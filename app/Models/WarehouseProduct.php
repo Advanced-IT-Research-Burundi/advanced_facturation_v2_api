@@ -56,10 +56,6 @@ class WarehouseProduct extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
-    public function lastStockMovement(): BelongsTo
-    {
-        return $this->belongsTo(StockMovement::class);
-    }
 
     public function lastStockMovement(): BelongsTo
     {
