@@ -1,63 +1,10 @@
 models:
 
-  Role:
-    role_name: string
-    relationships:
-      hasMany: User
-
-  User:
-    full_name: string
-    email: string:unique
-    password: string
-    role_id: foreign
-    timestamps: true
-    relationships:
-      belongsTo: Role
-      hasMany:
-        - Invoice
-        - StockMovement
-
-  Product:
-    item_code: string:unique
-    item_designation: string
-    item_measurement_unit: string
-    barcode: string nullable
-    vat_rate: double
-    timestamps: true
-    relationships:
-      hasMany:
-        - StockMovement
-        - WarehouseProduct
-
-  Warehouse:
+  Company:
     name: string
-    location: string nullable
-    timestamps: true
-    relationships:
-      hasMany:
-        - StockMovement
-        - WarehouseProduct
-
-  Customer:
-    customer_name: string
-    customer_TIN: string nullable
-    customer_address: string nullable
-    vat_customer_payer: string
-    timestamps: true
-    relationships:
-      hasMany: Invoice
-
-  Invoice:
-    invoice_number: string
-    invoice_date: datetime
-    invoice_type: string
-    invoice_identifier: string
-    invoice_currency: string
-
-    # TAXPAYER (SELLER)
     tp_type: string
     tp_name: string
-    tp_TIN: string
+    tp_TIN: string:unique
     tp_trade_number: string nullable
     tp_postal_number: string nullable
     tp_phone_number: string nullable
@@ -72,6 +19,91 @@ models:
     tp_fiscal_center: string nullable
     tp_activity_sector: string nullable
     tp_legal_form: string nullable
+
+    vat_taxpayer: string
+    ct_taxpayer: string
+    tl_taxpayer: string
+
+    system_or_device_id: string
+    default_currency: string
+
+    timestamps: true
+    relationships:
+      hasMany:
+        - Invoice
+        - Warehouse
+        - User
+
+  Role:
+    role_name: string
+    relationships:
+      hasMany: User
+
+  User:
+    full_name: string
+    email: string:unique
+    password: string
+    role_id: foreign
+    company_id: foreign
+    timestamps: true
+    relationships:
+      belongsTo:
+        - Role
+        - Company
+      hasMany:
+        - Invoice
+        - StockMovement
+
+  Product:
+    item_code: string:unique
+    item_designation: string
+    item_measurement_unit: string
+    barcode: string nullable
+    vat_rate: double
+    company_id: foreign
+    timestamps: true
+    relationships:
+      belongsTo: Company
+      hasMany:
+        - StockMovement
+        - WarehouseProduct
+
+  Warehouse:
+    name: string
+    location: string nullable
+    company_id: foreign
+    timestamps: true
+    relationships:
+      belongsTo: Company
+      hasMany:
+        - StockMovement
+        - WarehouseProduct
+
+  Customer:
+    customer_name: string
+    customer_TIN: string nullable
+    customer_address: string nullable
+    vat_customer_payer: string
+    company_id: foreign
+    timestamps: true
+    relationships:
+      belongsTo: Company
+      hasMany: Invoice
+
+  Invoice:
+    invoice_number: string
+    invoice_date: datetime
+    invoice_type: string
+    invoice_identifier: string
+    invoice_currency: string
+
+    # TAXPAYER SNAPSHOT (OBR REQUIREMENT)
+    tp_type: string
+    tp_name: string
+    tp_TIN: string
+    tp_trade_number: string nullable
+    tp_phone_number: string nullable
+    tp_fiscal_center: string nullable
 
     vat_taxpayer: string
     ct_taxpayer: string
@@ -96,12 +128,14 @@ models:
     obr_submission_status: enum:PENDING,SENT,ACCEPTED,REJECTED
     obr_response_message: text nullable
 
+    company_id: foreign
     customer_id: foreign
     created_by: foreign:users
     timestamps: true
 
     relationships:
       belongsTo:
+        - Company
         - Customer
         - User:created_by
       hasMany:
@@ -146,6 +180,7 @@ models:
     obr_response_message: text nullable
     obr_sent_at: datetime nullable
 
+    company_id: foreign
     product_id: foreign
     warehouse_id: foreign
     created_by: foreign:users
@@ -153,6 +188,7 @@ models:
 
     relationships:
       belongsTo:
+        - Company
         - Product
         - Warehouse
         - User:created_by
