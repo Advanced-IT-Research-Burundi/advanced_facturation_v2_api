@@ -15,7 +15,6 @@ class RoleFactory extends Factory
         return [
             'name' => fake()->name(),
             'description' => fake()->text(),
-            'user_id' => User::factory(),
         ];
     }
 }

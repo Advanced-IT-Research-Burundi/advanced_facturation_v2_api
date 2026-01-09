@@ -36,7 +36,7 @@ return new class extends Migration
             $table->string('tl_taxpayer');
             $table->string('system_or_device_id');
             $table->string('default_currency');
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->nullable()->constrained();
             $table->timestamps();
             $table->softDeletes();
         });
