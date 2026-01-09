@@ -1,5 +1,39 @@
 models:
-  
+
+  Company:
+    name: string
+    tp_type: string
+    tp_name: string
+    tp_TIN: string:unique
+    tp_trade_number: string nullable
+    tp_postal_number: string nullable
+    tp_phone_number: string nullable
+
+    tp_address_province: string nullable
+    tp_address_commune: string nullable
+    tp_address_quartier: string nullable
+    tp_address_avenue: string nullable
+    tp_address_rue: string nullable
+    tp_address_number: string nullable
+
+    tp_fiscal_center: string nullable
+    tp_activity_sector: string nullable
+    tp_legal_form: string nullable
+
+    vat_taxpayer: string
+    ct_taxpayer: string
+    tl_taxpayer: string
+
+    system_or_device_id: string
+    default_currency: string
+
+    timestamps: true
+    relationships:
+      hasMany:
+        - Invoice
+        - Warehouse
+        - User
+
   Role:
     name: string
     description: string nullable
@@ -12,10 +46,13 @@ models:
     name: string nullable
     email: string:unique
     password: string
-    full_name: string nullable
+    role_id: foreign
+    company_id: foreign
     timestamps: true
     relationships:
-      belongsTo: Role
+      belongsTo:
+        - Role
+        - Company
       hasMany:
         - Invoice
         - StockMovement
@@ -32,9 +69,11 @@ models:
     item_measurement_unit: string
     barcode: string nullable
     vat_rate: double
+    company_id: foreign
     timestamps: true
     user_id: foreign
     relationships:
+      belongsTo: Company
       hasMany:
         - StockMovement
         - WarehouseProduct
@@ -42,9 +81,11 @@ models:
   Warehouse:
     name: string
     location: string nullable
+    company_id: foreign
     timestamps: true
     user_id: foreign
     relationships:
+      belongsTo: Company
       hasMany:
         - StockMovement
         - WarehouseProduct
@@ -55,9 +96,11 @@ models:
     customer_phone: string unique nullable
     customer_address: string nullable
     vat_customer_payer: string
+    company_id: foreign
     timestamps: true
     user_id: foreign
     relationships:
+      belongsTo: Company
       hasMany: Invoice
 
   Invoice:
@@ -67,24 +110,13 @@ models:
     invoice_identifier: string
     invoice_currency: string
 
-    # TAXPAYER (SELLER)
+    # TAXPAYER SNAPSHOT (OBR REQUIREMENT)
     tp_type: string
     tp_name: string
     tp_TIN: string
     tp_trade_number: string nullable
-    tp_postal_number: string nullable
     tp_phone_number: string nullable
-
-    tp_address_province: string nullable
-    tp_address_commune: string nullable
-    tp_address_quartier: string nullable
-    tp_address_avenue: string nullable
-    tp_address_rue: string nullable
-    tp_address_number: string nullable
-
     tp_fiscal_center: string nullable
-    tp_activity_sector: string nullable
-    tp_legal_form: string nullable
 
     vat_taxpayer: string
     ct_taxpayer: string
@@ -109,6 +141,7 @@ models:
     obr_submission_status: enum:PENDING,SENT,ACCEPTED,REJECTED
     obr_response_message: text nullable
 
+    company_id: foreign
     customer_id: foreign
     created_by: foreign:users
     timestamps: true
@@ -116,6 +149,7 @@ models:
 
     relationships:
       belongsTo:
+        - Company
         - Customer
         - User:created_by
       hasMany:
@@ -156,6 +190,8 @@ models:
     obr_submission_status: enum:PENDING,SENT,ACCEPTED,REJECTED
     obr_response_message: text nullable
     obr_sent_at: datetime nullable
+
+    company_id: foreign
     product_id: foreign
     warehouse_id: foreign
     created_by: foreign:users
@@ -164,6 +200,7 @@ models:
 
     relationships:
       belongsTo:
+        - Company
         - Product
         - Warehouse
         - User:created_by
