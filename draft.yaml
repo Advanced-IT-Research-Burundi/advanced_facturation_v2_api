@@ -1,21 +1,30 @@
 models:
-
+  
   Role:
-    role_name: string
+    name: string
+    description: string nullable
+    timestamps: true
+    user_id: foreign
     relationships:
       hasMany: User
 
   User:
-    full_name: string
+    name: string nullable
     email: string:unique
     password: string
-    role_id: foreign
+    full_name: string nullable
     timestamps: true
     relationships:
       belongsTo: Role
       hasMany:
         - Invoice
         - StockMovement
+        
+  RoleUser:
+    role_id: foreign
+    user_id: foreign
+    indexes:
+      - unique: role_id, user_id
 
   Product:
     item_code: string:unique
@@ -24,6 +33,7 @@ models:
     barcode: string nullable
     vat_rate: double
     timestamps: true
+    user_id: foreign
     relationships:
       hasMany:
         - StockMovement
@@ -33,6 +43,7 @@ models:
     name: string
     location: string nullable
     timestamps: true
+    user_id: foreign
     relationships:
       hasMany:
         - StockMovement
@@ -40,10 +51,12 @@ models:
 
   Customer:
     customer_name: string
-    customer_TIN: string nullable
+    customer_TIN: string unique nullable
+    customer_phone: string unique nullable
     customer_address: string nullable
     vat_customer_payer: string
     timestamps: true
+    user_id: foreign
     relationships:
       hasMany: Invoice
 
@@ -99,6 +112,7 @@ models:
     customer_id: foreign
     created_by: foreign:users
     timestamps: true
+    user_id: foreign
 
     relationships:
       belongsTo:
@@ -113,7 +127,6 @@ models:
     item_designation: string
     item_quantity: double
     item_price: double
-
     item_ct: double nullable
     item_tl: double nullable
     item_ott_tax: double nullable
@@ -124,32 +137,30 @@ models:
     item_price_wvat: double
     item_total_amount: double
     timestamps: false
+    user_id: foreign
     relationships:
       belongsTo: Invoice
 
   StockMovement:
     system_or_device_id: string
-
     item_code: string
     item_designation: string
     item_quantity: double
     item_measurement_unit: string
     item_purchase_or_sale_price: double
     item_purchase_or_sale_currency: string
-
     item_movement_type: string
     item_movement_invoice_ref: string nullable
     item_movement_description: string nullable
     item_movement_date: datetime
-
     obr_submission_status: enum:PENDING,SENT,ACCEPTED,REJECTED
     obr_response_message: text nullable
     obr_sent_at: datetime nullable
-
     product_id: foreign
     warehouse_id: foreign
     created_by: foreign:users
     timestamps: true
+    user_id: foreign
 
     relationships:
       belongsTo:
@@ -165,6 +176,7 @@ models:
     currency: string
     last_stock_movement_id: foreign:stock_movements
     timestamps: true
+    user_id: foreign
     indexes:
       - unique: product_id, warehouse_id
     relationships:
