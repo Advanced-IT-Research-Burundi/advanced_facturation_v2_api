@@ -29,7 +29,6 @@ class UserController extends Controller
             'name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users|max:255',
             'password' => 'required|string|min:6',
-            'role_id' => 'required|exists:roles,id',
             'company_id' => 'required|exists:companies,id',
         ]);
 
@@ -65,7 +64,6 @@ class UserController extends Controller
             'name' => 'sometimes|nullable|string|max:255',
             'email' => 'sometimes|required|email|unique:users,email,' . $user->id . '|max:255',
             'password' => 'sometimes|required|string|min:6',
-            'role_id' => 'sometimes|required|exists:roles,id',
             'company_id' => 'sometimes|required|exists:companies,id',
         ]);
 
