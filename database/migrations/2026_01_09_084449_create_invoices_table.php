@@ -41,9 +41,9 @@ return new class extends Migration
             $table->text('electronic_signature')->nullable();
             $table->enum('obr_submission_status', ["PENDING","SENT","ACCEPTED","REJECTED"]);
             $table->text('obr_response_message')->nullable();
-            $table->foreignId('company_id')->constrained();
-            $table->foreignId('customer_id')->constrained('');
-            $table->foreignId('created_by')->constrained('users', 'by');
+            $table->foreignId('company_id')->constrained()->nullable();
+            $table->foreignId('customer_id')->constrained()->nullable();
+            $table->foreignId('created_by')->constrained('users', 'id');
             $table->foreignId('user_id')->constrained();
             $table->foreignId('created_by_id');
             $table->timestamps();

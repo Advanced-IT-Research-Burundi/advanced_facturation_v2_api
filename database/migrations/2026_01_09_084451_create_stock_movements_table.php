@@ -29,12 +29,12 @@ return new class extends Migration
             $table->enum('obr_submission_status', ["PENDING","SENT","ACCEPTED","REJECTED"]);
             $table->text('obr_response_message')->nullable();
             $table->dateTime('obr_sent_at')->nullable();
-            $table->foreignId('company_id')->constrained();
-            $table->foreignId('product_id')->constrained('');
-            $table->foreignId('warehouse_id')->constrained('');
-            $table->foreignId('created_by')->constrained('users', 'by');
-            $table->foreignId('user_id')->constrained();
-            $table->foreignId('created_by_id');
+            $table->foreignId('company_id')->constrained()->nullable();
+            $table->foreignId('product_id')->constrained()->nullable();
+            $table->foreignId('warehouse_id')->constrained()->nullable();
+            $table->foreignId('created_by')->constrained('users', 'id')->nullable();
+            $table->foreignId('user_id')->constrained()->nullable();
+            $table->foreignId('created_by_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
