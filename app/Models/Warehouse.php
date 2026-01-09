@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class User extends Model
+class Warehouse extends Model
 {
     use HasFactory, SoftDeletes;
 
@@ -19,20 +19,9 @@ class User extends Model
      */
     protected $fillable = [
         'name',
-        'email',
-        'password',
-        'role_id',
+        'location',
         'company_id',
         'user_id',
-    ];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array
-     */
-    protected $hidden = [
-        'password',
     ];
 
     /**
@@ -44,15 +33,9 @@ class User extends Model
     {
         return [
             'id' => 'integer',
-            'role_id' => 'integer',
             'company_id' => 'integer',
             'user_id' => 'integer',
         ];
-    }
-
-    public function role(): BelongsTo
-    {
-        return $this->belongsTo(Role::class);
     }
 
     public function company(): BelongsTo
@@ -65,13 +48,13 @@ class User extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function invoices(): HasMany
-    {
-        return $this->hasMany(Invoice::class);
-    }
-
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function warehouseProducts(): HasMany
+    {
+        return $this->hasMany(WarehouseProduct::class);
     }
 }

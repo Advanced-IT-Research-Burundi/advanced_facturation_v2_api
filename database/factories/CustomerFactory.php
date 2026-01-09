@@ -3,11 +3,10 @@
 namespace Database\Factories;
 
 use App\Models\Company;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-class UserFactory extends Factory
+class CustomerFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -15,10 +14,11 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
-            'email' => fake()->safeEmail(),
-            'password' => fake()->password(),
-            'role_id' => Role::factory(),
+            'customer_name' => fake()->word(),
+            'customer_TIN' => fake()->word(),
+            'customer_phone' => fake()->word(),
+            'customer_address' => fake()->word(),
+            'vat_customer_payer' => fake()->word(),
             'company_id' => Company::factory(),
             'user_id' => User::factory(),
         ];

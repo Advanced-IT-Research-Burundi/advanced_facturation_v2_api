@@ -1,10 +1,9 @@
 models:
-
   Company:
     name: string
     tp_type: string
     tp_name: string
-    tp_TIN: string:unique
+    tp_TIN: string unique
     tp_trade_number: string nullable
     tp_postal_number: string nullable
     tp_phone_number: string nullable
@@ -28,67 +27,65 @@ models:
     default_currency: string
 
     timestamps: true
+    softDeletes: true
+    user_id: foreign
     relationships:
-      hasMany:
-        - Invoice
-        - Warehouse
-        - User
+      hasMany: Invoice, Warehouse, User
 
   Role:
     name: string
     description: string nullable
     timestamps: true
+    softDeletes: true
     user_id: foreign
     relationships:
       hasMany: User
 
   User:
     name: string nullable
-    email: string:unique
+    email: string unique
     password: string
     role_id: foreign
     company_id: foreign
     timestamps: true
+    softDeletes: true
+    user_id: foreign
     relationships:
-      belongsTo:
-        - Role
-        - Company
-      hasMany:
-        - Invoice
-        - StockMovement
+      belongsTo: Role, Company
+      hasMany: Invoice, StockMovement
         
   RoleUser:
     role_id: foreign
     user_id: foreign
+    timestamps: true
+    softDeletes: true
     indexes:
       - unique: role_id, user_id
 
   Product:
-    item_code: string:unique
+    item_code: string unique
     item_designation: string
     item_measurement_unit: string
     barcode: string nullable
     vat_rate: double
     company_id: foreign
     timestamps: true
+    softDeletes: true
     user_id: foreign
     relationships:
       belongsTo: Company
-      hasMany:
-        - StockMovement
-        - WarehouseProduct
+      hasMany: StockMovement, WarehouseProduct
 
   Warehouse:
     name: string
     location: string nullable
     company_id: foreign
     timestamps: true
+    softDeletes: true
     user_id: foreign
     relationships:
       belongsTo: Company
-      hasMany:
-        - StockMovement
-        - WarehouseProduct
+      hasMany: StockMovement, WarehouseProduct
 
   Customer:
     customer_name: string
@@ -98,6 +95,7 @@ models:
     vat_customer_payer: string
     company_id: foreign
     timestamps: true
+    softDeletes: true
     user_id: foreign
     relationships:
       belongsTo: Company
@@ -145,16 +143,12 @@ models:
     customer_id: foreign
     created_by: foreign:users
     timestamps: true
+    softDeletes: true
     user_id: foreign
 
     relationships:
-      belongsTo:
-        - Company
-        - Customer
-        - User:created_by
-      hasMany:
-        - InvoiceItem
-        - StockMovement
+      belongsTo: Company, Customer, User:created_by
+      hasMany: InvoiceItem, StockMovement
 
   InvoiceItem:
     invoice_id: foreign
@@ -171,6 +165,7 @@ models:
     item_price_wvat: double
     item_total_amount: double
     timestamps: false
+    softDeletes: true
     user_id: foreign
     relationships:
       belongsTo: Invoice
@@ -196,14 +191,11 @@ models:
     warehouse_id: foreign
     created_by: foreign:users
     timestamps: true
+    softDeletes: true
     user_id: foreign
 
     relationships:
-      belongsTo:
-        - Company
-        - Product
-        - Warehouse
-        - User:created_by
+      belongsTo: Company, Product, Warehouse, User:created_by
 
   WarehouseProduct:
     product_id: foreign
@@ -213,11 +205,9 @@ models:
     currency: string
     last_stock_movement_id: foreign:stock_movements
     timestamps: true
+    softDeletes: true
     user_id: foreign
     indexes:
       - unique: product_id, warehouse_id
     relationships:
-      belongsTo:
-        - Product
-        - Warehouse
-        - StockMovement:last_stock_movement_id
+      belongsTo: Product, Warehouse, StockMovement:last_stock_movement_id
