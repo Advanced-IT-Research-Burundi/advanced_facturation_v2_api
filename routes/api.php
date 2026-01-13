@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\WarehouseProductController;
 use App\Http\Controllers\Api\RoleUserController;
 use App\Http\Controllers\Api\AppConfigController;
+use App\Http\Controllers\Api\CategoryProductController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -48,6 +49,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Products
     Route::apiResource('products', ProductController::class);
     Route::post('products/{id}/restore', [ProductController::class, 'restore']);
+
+    // Category Products
+    Route::apiResource('category-products', CategoryProductController::class);
+    Route::post('category-products/{id}/restore', [CategoryProductController::class, 'restore']);
 
     // Warehouses
     Route::apiResource('warehouses', WarehouseController::class);

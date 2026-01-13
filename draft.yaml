@@ -1,5 +1,6 @@
 models:
-  AppConfig:
-    config_key : string
-    value: text nullable 
+  CategoryProduct:
+    name : string
+    description: text nullable 
+    company_id: integer
     
