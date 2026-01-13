@@ -16,7 +16,10 @@ class ObrService{
     public function checkTin($tp_TIN){
       $response =  $this->post('checkTIN', ['tp_TIN'=> $tp_TIN]);
       if($response->json()['success']){
-        return $response->json()['result']['taxpayer'][0];
+        return [
+          'success'=> true,
+          ... $response->json()['result']['taxpayer'][0],
+        ];
       }
       return $response;
     }

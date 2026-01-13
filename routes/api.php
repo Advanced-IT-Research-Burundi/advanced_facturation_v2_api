@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('customers', CustomerController::class);
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
 
+    Route::get('checkTIN/{tp_TIN}', [CustomerController::class,'checkTin']);
+
     // Invoices
     Route::apiResource('invoices', InvoiceController::class);
     Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);

@@ -4,11 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Services\ObrService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class CustomerController extends Controller
 {
+
+    public function __construct(public ObrService $obr){
+
+    }
+
+    public function checkTin($tp_TIN){
+        return $this->obr->checkTIN($tp_TIN);
+    }
     /**
      * Display a listing of customers.
      */
