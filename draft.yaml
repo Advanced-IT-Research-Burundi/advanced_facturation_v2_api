@@ -1,6 +1,13 @@
 models:
-  ProductUnit:
+  DepenseCategory: 
     name : string
     description: text nullable 
     company_id: integer
+
+  Depense:
+    name : string
+    montant : float 
+    depense_category_id: id  froreign DepenseCategory
+    company_id: integer nullable
+    justification_file : string nullable
     

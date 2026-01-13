@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\WarehouseProductController;
 use App\Http\Controllers\Api\RoleUserController;
 use App\Http\Controllers\Api\AppConfigController;
 use App\Http\Controllers\Api\CategoryProductController;
+use App\Http\Controllers\Api\DepenseCategoryController;
+use App\Http\Controllers\Api\DepenseController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -89,4 +91,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('app-configs', AppConfigController::class);
     Route::post('app-configs/{id}/restore', [AppConfigController::class, 'restore']);
     Route::get('app-configs-by-key/{key}', [AppConfigController::class, 'getByKey']);
+
+    // Depense Categories
+    Route::apiResource('depense-categories', DepenseCategoryController::class);
+    Route::post('depense-categories/{id}/restore', [DepenseCategoryController::class, 'restore']);
+
+    // Depenses
+    Route::apiResource('depenses', DepenseController::class);
+    Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 });

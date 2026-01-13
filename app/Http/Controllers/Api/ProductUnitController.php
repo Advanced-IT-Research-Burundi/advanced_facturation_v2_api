@@ -28,8 +28,10 @@ class ProductUnitController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'company_id' => 'required|exists:companies,id',
+            
         ]);
+
+        $validated['company_id'] = auth()->user()->company_id ?? 1;
 
         $productUnit = ProductUnit::create($validated);
 

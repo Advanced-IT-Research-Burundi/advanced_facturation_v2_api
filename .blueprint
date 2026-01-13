@@ -1,7 +1,10 @@
 created:
-    - database/factories/ProductUnitFactory.php
-    - database/migrations/2026_01_13_143236_create_product_units_table.php
-    - app/Models/ProductUnit.php
+    - database/factories/DepenseCategoryFactory.php
+    - database/factories/DepenseFactory.php
+    - database/migrations/2026_01_13_150844_create_depense_categories_table.php
+    - database/migrations/2026_01_13_150845_create_depenses_table.php
+    - app/Models/DepenseCategory.php
+    - app/Models/Depense.php
 models:
     Company: { name: string, tp_type: string, tp_name: string, tp_TIN: 'string unique', tp_trade_number: 'string nullable', tp_postal_number: 'string nullable', tp_phone_number: 'string nullable', tp_address_province: 'string nullable', tp_address_commune: 'string nullable', tp_address_quartier: 'string nullable', tp_address_avenue: 'string nullable', tp_address_rue: 'string nullable', tp_address_number: 'string nullable', tp_fiscal_center: 'string nullable', tp_activity_sector: 'string nullable', tp_legal_form: 'string nullable', vat_taxpayer: string, ct_taxpayer: string, tl_taxpayer: string, system_or_device_id: string, default_currency: string, timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, relationships: { hasMany: 'Invoice, Warehouse, User' } }
     Role: { name: string, description: 'string nullable', timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, relationships: { hasMany: User } }
@@ -17,3 +20,5 @@ models:
     AppConfig: { config_key: string, value: 'text nullable' }
     CategoryProduct: { name: string, description: 'text nullable', company_id: integer }
     ProductUnit: { name: string, description: 'text nullable', company_id: integer }
+    DepenseCategory: { name: string, description: 'text nullable', company_id: integer }
+    Depense: { name: string, montant: float, depense_category_id: 'id  froreign DepenseCategory', company_id: 'integer nullable', justification_file: 'string nullable' }
