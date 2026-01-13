@@ -13,8 +13,8 @@ class ObrService{
       $this->baseUrl = AppConfig::getConfigKey("OBR_MODE_TEST") ?  AppConfig::getConfigKey("OBR_TEST_URL") : AppConfig::getConfigKey("OBR_PROD_URL");
     }
 
-    public function checkTin(){
-        
+    public function checkTin($tp_TIN){
+      return  $this->post('checkTIN', ['tp_TIN'=> $tp_TIN]);
     }
 
     public function getToken(){
@@ -31,7 +31,7 @@ class ObrService{
 
     private function post($url , $data){
         $token = $this->getToken();
-        return Http::withToken($token)->post($url, $data);
+        return Http::withToken($token)->post($this->baseUrl .'/'. $url, $data);
         
     }
 }
