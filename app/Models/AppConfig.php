@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 
 class AppConfig extends Model
 {
@@ -34,5 +35,10 @@ class AppConfig extends Model
             'id' => 'integer',
             'modifiable' => 'boolean',
         ];
+    }
+
+    public static function getConfigKey($key){
+        $config =  AppConfig::select('value')->where('config_key', $key)->first();   
+       return $config ? $config->value : null;
     }
 }

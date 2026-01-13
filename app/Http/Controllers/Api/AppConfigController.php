@@ -4,16 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppConfig;
+use App\Services\ObrService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class AppConfigController extends Controller
 {
+    public $obrService ;
+    public function __construct(ObrService $obr){
+        $this->obrService = $obr;
+    }
     /**
      * Display a listing of app configs.
      */
     public function index()
     {
+       return $this->obrService->getToken();
         return response()->json([
             'success' => true,
             'data' => AppConfig::paginate(15)
