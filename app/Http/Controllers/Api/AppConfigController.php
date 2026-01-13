@@ -19,7 +19,7 @@ class AppConfigController extends Controller
      */
     public function index()
     {
-       return $this->obrService->checkTin('4002864561');
+       
         return response()->json([
             'success' => true,
             'data' => AppConfig::paginate(15)
