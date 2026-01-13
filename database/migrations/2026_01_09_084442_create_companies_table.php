@@ -16,7 +16,8 @@ return new class extends Migration
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('tp_type');
+            // 1 pour le personne physique , 2 pour le personne morale ou societe etranger
+            $table->enum('tp_type',[1,2])->default('1');
             $table->string('tp_name');
             $table->string('tp_TIN')->unique();
             $table->string('tp_trade_number')->nullable();
@@ -28,7 +29,11 @@ return new class extends Migration
             $table->string('tp_address_avenue')->nullable();
             $table->string('tp_address_rue')->nullable();
             $table->string('tp_address_number')->nullable();
-            $table->string('tp_fiscal_center')->nullable();
+            $table->enum('tp_fiscal_center', [
+            'DPMC',    
+            'DMC',
+            'DGC'
+            ])->nullable();
             $table->string('tp_activity_sector')->nullable();
             $table->string('tp_legal_form')->nullable();
             $table->string('vat_taxpayer');
@@ -41,6 +46,7 @@ return new class extends Migration
             $table->string('web_site')->nullable();
             $table->string('tp_banque')->nullable();
             $table->string(column: 'tp_compte_name')->nullable();
+            $table->string(column: 'company_logo')->nullable();
             $table->text(column: 'description')->nullable();
             $table->foreignId('user_id')->nullable()->constrained();
             $table->timestamps();
