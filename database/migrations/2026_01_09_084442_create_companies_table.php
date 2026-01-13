@@ -34,8 +34,14 @@ return new class extends Migration
             $table->string('vat_taxpayer');
             $table->string('ct_taxpayer');
             $table->string('tl_taxpayer');
-            $table->string('system_or_device_id');
-            $table->string('default_currency');
+            $table->string('system_or_device_id')->nullable();
+             $table->string('default_currency')->nullable();
+            $table->string('obr_username')->nullable();
+            $table->string('obr_password')->nullable();
+            $table->string('web_site')->nullable();
+            $table->string('tp_banque')->nullable();
+            $table->string(column: 'tp_compte_name')->nullable();
+            $table->text(column: 'description')->nullable();
             $table->foreignId('user_id')->nullable()->constrained();
             $table->timestamps();
             $table->softDeletes();
