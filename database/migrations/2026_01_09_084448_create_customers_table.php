@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('customer_phone')->unique()->nullable();
             $table->string('customer_address')->nullable();
             $table->string('vat_customer_payer');
-            $table->foreignId('company_id')->constrained();
+            $table->foreignId('company_id')->nullable();
             $table->foreignId('user_id')->constrained();
             $table->timestamps();
             $table->softDeletes();

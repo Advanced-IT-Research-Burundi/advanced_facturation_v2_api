@@ -13,7 +13,7 @@ class CompanySeeder extends Seeder
         DB::table('companies')->insert([
             [
                 'name' => 'Advanced IT and Research Burundi',
-                'tp_type' => 'SARL',
+                'tp_type' => 1,
                 'tp_name' => 'ADVANCED IT AND RESEARCH BURUNDI SARL',
                 'tp_TIN' => '12345678901234',
                 'tp_trade_number' => 'RC/BDI/2025/001',
@@ -25,7 +25,7 @@ class CompanySeeder extends Seeder
                 'tp_address_avenue' => 'Avenue de l\'OUA',
                 'tp_address_rue' => 'Rue de Techno',
                 'tp_address_number' => '123',
-                'tp_fiscal_center' => 'Bujumbura',
+                'tp_fiscal_center' => 'DMC',
                 'tp_activity_sector' => 'Informatique et Services de Recherche',
                 'tp_legal_form' => 'SARL',
                 'vat_taxpayer' => 'YES',
@@ -39,7 +39,7 @@ class CompanySeeder extends Seeder
             ],
             [
                 'name' => 'Tech Solutions Test',
-                'tp_type' => 'SARL',
+                'tp_type' => 2,
                 'tp_name' => 'TECH SOLUTIONS TEST SARL',
                 'tp_TIN' => '98765432109876',
                 'tp_trade_number' => 'RC/BDI/2025/002',
@@ -51,7 +51,7 @@ class CompanySeeder extends Seeder
                 'tp_address_avenue' => 'Avenue de Commerce',
                 'tp_address_rue' => 'Rue 45',
                 'tp_address_number' => '456',
-                'tp_fiscal_center' => 'Bujumbura',
+                'tp_fiscal_center' => 'DGC',
                 'tp_activity_sector' => 'Services Informatiques',
                 'tp_legal_form' => 'SARL',
                 'vat_taxpayer' => 'YES',

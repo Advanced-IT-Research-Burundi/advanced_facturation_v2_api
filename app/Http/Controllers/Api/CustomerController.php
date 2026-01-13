@@ -40,10 +40,23 @@ class CustomerController extends Controller
             'customer_phone' => 'nullable|string|unique:customers|max:255',
             'customer_address' => 'nullable|string|max:255',
             'vat_customer_payer' => 'required|string|max:255',
-            'company_id' => 'required|exists:companies,id',
         ]);
 
         $validated['user_id'] = auth()->id();
+        $validated['company_id'] = auth()->user()->company_id ?? 1;
+        // check it the tin is valid 
+        if($validated['customer_TIN'] != null){
+            $response = $this->obr->checkTIN($validated['customer_TIN']);
+            if($response['success'] == false){
+                return response()->json([
+                    'success' => false,
+                    'message' => $response['message']
+                ],422);
+            }else{
+                $validated['customer_name'] = $response['tp_name'];
+            }
+
+        }
 
         $customer = Customer::create($validated);
 
