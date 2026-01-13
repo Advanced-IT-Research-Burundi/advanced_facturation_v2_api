@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\ObrService;
 use Illuminate\Support\ServiceProvider;
 
 use Dedoc\Scramble\Scramble;
@@ -18,6 +19,9 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         //
+        $this->app->singleton("obr", fn() => new ObrService() );
+
+        $this->app->singleton(ObrService::class, fn() => new ObrService() );
     }
 
     /**
