@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\WarehouseProductController;
 use App\Http\Controllers\Api\RoleUserController;
+use App\Http\Controllers\Api\AppConfigController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -71,4 +72,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
     Route::post('warehouse-products/{id}/restore', [WarehouseProductController::class, 'restore']);
+
+    // App Configs
+    Route::apiResource('app-configs', AppConfigController::class);
+    Route::post('app-configs/{id}/restore', [AppConfigController::class, 'restore']);
+    Route::get('app-configs-by-key/{key}', [AppConfigController::class, 'getByKey']);
 });
