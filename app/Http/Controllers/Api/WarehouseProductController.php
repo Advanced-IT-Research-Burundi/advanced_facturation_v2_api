@@ -9,111 +9,49 @@ use Illuminate\Http\Response;
 
 class WarehouseProductController extends Controller
 {
-    /**
-     * Display a listing of warehouse products.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json([
-            'success' => true,
-            'data' => WarehouseProduct::with(['product', 'warehouse'])->paginate(15)
-        ], Response::HTTP_OK);
-    }
+        try {
+            // Initialisation avec les relations
+            $query = WarehouseProduct::with(['product', 'warehouse']);
 
-    /**
-     * Store a newly created warehouse product.
-     */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
-            'quantity' => 'required|numeric|min:0',
-            'unit_price' => 'required|numeric|min:0',
-            'currency' => 'required|string|max:3',
-            'last_stock_movement_id' => 'nullable|exists:stock_movements,id',
-        ]);
+            // RECHERCHE : Utilisation des colonnes réelles de votre table 'products'
+            if ($request->filled('search')) {
+                $search = $request->search;
+                
+                $query->whereHas('product', function($q) use ($search) {
+                    $q->where(function($inner) use ($search) {
+                        // Correction ici : item_designation au lieu de name, item_code au lieu de sku
+                        $inner->where('item_designation', 'like', "%{$search}%")
+                              ->orWhere('item_code', 'like', "%{$search}%")
+                              ->orWhere('barcode', 'like', "%{$search}%"); // Ajouté car présent dans votre table
+                    });
+                });
+            }
 
-        $validated['user_id'] = auth()->id();
+            // FILTRE DE STOCK
+            if ($request->filled('filter') && $request->filter !== 'TOUT') {
+                if ($request->filter === 'STOCK VIDE') {
+                    $query->where('quantity', '<=', 0);
+                } elseif ($request->filter === 'STOCK NON VIDE') {
+                    $query->where('quantity', '>', 0);
+                }
+            }
 
-        // Check for unique constraint
-        $existing = WarehouseProduct::where('product_id', $validated['product_id'])
-            ->where('warehouse_id', $validated['warehouse_id'])
-            ->first();
+            // Pagination
+            $results = $query->latest()->paginate(15);
 
-        if ($existing) {
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'This product already exists in this warehouse'
-            ], Response::HTTP_CONFLICT);
+                'message' => 'Erreur SQL',
+                'error' => $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-
-        $warehouseProduct = WarehouseProduct::create($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Warehouse product created successfully',
-            'data' => $warehouseProduct->load(['product', 'warehouse'])
-        ], Response::HTTP_CREATED);
-    }
-
-    /**
-     * Display the specified warehouse product.
-     */
-    public function show(WarehouseProduct $warehouseProduct)
-    {
-        return response()->json([
-            'success' => true,
-            'data' => $warehouseProduct->load(['product', 'warehouse', 'lastStockMovement'])
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Update the specified warehouse product.
-     */
-    public function update(Request $request, WarehouseProduct $warehouseProduct)
-    {
-        $validated = $request->validate([
-            'quantity' => 'sometimes|required|numeric|min:0',
-            'unit_price' => 'sometimes|required|numeric|min:0',
-            'currency' => 'sometimes|required|string|max:3',
-            'last_stock_movement_id' => 'nullable|exists:stock_movements,id',
-        ]);
-
-        $warehouseProduct->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Warehouse product updated successfully',
-            'data' => $warehouseProduct->load(['product', 'warehouse'])
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Remove the specified warehouse product (soft delete).
-     */
-    public function destroy(WarehouseProduct $warehouseProduct)
-    {
-        $warehouseProduct->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Warehouse product deleted successfully'
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Restore a soft-deleted warehouse product.
-     */
-    public function restore($id)
-    {
-        $warehouseProduct = WarehouseProduct::withTrashed()->findOrFail($id);
-        $warehouseProduct->restore();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Warehouse product restored successfully',
-            'data' => $warehouseProduct
-        ], Response::HTTP_OK);
     }
 }
