@@ -35,6 +35,7 @@ class SeedDefaultConfig extends Command
             "OBR_PROD_URL" => "https://ebms.obr.gov.bi:8443/ebms_api/",
             "OBR_TEST_URL" =>"https://ebms.obr.gov.bi:9443/ebms_api/",
             "OBR_MODE_TEST" => 1,
+            "CAN_SYNCRONISE_TO_OBR" => 1,
         ];
 
         foreach ($configs as $key => $value) {
