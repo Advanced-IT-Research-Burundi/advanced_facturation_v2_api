@@ -1,5 +1,5 @@
 models:
-  CategoryProduct:
+  ProductUnit:
     name : string
     description: text nullable 
     company_id: integer

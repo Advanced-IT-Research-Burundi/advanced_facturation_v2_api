@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductUnitController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -49,6 +50,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Products
     Route::apiResource('products', ProductController::class);
     Route::post('products/{id}/restore', [ProductController::class, 'restore']);
+
+    // Product Units
+    Route::apiResource('product-units', ProductUnitController::class);
+    Route::post('product-units/{id}/restore', [ProductUnitController::class, 'restore']);
 
     // Category Products
     Route::apiResource('category-products', CategoryProductController::class);
