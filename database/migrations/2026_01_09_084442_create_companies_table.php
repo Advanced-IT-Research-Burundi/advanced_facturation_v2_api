@@ -48,7 +48,7 @@ return new class extends Migration
             $table->string(column: 'tp_compte_name')->nullable();
             $table->string(column: 'company_logo')->nullable();
             $table->text(column: 'description')->nullable();
-            $table->foreignId('user_id')->nullable()->constrained();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

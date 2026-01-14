@@ -28,7 +28,7 @@ class DepenseCategoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'company_id' => 'required|exists:companies,id',
+            //'company_id' => 'required|exists:companies,id',
         ]);
 
         $validated['user_id'] = auth()->id();

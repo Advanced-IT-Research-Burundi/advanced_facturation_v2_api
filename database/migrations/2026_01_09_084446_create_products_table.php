@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('item_measurement_unit');
             $table->string('barcode')->nullable();
             $table->double('vat_rate');
-            $table->foreignId('company_id')->constrained();
+            $table->foreignId('company_id')->nullable();
             $table->foreignId('user_id')->constrained();
             $table->timestamps();
             $table->softDeletes();

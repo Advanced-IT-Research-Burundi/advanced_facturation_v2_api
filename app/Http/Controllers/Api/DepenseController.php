@@ -29,7 +29,6 @@ class DepenseController extends Controller
             'name' => 'required|string|max:255',
             'montant' => 'required|numeric|min:0',
             'depense_category_id' => 'required|exists:depense_categories,id',
-            'company_id' => 'required|exists:companies,id',
             'justification_file' => 'nullable|string|max:255',
         ]);
 
