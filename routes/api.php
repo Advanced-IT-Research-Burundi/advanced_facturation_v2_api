@@ -65,6 +65,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Warehouses
     Route::apiResource('warehouses', WarehouseController::class);
     Route::post('warehouses/{id}/restore', [WarehouseController::class, 'restore']);
+    Route::get('product_not_stock/{stock_id}', [WarehouseController::class, 'product_not_stock']);
+
+    Route::get('product_in_stock/{stock_id}', [WarehouseController::class, 'product_in_stock']);
 
     // Customers
     Route::apiResource('customers', CustomerController::class);
