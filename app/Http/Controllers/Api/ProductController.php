@@ -26,7 +26,7 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => ProductResource::collection($query->paginate(15))
+            'data' => $query->latest()->paginate(15),// ProductResource::collection()
         ], Response::HTTP_OK);
     }
 
@@ -38,7 +38,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'item_code' => 'required|string|unique:products|max:255',
             'item_designation' => 'required|string|max:255',
-           // 'item_measurement_unit' => 'required|string|max:255',
+            'item_measurement_unit' => 'sometimes|max:255',
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'required|numeric|min:0|max:100',
            // 'company_id' => 'required|exists:companies,id',

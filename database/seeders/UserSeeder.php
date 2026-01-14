@@ -35,6 +35,15 @@ class UserSeeder extends Seeder
         // Create users
         $users = [
             [
+
+            "name" => "Jean Lionel", 
+            "email" => "nijeanlionel@gmail.com",
+            "password" => Hash::make(value: 'Advanced2026'), 
+            'company_id' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+            ],
+            [
                 'name' => 'Super Administrator',
                 'email' => 'superadmin@system.com',
                 'password' => Hash::make('password123'),
@@ -115,12 +124,13 @@ class UserSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'name' => 'James Wilson',
-                'email' => 'james.w@company.com',
-                'password' => Hash::make('password123'),
-                'company_id' => 1,
-                'created_at' => now(),
-                'updated_at' => now(),
+
+            "name" => "Advanced Dev", 
+            "email" => "dev@advancedit.com",
+            "password" => Hash::make(value: 'Advanced2026'), 
+            'company_id' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
             ],
         ];
 
