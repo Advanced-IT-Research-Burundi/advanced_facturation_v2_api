@@ -20,10 +20,9 @@ return new class extends Migration
             $table->string('item_measurement_unit');
             $table->string('barcode')->nullable();
             $table->double('vat_rate')->default(0);
-            $table->foreignId('company_id')->nullable();
             $table->foreignId('product_unit_id')->nullable();
             $table->foreignId('product_category_id')->nullable();
-            $table->foreignId('user_id')->constrained();
+           
             $table->string('code_product')->nullable();
             $table->string('marque')->nullable();
             $table->double('quantite', 64,2)->default(0)->nullable();
@@ -38,8 +37,8 @@ return new class extends Migration
             $table->date('date_expiration')->nullable();
             $table->string('image')->nullable();
             $table->string('type')->nullable();
-            $table->foreignId('user_id')->nullable();
             $table->foreignId('company_id')->nullable();
+            $table->foreignId('user_id')->constrained();       
             $table->text('description')->nullable();
             $table->timestamps();
             $table->softDeletes();

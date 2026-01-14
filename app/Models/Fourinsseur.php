@@ -6,10 +6,11 @@ use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Fourinsseur extends Model
 {
-    use HasFactory, HasCompanyId;
+    use HasFactory, HasCompanyId, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.

@@ -38,10 +38,10 @@ class ProductController extends Controller
         $validated = $request->validate([
             'item_code' => 'required|string|unique:products|max:255',
             'item_designation' => 'required|string|max:255',
-            'item_measurement_unit' => 'required|string|max:255',
+           // 'item_measurement_unit' => 'required|string|max:255',
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'required|numeric|min:0|max:100',
-            'company_id' => 'required|exists:companies,id',
+           // 'company_id' => 'required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
             'code_product' => 'nullable|string|max:255',
@@ -62,8 +62,16 @@ class ProductController extends Controller
         ]);
 
         $validated['user_id'] = auth()->id();
+        try {
+            $product = Product::create(attributes: $validated);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success'=> false,
+                'message'=> $e->getMessage()
+            ]
+            );
 
-        $product = Product::create($validated);
+        }
 
         return response()->json([
             'success' => true,
@@ -91,10 +99,10 @@ class ProductController extends Controller
         $validated = $request->validate([
             'item_code' => 'sometimes|required|string|unique:products,item_code,' . $product->id . '|max:255',
             'item_designation' => 'sometimes|required|string|max:255',
-            'item_measurement_unit' => 'sometimes|required|string|max:255',
+            //'item_measurement_unit' => 'sometimes|required|string|max:255',
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'sometimes|required|numeric|min:0|max:100',
-            'company_id' => 'sometimes|required|exists:companies,id',
+            //'company_id' => 'sometimes|required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
             'code_product' => 'nullable|string|max:255',
