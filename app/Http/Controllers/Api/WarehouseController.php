@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WarehouseResource;
+use App\Models\Product;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -47,13 +48,27 @@ class WarehouseController extends Controller
         ], Response::HTTP_CREATED);
     }
 
-    public function products($id)
+    public function warehouseProducts($id)
     {
         $warehouse = Warehouse::with('warehouseProducts')->findOrFail($id);
 
         return response()->json([
             'success' => true,
             'data' => $warehouse->warehouseProducts
+        ], Response::HTTP_OK);
+    }
+
+    public function warehouseNotProducts($id)
+    {
+        $warehouse = Warehouse::findOrFail($id);
+
+        $assignedProductIds = $warehouse->warehouseProducts()->pluck('product_id')->toArray();
+
+        $notAssignedProducts = Product::whereNotIn('id', $assignedProductIds)->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $notAssignedProducts
         ], Response::HTTP_OK);
     }
 }

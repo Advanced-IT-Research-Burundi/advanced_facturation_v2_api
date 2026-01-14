@@ -17,9 +17,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_id')->constrained();
             $table->foreignId('warehouse_id')->nullable()->constrained();
-            $table->double('quantity');
-            $table->double('unit_price');
-            $table->string('currency');
+            $table->double('quantity')->nullable();
+            $table->double('unit_price')->nullable();
+            $table->string('currency')->nullable();
             $table->foreignId('last_stock_movement_id')->constrained('stock_movements');
             $table->foreignId('user_id')->constrained();
             $table->foreignId('last_stock_movement_id_id');

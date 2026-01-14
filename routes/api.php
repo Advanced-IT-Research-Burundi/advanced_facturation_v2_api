@@ -78,7 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('stocks', WarehouseController::class);
 
-    Route::get('stocks/{id}/products', [WarehouseController::class,'products']);
+    Route::get('stocks/{id}/products', [WarehouseController::class,'warehouseProducts']);
+    Route::get('stocks/{id}/notproducts', [WarehouseController::class,'warehouseNotProducts']);
 
     // Invoice Items
     Route::apiResource('invoice-items', InvoiceItemController::class);
