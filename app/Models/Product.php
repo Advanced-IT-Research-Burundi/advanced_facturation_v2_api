@@ -24,7 +24,24 @@ class Product extends Model
         'barcode',
         'vat_rate',
         'company_id',
+        'product_unit_id',
+        'product_category_id',
         'user_id',
+        'code_product',
+        'marque',
+        'quantite',
+        'quantite_alert',
+        'price',
+        'price_ttc',
+        'price_max',
+        'price_min',
+        'price_tvac',
+        'item_ott_tax',
+        'item_tsce_tax',
+        'date_expiration',
+        'image',
+        'type',
+        'description',
     ];
 
     /**
@@ -37,8 +54,20 @@ class Product extends Model
         return [
             'id' => 'integer',
             'vat_rate' => 'double',
+            'quantite' => 'double',
+            'quantite_alert' => 'double',
+            'price' => 'double',
+            'price_ttc' => 'double',
+            'price_max' => 'double',
+            'price_min' => 'double',
+            'price_tvac' => 'double',
+            'item_ott_tax' => 'double',
+            'item_tsce_tax' => 'double',
             'company_id' => 'integer',
+            'product_unit_id' => 'integer',
+            'product_category_id' => 'integer',
             'user_id' => 'integer',
+            'date_expiration' => 'date',
         ];
     }
 
@@ -50,6 +79,16 @@ class Product extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function productUnit(): BelongsTo
+    {
+        return $this->belongsTo(ProductUnit::class);
+    }
+
+    public function categoryProduct(): BelongsTo
+    {
+        return $this->belongsTo(CategoryProduct::class, 'product_category_id');
     }
 
     public function stockMovements(): HasMany

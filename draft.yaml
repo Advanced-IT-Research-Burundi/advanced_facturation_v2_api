@@ -1,13 +1,12 @@
 models:
-  DepenseCategory: 
+  Fourinsseur: 
     name : string
-    description: text nullable 
-    company_id: integer
+    phone_number: text nullable 
+    nif: text nullable 
+    email: text nullable
+    address: text nullable
+    company_id: foreign_id nullable
+    user_id: foreign_id
 
-  Depense:
-    name : string
-    montant : float 
-    depense_category_id: id  froreign DepenseCategory
-    company_id: integer nullable
-    justification_file : string nullable
+  
     

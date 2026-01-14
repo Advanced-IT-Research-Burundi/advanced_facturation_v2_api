@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -12,11 +13,20 @@ class ProductController extends Controller
     /**
      * Display a listing of products.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $query = Product::with(['company', 'productUnit', 'categoryProduct', 'user']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where('item_code', 'like', "%{$search}%")
+                  ->orWhere('item_designation', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
+        }
+
         return response()->json([
             'success' => true,
-            'data' => Product::with(['company', 'stockMovements'])->paginate(15)
+            'data' => ProductResource::collection($query->paginate(15))
         ], Response::HTTP_OK);
     }
 
@@ -32,6 +42,23 @@ class ProductController extends Controller
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'required|numeric|min:0|max:100',
             'company_id' => 'required|exists:companies,id',
+            'product_unit_id' => 'nullable|exists:product_units,id',
+            'product_category_id' => 'nullable|exists:category_products,id',
+            'code_product' => 'nullable|string|max:255',
+            'marque' => 'nullable|string|max:255',
+            'quantite' => 'nullable|numeric|min:0',
+            'quantite_alert' => 'nullable|numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'price_ttc' => 'nullable|numeric|min:0',
+            'price_max' => 'nullable|numeric|min:0',
+            'price_min' => 'nullable|numeric|min:0',
+            'price_tvac' => 'nullable|numeric|min:0',
+            'item_ott_tax' => 'nullable|numeric|min:0',
+            'item_tsce_tax' => 'nullable|numeric|min:0',
+            'date_expiration' => 'nullable|date',
+            'image' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
         ]);
 
         $validated['user_id'] = auth()->id();
@@ -40,8 +67,8 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Product created successfully',
-            'data' => $product->load('company')
+            'message' => 'Produit créé avec succès',
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
         ], Response::HTTP_CREATED);
     }
 
@@ -52,7 +79,7 @@ class ProductController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $product->load(['company', 'stockMovements', 'warehouseProducts'])
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user', 'stockMovements', 'warehouseProducts']))
         ], Response::HTTP_OK);
     }
 
@@ -68,14 +95,31 @@ class ProductController extends Controller
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'sometimes|required|numeric|min:0|max:100',
             'company_id' => 'sometimes|required|exists:companies,id',
+            'product_unit_id' => 'nullable|exists:product_units,id',
+            'product_category_id' => 'nullable|exists:category_products,id',
+            'code_product' => 'nullable|string|max:255',
+            'marque' => 'nullable|string|max:255',
+            'quantite' => 'nullable|numeric|min:0',
+            'quantite_alert' => 'nullable|numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'price_ttc' => 'nullable|numeric|min:0',
+            'price_max' => 'nullable|numeric|min:0',
+            'price_min' => 'nullable|numeric|min:0',
+            'price_tvac' => 'nullable|numeric|min:0',
+            'item_ott_tax' => 'nullable|numeric|min:0',
+            'item_tsce_tax' => 'nullable|numeric|min:0',
+            'date_expiration' => 'nullable|date',
+            'image' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
         ]);
 
         $product->update($validated);
 
         return response()->json([
             'success' => true,
-            'message' => 'Product updated successfully',
-            'data' => $product->load('company')
+            'message' => 'Produit mis à jour avec succès',
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
         ], Response::HTTP_OK);
     }
 
@@ -88,7 +132,7 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Product deleted successfully'
+            'message' => 'Produit supprimé avec succès'
         ], Response::HTTP_OK);
     }
 
@@ -102,8 +146,8 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Product restored successfully',
-            'data' => $product
+            'message' => 'Produit restauré avec succès',
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
         ], Response::HTTP_OK);
     }
 }
