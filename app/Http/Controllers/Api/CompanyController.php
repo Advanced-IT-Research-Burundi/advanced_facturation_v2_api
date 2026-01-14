@@ -20,6 +20,8 @@ class CompanyController extends Controller
         ], Response::HTTP_OK);
     }
 
+    
+
     /**
      * Store a newly created company.
      */
