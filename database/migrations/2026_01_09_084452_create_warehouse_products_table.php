@@ -20,9 +20,8 @@ return new class extends Migration
             $table->double('quantity');
             $table->double('unit_price');
             $table->string('currency');
-            $table->foreignId('last_stock_movement_id')->constrained('stock_movements');
+            $table->foreignId('last_stock_movement_id')->nullable()->constrained('stock_movements');
             $table->foreignId('user_id')->constrained();
-            $table->foreignId('last_stock_movement_id_id');
             $table->unique(['product_id', 'warehouse_id']);
             $table->timestamps();
             $table->softDeletes();
