@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Fourinsseur extends Model
 {
-    use HasFactory;
+    use HasFactory, HasCompanyId;
 
     /**
      * The attributes that are mass assignable.
@@ -33,6 +35,18 @@ class Fourinsseur extends Model
     {
         return [
             'id' => 'integer',
+            'company_id' => 'integer',
+            'user_id' => 'integer',
         ];
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

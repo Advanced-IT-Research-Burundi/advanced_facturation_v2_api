@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\AppConfigController;
 use App\Http\Controllers\Api\CategoryProductController;
 use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
+use App\Http\Controllers\Api\FourinsseurController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -101,4 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Depenses
     Route::apiResource('depenses', DepenseController::class);
     Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
+
+    // Fourinsseurs
+    Route::apiResource('fournisseurs', FourinsseurController::class);
 });

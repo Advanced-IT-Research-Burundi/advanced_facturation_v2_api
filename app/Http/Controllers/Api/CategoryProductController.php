@@ -16,7 +16,7 @@ class CategoryProductController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => CategoryProduct::with(['company', 'user'])->paginate(15)
+            'data' => CategoryProduct::latest()->paginate(15)
         ], Response::HTTP_OK);
     }
 
@@ -27,8 +27,7 @@ class CategoryProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'company_id' => 'required|exists:companies,id',
+            'description' => 'nullable|string'
         ]);
 
         $validated['user_id'] = auth()->id();
