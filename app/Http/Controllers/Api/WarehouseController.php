@@ -37,7 +37,7 @@ class WarehouseController extends Controller
             'count' => count($products)
         ], Response::HTTP_OK);
     }
-    public function stocks(){
+    public function index(){
         $stocks = Warehouse::with(['company'])->get();
         
         return response()->json([
@@ -45,19 +45,13 @@ class WarehouseController extends Controller
             'data' =>  WarehouseResource::collection($stocks)
         ], Response::HTTP_OK);
     }
-    public function index(Request $request)
+
+    public function show($id)
     {
-        $query = Warehouse::with(['company']);
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where('name', 'like', "%{$search}%")
-                  ->orWhere('location', 'like', "%{$search}%");
-        }
-
+        $warehouse = Warehouse::with(['company'])->findOrFail($id);
         return response()->json([
             'success' => true,
-            'data' => $query->paginate(15)
+            'data' => $warehouse->load(['company'])
         ], Response::HTTP_OK);
     }
 
@@ -78,5 +72,15 @@ class WarehouseController extends Controller
             'message' => 'Entrepôt créé',
             'data' => $warehouse->load('company')
         ], Response::HTTP_CREATED);
+    }
+
+    public function products($id)
+    {
+        $warehouse = Warehouse::with('warehouseProducts')->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $warehouse->warehouseProducts
+        ], Response::HTTP_OK);
     }
 }

@@ -40,6 +40,7 @@ class ProductResource extends JsonResource
             'product_unit' => $this->whenLoaded('productUnit'),
             'category_product' => $this->whenLoaded('categoryProduct'),
             'user' => $this->whenLoaded('user'),
+            'barcode_url' => url("/api/products/{$this->id}/barcode"),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

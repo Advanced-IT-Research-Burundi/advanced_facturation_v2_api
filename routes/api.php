@@ -79,7 +79,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('invoices', InvoiceController::class);
     Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);
 
-    Route::get('stocks', [WarehouseController::class, 'stocks']);
+    Route::apiResource('stocks', WarehouseController::class);
+
+    Route::get('stocks/{id}/products', [WarehouseController::class,'products']);
 
     // Invoice Items
     Route::apiResource('invoice-items', InvoiceItemController::class);
@@ -108,4 +110,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Fourinsseurs
     Route::apiResource('fournisseurs', FourinsseurController::class);
+
 });
+
+Route::get('/products/{product}/barcode', [ProductController::class, 'generatebarcode'])->name('api.products.barcode');
+Route::get('/products/{product}/qrcode', [ProductController::class, 'generateqrcode'])->name('api.products.qrcode');
+Route::get('/products-print-labels', [ProductController::class, 'printLabels'])->name('api.products.print');
+

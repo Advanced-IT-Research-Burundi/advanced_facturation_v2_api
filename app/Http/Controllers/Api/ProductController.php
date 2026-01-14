@@ -7,6 +7,8 @@ use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Picqer\Barcode\BarcodeGeneratorSVG;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class ProductController extends Controller
 {
@@ -157,5 +159,59 @@ class ProductController extends Controller
             'message' => 'Produit restauré avec succès',
             'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
         ], Response::HTTP_OK);
+    }
+
+    public function generatebarcode(Request $request, Product $product)
+    {
+        // Use product barcode or item_code if content is not provided
+        $content = $request->get('content', $product->barcode ?? $product->item_code ?? '000000');
+        $type = $request->get('type', 'TYPE_CODE_128');
+        
+        $generator = new BarcodeGeneratorSVG();
+        
+        $barcodeType = $generator::TYPE_CODE_128;
+        if ($type === 'TYPE_EAN_13') $barcodeType = $generator::TYPE_EAN_13;
+        if ($type === 'TYPE_CODE_39') $barcodeType = $generator::TYPE_CODE_39;
+        
+        try {
+            $svg = $generator->getBarcode($content, $barcodeType);
+            return response($svg)->header('Content-Type', 'image/svg+xml');
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate barcode: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    public function generateqrcode(Request $request, Product $product)
+    {
+        $content = $request->get('content', $product->barcode ?? $product->item_code ?? '000000');
+        $size = $request->get('size', 200);
+        
+        try {
+            $qrCode = QrCode::format('svg')
+                ->size($size)
+                ->margin(1)
+                ->generate($content);
+                
+            return response($qrCode)->header('Content-Type', 'image/svg+xml');
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    public function printLabels(Request $request)
+    {
+        $productId = $request->get('product_id');
+        $count = $request->get('count', 1);
+        $type = $request->get('type', 'barcode'); // 'barcode' or 'qrcode'
+        
+        $product = Product::findOrFail($productId);
+        
+        return view('labels.print', compact('product', 'count', 'type'));
     }
 }
