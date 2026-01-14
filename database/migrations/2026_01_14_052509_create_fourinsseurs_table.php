@@ -11,21 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
-
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('fourinsseurs', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->nullable();
-            $table->string('email')->unique();
-            $table->string('password');
-            // $table->foreignId('role_id')->constrained()->nullable();
+            $table->string('name');
+            $table->text('phone_number')->nullable();
+            $table->text('nif')->nullable();
+            $table->text('email')->nullable();
+            $table->text('address')->nullable();
             $table->foreignId('company_id')->nullable();
-            $table->foreignId('user_id')->nullable();
+            $table->foreignId('user_id');
             $table->timestamps();
             $table->softDeletes();
         });
-
-        Schema::enableForeignKeyConstraints();
     }
 
     /**
@@ -33,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
+        Schema::dropIfExists('fourinsseurs');
     }
 };

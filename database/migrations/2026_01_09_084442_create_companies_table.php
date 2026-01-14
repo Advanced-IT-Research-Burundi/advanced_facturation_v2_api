@@ -16,7 +16,8 @@ return new class extends Migration
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('tp_type');
+            // 1 pour le personne physique , 2 pour le personne morale ou societe etranger
+            $table->enum('tp_type',[1,2])->default('1');
             $table->string('tp_name');
             $table->string('tp_TIN')->unique();
             $table->string('tp_trade_number')->nullable();
@@ -28,15 +29,26 @@ return new class extends Migration
             $table->string('tp_address_avenue')->nullable();
             $table->string('tp_address_rue')->nullable();
             $table->string('tp_address_number')->nullable();
-            $table->string('tp_fiscal_center')->nullable();
+            $table->enum('tp_fiscal_center', [
+            'DPMC',    
+            'DMC',
+            'DGC'
+            ])->nullable();
             $table->string('tp_activity_sector')->nullable();
             $table->string('tp_legal_form')->nullable();
             $table->string('vat_taxpayer');
             $table->string('ct_taxpayer');
             $table->string('tl_taxpayer');
-            $table->string('system_or_device_id');
-            $table->string('default_currency');
-            $table->foreignId('user_id')->nullable()->constrained();
+            $table->string('system_or_device_id')->nullable();
+             $table->string('default_currency')->nullable();
+            $table->string('obr_username')->nullable();
+            $table->string('obr_password')->nullable();
+            $table->string('web_site')->nullable();
+            $table->string('tp_banque')->nullable();
+            $table->string(column: 'tp_compte_name')->nullable();
+            $table->string(column: 'company_logo')->nullable();
+            $table->text(column: 'description')->nullable();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

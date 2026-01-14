@@ -6,12 +6,11 @@ use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Warehouse extends Model
+class Fourinsseur extends Model
 {
-    use HasFactory, SoftDeletes , HasCompanyId;
+    use HasFactory, HasCompanyId, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -20,7 +19,10 @@ class Warehouse extends Model
      */
     protected $fillable = [
         'name',
-        'location',
+        'phone_number',
+        'nif',
+        'email',
+        'address',
         'company_id',
         'user_id',
     ];
@@ -47,15 +49,5 @@ class Warehouse extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function stockMovements(): HasMany
-    {
-        return $this->hasMany(StockMovement::class);
-    }
-
-    public function warehouseProducts(): HasMany
-    {
-        return $this->hasMany(WarehouseProduct::class);
     }
 }

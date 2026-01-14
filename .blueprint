@@ -1,37 +1,7 @@
 created:
-    - database/factories/CompanyFactory.php
-    - database/factories/RoleFactory.php
-    - database/factories/UserFactory.php
-    - database/factories/RoleUserFactory.php
-    - database/factories/ProductFactory.php
-    - database/factories/WarehouseFactory.php
-    - database/factories/CustomerFactory.php
-    - database/factories/InvoiceFactory.php
-    - database/factories/InvoiceItemFactory.php
-    - database/factories/StockMovementFactory.php
-    - database/factories/WarehouseProductFactory.php
-    - database/migrations/2026_01_09_084514_create_companies_table.php
-    - database/migrations/2026_01_09_084515_create_roles_table.php
-    - database/migrations/2026_01_09_084516_create_users_table.php
-    - database/migrations/2026_01_09_084517_create_role_users_table.php
-    - database/migrations/2026_01_09_084518_create_products_table.php
-    - database/migrations/2026_01_09_084519_create_warehouses_table.php
-    - database/migrations/2026_01_09_084520_create_customers_table.php
-    - database/migrations/2026_01_09_084521_create_invoices_table.php
-    - database/migrations/2026_01_09_084522_create_invoice_items_table.php
-    - database/migrations/2026_01_09_084523_create_stock_movements_table.php
-    - database/migrations/2026_01_09_084524_create_warehouse_products_table.php
-    - app/Models/Company.php
-    - app/Models/Role.php
-    - app/Models/User.php
-    - app/Models/RoleUser.php
-    - app/Models/Product.php
-    - app/Models/Warehouse.php
-    - app/Models/Customer.php
-    - app/Models/Invoice.php
-    - app/Models/InvoiceItem.php
-    - app/Models/StockMovement.php
-    - app/Models/WarehouseProduct.php
+    - database/factories/FourinsseurFactory.php
+    - database/migrations/2026_01_14_052509_create_fourinsseurs_table.php
+    - app/Models/Fourinsseur.php
 models:
     Company: { name: string, tp_type: string, tp_name: string, tp_TIN: 'string unique', tp_trade_number: 'string nullable', tp_postal_number: 'string nullable', tp_phone_number: 'string nullable', tp_address_province: 'string nullable', tp_address_commune: 'string nullable', tp_address_quartier: 'string nullable', tp_address_avenue: 'string nullable', tp_address_rue: 'string nullable', tp_address_number: 'string nullable', tp_fiscal_center: 'string nullable', tp_activity_sector: 'string nullable', tp_legal_form: 'string nullable', vat_taxpayer: string, ct_taxpayer: string, tl_taxpayer: string, system_or_device_id: string, default_currency: string, timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, relationships: { hasMany: 'Invoice, Warehouse, User' } }
     Role: { name: string, description: 'string nullable', timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, relationships: { hasMany: User } }
@@ -44,3 +14,9 @@ models:
     InvoiceItem: { invoice_id: foreign, item_designation: string, item_quantity: double, item_price: double, item_ct: 'double nullable', item_tl: 'double nullable', item_ott_tax: 'double nullable', item_tsce_tax: 'double nullable', item_price_nvat: double, vat: double, item_price_wvat: double, item_total_amount: double, timestamps: false, softdeletes: softDeletes, user_id: foreign, relationships: { belongsTo: Invoice } }
     StockMovement: { system_or_device_id: string, item_code: string, item_designation: string, item_quantity: double, item_measurement_unit: string, item_purchase_or_sale_price: double, item_purchase_or_sale_currency: string, item_movement_type: string, item_movement_invoice_ref: 'string nullable', item_movement_description: 'string nullable', item_movement_date: datetime, obr_submission_status: 'enum:PENDING,SENT,ACCEPTED,REJECTED', obr_response_message: 'text nullable', obr_sent_at: 'datetime nullable', company_id: foreign, product_id: foreign, warehouse_id: foreign, created_by: 'foreign:users', timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, relationships: { belongsTo: 'Company, Product, Warehouse, User:created_by' } }
     WarehouseProduct: { product_id: foreign, warehouse_id: foreign, quantity: double, unit_price: double, currency: string, last_stock_movement_id: 'foreign:stock_movements', timestamps: timestamps, softdeletes: softDeletes, user_id: foreign, indexes: [{ unique: 'product_id, warehouse_id' }], relationships: { belongsTo: 'Product, Warehouse, StockMovement:last_stock_movement_id' } }
+    AppConfig: { config_key: string, value: 'text nullable' }
+    CategoryProduct: { name: string, description: 'text nullable', company_id: integer }
+    ProductUnit: { name: string, description: 'text nullable', company_id: integer }
+    DepenseCategory: { name: string, description: 'text nullable', company_id: integer }
+    Depense: { name: string, montant: float, depense_category_id: 'id  froreign DepenseCategory', company_id: 'integer nullable', justification_file: 'string nullable' }
+    Fourinsseur: { name: string, phone_number: 'text nullable', nif: 'text nullable', email: 'text nullable', address: 'text nullable', company_id: 'foreign_id nullable', user_id: foreign_id }

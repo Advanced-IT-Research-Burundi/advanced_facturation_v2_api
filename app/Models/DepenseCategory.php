@@ -5,11 +5,9 @@ namespace App\Models;
 use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Warehouse extends Model
+class DepenseCategory extends Model
 {
     use HasFactory, SoftDeletes , HasCompanyId;
 
@@ -20,7 +18,7 @@ class Warehouse extends Model
      */
     protected $fillable = [
         'name',
-        'location',
+        'description',
         'company_id',
         'user_id',
     ];
@@ -34,28 +32,30 @@ class Warehouse extends Model
     {
         return [
             'id' => 'integer',
-            'company_id' => 'integer',
-            'user_id' => 'integer',
         ];
     }
 
-    public function company(): BelongsTo
+    /**
+     * Get the company that owns this depense category.
+     */
+    public function company()
     {
         return $this->belongsTo(Company::class);
     }
 
-    public function user(): BelongsTo
+    /**
+     * Get the user that created this depense category.
+     */
+    public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    public function stockMovements(): HasMany
+    /**
+     * Get all depenses for this category.
+     */
+    public function depenses()
     {
-        return $this->hasMany(StockMovement::class);
-    }
-
-    public function warehouseProducts(): HasMany
-    {
-        return $this->hasMany(WarehouseProduct::class);
+        return $this->hasMany(Depense::class);
     }
 }

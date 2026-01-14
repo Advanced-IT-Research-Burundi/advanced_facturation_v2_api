@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductUnitController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -14,6 +15,11 @@ use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\WarehouseProductController;
 use App\Http\Controllers\Api\RoleUserController;
+use App\Http\Controllers\Api\AppConfigController;
+use App\Http\Controllers\Api\CategoryProductController;
+use App\Http\Controllers\Api\DepenseCategoryController;
+use App\Http\Controllers\Api\DepenseController;
+use App\Http\Controllers\Api\FourinsseurController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -48,6 +54,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('products', ProductController::class);
     Route::post('products/{id}/restore', [ProductController::class, 'restore']);
 
+    // Product Units
+    Route::apiResource('product-units', ProductUnitController::class);
+    Route::post('product-units/{id}/restore', [ProductUnitController::class, 'restore']);
+
+    // Category Products
+    Route::apiResource('category-products', CategoryProductController::class);
+    Route::post('category-products/{id}/restore', [CategoryProductController::class, 'restore']);
+
     // Warehouses
     Route::apiResource('warehouses', WarehouseController::class);
     Route::post('warehouses/{id}/restore', [WarehouseController::class, 'restore']);
@@ -56,9 +70,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('customers', CustomerController::class);
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
 
+    Route::get('checkTIN/{tp_TIN}', [CustomerController::class,'checkTin']);
+
     // Invoices
     Route::apiResource('invoices', InvoiceController::class);
     Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);
+
+    Route::get('stocks', [WarehouseController::class, 'stocks']);
 
     // Invoice Items
     Route::apiResource('invoice-items', InvoiceItemController::class);
@@ -71,4 +89,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
     Route::post('warehouse-products/{id}/restore', [WarehouseProductController::class, 'restore']);
+
+    // App Configs
+    Route::apiResource('app-configs', AppConfigController::class);
+    Route::post('app-configs/{id}/restore', [AppConfigController::class, 'restore']);
+    Route::get('app-configs-by-key/{key}', [AppConfigController::class, 'getByKey']);
+
+    // Depense Categories
+    Route::apiResource('depense-categories', DepenseCategoryController::class);
+    Route::post('depense-categories/{id}/restore', [DepenseCategoryController::class, 'restore']);
+
+    // Depenses
+    Route::apiResource('depenses', DepenseController::class);
+    Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
+
+    // Fourinsseurs
+    Route::apiResource('fournisseurs', FourinsseurController::class);
 });

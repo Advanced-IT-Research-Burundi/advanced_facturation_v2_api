@@ -12,13 +12,26 @@ class UserController extends Controller
     /**
      * Display a listing of users.
      */
-    public function index()
-    {
-        return response()->json([
-            'success' => true,
-            'data' => User::with(['role', 'company'])->paginate(15)
-        ], Response::HTTP_OK);
-    }
+   public function index(Request $request)
+{
+    $search = $request->query('search');
+
+    $users = User::with(['role', 'company'])
+        ->when($search, function ($query) use ($search) {
+            $query->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%")
+                  ->orWhereHas('company', function ($q) use ($search) {
+                      $q->where('name', 'LIKE', "%{$search}%");
+                  });
+        })
+        ->paginate(15);
+
+    return response()->json([
+        'success' => true,
+        'data' => $users
+    ], Response::HTTP_OK);
+}
+
 
     /**
      * Store a newly created user.

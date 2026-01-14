@@ -6,12 +6,11 @@ use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Warehouse extends Model
+class Depense extends Model
 {
-    use HasFactory, SoftDeletes , HasCompanyId;
+    use HasFactory, SoftDeletes, HasCompanyId;
 
     /**
      * The attributes that are mass assignable.
@@ -20,8 +19,10 @@ class Warehouse extends Model
      */
     protected $fillable = [
         'name',
-        'location',
+        'montant',
+        'depense_category_id',
         'company_id',
+        'justification_file',
         'user_id',
     ];
 
@@ -34,28 +35,32 @@ class Warehouse extends Model
     {
         return [
             'id' => 'integer',
-            'company_id' => 'integer',
-            'user_id' => 'integer',
+            'montant' => 'float',
+            'depense_category_id' => 'integer',
         ];
     }
 
+    /**
+     * Get the depense category for this depense.
+     */
+    public function depenseCategory(): BelongsTo
+    {
+        return $this->belongsTo(DepenseCategory::class);
+    }
+
+    /**
+     * Get the company that owns this depense.
+     */
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
     }
 
+    /**
+     * Get the user that created this depense.
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function stockMovements(): HasMany
-    {
-        return $this->hasMany(StockMovement::class);
-    }
-
-    public function warehouseProducts(): HasMany
-    {
-        return $this->hasMany(WarehouseProduct::class);
     }
 }
