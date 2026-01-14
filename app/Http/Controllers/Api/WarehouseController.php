@@ -3,12 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\WarehouseResource;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class WarehouseController extends Controller
 {
+    public function stocks(){
+        $stocks = Warehouse::with(['company'])->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' =>  WarehouseResource::collection($stocks)
+        ], Response::HTTP_OK);
+    }
     public function index(Request $request)
     {
         $query = Warehouse::with(['company']);
@@ -30,7 +39,7 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
-            'company_id' => 'required|exists:companies,id',
+          //  'company_id' => 'required|exists:companies,id',
         ]);
 
         $validated['user_id'] = auth()->id() ?? 1;
