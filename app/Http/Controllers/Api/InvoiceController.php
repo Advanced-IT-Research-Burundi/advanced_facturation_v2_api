@@ -233,27 +233,28 @@ class InvoiceController extends Controller
                 $total_amount = 0;
 
                 foreach ($request->items as $item) {
-                    $quantity = $item['item_quantity'];
-                    $price = $item['item_price'];
-                    $vatRate = $item['vat'];
-                    
-                    $price_nvat = $quantity * $price;
-                    $vat_amount = $price_nvat * ($vatRate / 100);
-                    $total_item_amount = $price_nvat + $vat_amount;
+                    $itemCalculations = $this->calculateItemAmounts($item);
 
                     $invoice->invoiceItems()->create([
                         'item_designation' => $item['item_designation'],
-                        'item_quantity' => $quantity,
-                        'item_price' => $price,
-                        'vat' => $vatRate,
-                        'item_price_nvat' => $price_nvat,
-                        'item_total_amount' => $total_item_amount,
-                        // 'user_id' => auth()->id(), // specific to setup
+                        'item_quantity' => $item['item_quantity'],
+                        'item_price' => $item['item_price'],
+                        'item_ct' => $item['item_ct'] ?? 0,
+                        'item_tl' => $item['item_tl'] ?? 0,
+                        'item_ott_tax' => 0,
+                        'item_tsce_tax' => 0,
+                        'item_price_nvat' => $itemCalculations['price_nvat'],
+                        'vat' => $item['vat'],
+                        'item_price_wvat' => $itemCalculations['price_wvat'],
+                        'item_total_amount' => $itemCalculations['total_amount'],
+                        'product_id' => $item['product_id'] ?? null,
+                        'user_id' => auth()->id(),
                     ]);
 
-                    $total_amount_nvat += $price_nvat;
-                    $total_vat_amount += $vat_amount;
-                    $total_amount += $total_item_amount;
+                    $total_amount_nvat += $itemCalculations['price_nvat'] * $item['item_quantity'];
+                    $total_vat_amount += $itemCalculations['vat_amount'] * $item['item_quantity'];
+                    // Note: total_amount in calculations is line total TTC
+                    $total_amount += $itemCalculations['total_amount'];
                 }
 
                 // Update invoice totals
