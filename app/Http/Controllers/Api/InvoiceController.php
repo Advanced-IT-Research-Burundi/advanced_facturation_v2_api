@@ -38,12 +38,12 @@ class InvoiceController extends Controller
     {
         $validated = $request->validate([
             'invoice_type' => 'required|in:FN,FP,FA,FC',
-            'invoice_identifier' => 'required|in:SERVICE,POS',
+            'invoice_action' => 'required|in:SERVICE,POS',
             'invoice_currency' => 'required|string|max:3',
             'customer_id' => 'required|exists:customers,id',
             'warehouse_id' => 'nullable|exists:warehouses,id',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required_if:invoice_identifier,POS|exists:products,id',
+            'items.*.product_id' => 'required_if:invoice_action,POS|exists:products,id',
             'items.*.item_designation' => 'required|string|max:255',
             'items.*.item_quantity' => 'required|numeric|min:0.01',
             'items.*.item_price' => 'required|numeric|min:0',
@@ -56,7 +56,7 @@ class InvoiceController extends Controller
             DB::beginTransaction();
 
             // Vérifier le stock si c'est une vente POS
-            if ($validated['invoice_identifier'] === 'POS') {
+            if ($validated['invoice_action'] === 'POS') {
                 $stockCheck = $this->stockService->checkStockAvailability(
                     $validated['items'],
                     $validated['warehouse_id'] ?? null
@@ -76,14 +76,13 @@ class InvoiceController extends Controller
             $totals = $this->calculateTotals($validated['items']);
             $invoiceNumber = $this->generateInvoiceNumber(
                 $validated['invoice_type'],
-                $validated['invoice_identifier']
+                $validated['invoice_action']
             );
 
             $invoice = Invoice::create([
                 'invoice_number' => $invoiceNumber,
                 'invoice_date' => now(),
                 'invoice_type' => $validated['invoice_type'],
-                'invoice_identifier' => $validated['invoice_identifier'],
                 'invoice_currency' => $validated['invoice_currency'],
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
@@ -135,7 +134,7 @@ class InvoiceController extends Controller
             }
 
             $stockMovements = null;
-            if ($validated['invoice_identifier'] === 'POS') {
+            if ($validated['invoice_action'] === 'POS') {
                 $stockMovements = $this->stockService->processSaleStockMovement(
                     $validated['items'],
                     $invoice->id,

@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('invoice_number');
             $table->dateTime('invoice_date');
             $table->string('invoice_type');
-            $table->string('invoice_identifier');
+            $table->string('invoice_identifier')->nullable();
             $table->string('invoice_currency');
             $table->string('tp_type');
             $table->string('tp_name');
