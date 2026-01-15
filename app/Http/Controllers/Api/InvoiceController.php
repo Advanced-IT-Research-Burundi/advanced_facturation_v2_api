@@ -25,9 +25,16 @@ class InvoiceController extends Controller
      */
     public function index()
     {
+        $query = Invoice::with(['company', 'customer', 'invoiceItems'])
+            ->orderBy('created_at', 'desc');
+
+        if (request()->has('invoice_type')) {
+            $query->where('invoice_type', request('invoice_type'));
+        }
+
         return response()->json([
             'success' => true,
-            'data' => Invoice::with(['company', 'customer', 'invoiceItems'])->paginate(15)
+            'data' => $query->paginate(15)
         ], Response::HTTP_OK);
     }
 
@@ -51,7 +58,6 @@ class InvoiceController extends Controller
             'items.*.item_ct' => 'nullable|numeric|min:0',
             'items.*.item_tl' => 'nullable|numeric|min:0',
         ]);
-
         try {
             DB::beginTransaction();
 
@@ -93,6 +99,7 @@ class InvoiceController extends Controller
                 'invoice_number' => $invoiceNumber,
                 'invoice_date' => now(),
                 'invoice_type' => $validated['invoice_type'],
+                'invoice_identifier' => $validated['invoice_action'],
                 'invoice_currency' => $validated['invoice_currency'],
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
@@ -194,19 +201,70 @@ class InvoiceController extends Controller
     public function update(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'invoice_number' => 'sometimes|required|string|max:255',
-            'invoice_date' => 'sometimes|required|date',
-            'invoice_type' => 'sometimes|required|string|max:255',
-            'invoice_identifier' => 'sometimes|required|string|max:255',
-            'invoice_currency' => 'sometimes|required|string|max:3',
-            'obr_submission_status' => 'sometimes|required|in:PENDING,SENT,ACCEPTED,REJECTED',
-            'obr_response_message' => 'nullable|string',
-            'invoice_registered_number' => 'nullable|string|max:255',
-            'invoice_registered_date' => 'nullable|date',
-            'electronic_signature' => 'nullable|string',
+            'invoice_number' => 'sometimes|string',
+            'invoice_date' => 'sometimes|date',
+            'invoice_type' => 'sometimes|string',
+            'invoice_currency' => 'sometimes|string|max:3',
+            'customer_id' => 'sometimes|exists:customers,id',
+            'items' => 'sometimes|array|min:1',
+            'items.*.item_designation' => 'required_with:items|string',
+            'items.*.item_quantity' => 'required_with:items|numeric|min:0.01',
+            'items.*.item_price' => 'required_with:items|numeric|min:0',
+            'items.*.vat' => 'required_with:items|numeric|min:0',
         ]);
 
-        $invoice->update($validated);
+        DB::transaction(function () use ($invoice, $request, $validated) {
+            // Update Invoice details
+            $invoice->update($request->only([
+                'invoice_currency', 
+                'customer_id', 
+                'invoice_type'
+                // Add other fillable fields if needed
+            ]));
+
+            // Update Items if present
+            if ($request->has('items')) {
+                // Simplest approach: Delete all and recreate. 
+                // Ensure to handle stock logic if this was a POS sale (but for Proforma FP it's fine).
+                $invoice->invoiceItems()->delete();
+
+                $total_amount_nvat = 0;
+                $total_vat_amount = 0;
+                $total_amount = 0;
+
+                foreach ($request->items as $item) {
+                    $itemCalculations = $this->calculateItemAmounts($item);
+
+                    $invoice->invoiceItems()->create([
+                        'item_designation' => $item['item_designation'],
+                        'item_quantity' => $item['item_quantity'],
+                        'item_price' => $item['item_price'],
+                        'item_ct' => $item['item_ct'] ?? 0,
+                        'item_tl' => $item['item_tl'] ?? 0,
+                        'item_ott_tax' => 0,
+                        'item_tsce_tax' => 0,
+                        'item_price_nvat' => $itemCalculations['price_nvat'],
+                        'vat' => $item['vat'],
+                        'item_price_wvat' => $itemCalculations['price_wvat'],
+                        'item_total_amount' => $itemCalculations['total_amount'],
+                        'product_id' => $item['product_id'] ?? null,
+                        'user_id' => auth()->id(),
+                    ]);
+
+                    $total_amount_nvat += $itemCalculations['price_nvat'] * $item['item_quantity'];
+                    $total_vat_amount += $itemCalculations['vat_amount'] * $item['item_quantity'];
+                    // Note: total_amount in calculations is line total TTC
+                    $total_amount += $itemCalculations['total_amount'];
+                }
+
+                // Update invoice totals
+                $invoice->update([
+                    'invoice_amount_nvat' => $total_amount_nvat,
+                    'invoice_vat_amount' => $total_vat_amount,
+                    'invoice_total_amount' => $total_amount,
+                ]);
+            }
+        });
 
         return response()->json([
             'success' => true,
