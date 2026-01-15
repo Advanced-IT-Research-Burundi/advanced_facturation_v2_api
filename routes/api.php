@@ -21,6 +21,11 @@ use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
 use App\Http\Controllers\Api\FourinsseurController;
 use App\Http\Controllers\Api\WarehouseUserController;
+use App\Http\Controllers\Api\ProductLotController;
+use App\Http\Controllers\Api\PrescriptionController;
+use App\Http\Controllers\Api\PatientHistoryController;
+use App\Http\Controllers\Api\ExpirationAlertController;
+use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -122,6 +127,47 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('warehouses/{warehouse}/assign-user', [WarehouseUserController::class, 'assignUser']);
     Route::post('warehouses/{warehouse}/unassign-user', [WarehouseUserController::class, 'unassignUser']);
     Route::post('warehouses/{warehouse}/assign-multiple-users', [WarehouseUserController::class, 'assignMultipleUsers']);
+
+    // =============================================
+    // ROUTES PHARMACEUTIQUES
+    // =============================================
+
+    // Produits pharmaceutiques
+    Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
+
+    // Product Lots (Gestion des lots)
+    Route::apiResource('product-lots', ProductLotController::class);
+    Route::post('product-lots/{id}/restore', [ProductLotController::class, 'restore']);
+    Route::get('products/{product}/lots', [ProductLotController::class, 'byProduct']);
+    Route::post('product-lots/{lot}/adjust', [ProductLotController::class, 'adjustQuantity']);
+
+    // Prescriptions (Ordonnances)
+    Route::apiResource('prescriptions', PrescriptionController::class);
+    Route::post('prescriptions/{id}/restore', [PrescriptionController::class, 'restore']);
+    Route::post('prescriptions/{prescription}/dispense', [PrescriptionController::class, 'dispense']);
+
+    // Patient History (Historique patient)
+    Route::apiResource('patient-histories', PatientHistoryController::class);
+    Route::get('customers/{customer}/history', [PatientHistoryController::class, 'byCustomer']);
+    Route::post('patient-histories/check-interactions', [PatientHistoryController::class, 'checkInteractions']);
+    Route::get('patient-histories/followups', [PatientHistoryController::class, 'followups']);
+
+    // Expiration Alerts (Alertes d'expiration)
+    Route::get('expiration-alerts', [ExpirationAlertController::class, 'index']);
+    Route::get('expiration-alerts/stats', [ExpirationAlertController::class, 'stats']);
+    Route::get('expiration-alerts/{expirationAlert}', [ExpirationAlertController::class, 'show']);
+    Route::post('expiration-alerts/{alert}/acknowledge', [ExpirationAlertController::class, 'acknowledge']);
+    Route::post('expiration-alerts/{alert}/resolve', [ExpirationAlertController::class, 'resolve']);
+    Route::post('expiration-alerts/generate', [ExpirationAlertController::class, 'generate']);
+    Route::post('expiration-alerts/bulk-acknowledge', [ExpirationAlertController::class, 'bulkAcknowledge']);
+
+    // Pharmaceutical Dashboard
+    Route::get('pharmaceutical/dashboard', [PharmaceuticalDashboardController::class, 'index']);
+    Route::get('pharmaceutical/expiring-soon', [PharmaceuticalDashboardController::class, 'expiringSoon']);
+    Route::get('pharmaceutical/recent-prescriptions', [PharmaceuticalDashboardController::class, 'recentPrescriptions']);
+    Route::get('pharmaceutical/critical-alerts', [PharmaceuticalDashboardController::class, 'criticalAlerts']);
+    Route::get('pharmaceutical/therapeutic-classes', [PharmaceuticalDashboardController::class, 'therapeuticClasses']);
+    Route::get('pharmaceutical/low-stock', [PharmaceuticalDashboardController::class, 'lowStock']);
 
 });
 

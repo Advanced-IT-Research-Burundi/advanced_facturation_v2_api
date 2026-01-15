@@ -44,6 +44,20 @@ class Product extends Model
         'image',
         'type',
         'description',
+        // Champs pharmaceutiques
+        'is_pharmaceutical',
+        'dci',
+        'dosage',
+        'forme_galenique',
+        'laboratoire',
+        'numero_amm',
+        'requires_prescription',
+        'classe_therapeutique',
+        'contre_indications',
+        'posologie_standard',
+        'delai_alerte_expiration',
+        'is_controlled_substance',
+        'storage_conditions',
     ];
 
     /**
@@ -70,6 +84,11 @@ class Product extends Model
             'product_category_id' => 'integer',
             'user_id' => 'integer',
             'date_expiration' => 'date',
+            // Casts pharmaceutiques
+            'is_pharmaceutical' => 'boolean',
+            'requires_prescription' => 'boolean',
+            'is_controlled_substance' => 'boolean',
+            'delai_alerte_expiration' => 'integer',
         ];
     }
 
@@ -101,5 +120,61 @@ class Product extends Model
     public function warehouseProducts(): HasMany
     {
         return $this->hasMany(WarehouseProduct::class);
+    }
+
+    // Relations pharmaceutiques
+    public function lots(): HasMany
+    {
+        return $this->hasMany(ProductLot::class);
+    }
+
+    public function activeLots(): HasMany
+    {
+        return $this->hasMany(ProductLot::class)->where('status', 'active')->where('current_quantity', '>', 0);
+    }
+
+    public function patientHistories(): HasMany
+    {
+        return $this->hasMany(PatientHistory::class);
+    }
+
+    public function expirationAlerts(): HasMany
+    {
+        return $this->hasMany(ExpirationAlert::class);
+    }
+
+    // Scopes pharmaceutiques
+    public function scopePharmaceutical($query)
+    {
+        return $query->where('is_pharmaceutical', true);
+    }
+
+    public function scopeNonPharmaceutical($query)
+    {
+        return $query->where('is_pharmaceutical', false);
+    }
+
+    public function scopeRequiresPrescription($query)
+    {
+        return $query->where('requires_prescription', true);
+    }
+
+    public function scopeControlledSubstance($query)
+    {
+        return $query->where('is_controlled_substance', true);
+    }
+
+    // Accessors pharmaceutiques
+    public function getTotalLotQuantityAttribute(): float
+    {
+        return $this->activeLots()->sum('current_quantity');
+    }
+
+    public function getHasExpiringLotsAttribute(): bool
+    {
+        $alertDays = $this->delai_alerte_expiration ?? 90;
+        return $this->activeLots()
+            ->where('expiration_date', '<=', now()->addDays($alertDays))
+            ->exists();
     }
 }
