@@ -55,8 +55,8 @@ class InvoiceController extends Controller
         try {
             DB::beginTransaction();
 
-            // Vérifier le stock si c'est une vente POS
-            if ($validated['invoice_action'] === 'POS') {
+            // Vérifier le stock uniquement si c'est une vente POS ET une facture réelle (FN)
+            if ($validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
                 $stockCheck = $this->stockService->checkStockAvailability(
                     $validated['items'],
                     $validated['warehouse_id'] ?? null
@@ -73,6 +73,16 @@ class InvoiceController extends Controller
 
             $customer = Customer::findOrFail($validated['customer_id']);
             $company = auth()->user()->company;
+            
+            // Check if company is null and handle it (fallback or error)
+            if (!$company) {
+                // For POS, we might need a default company or just return error
+                return response()->json([
+                    'success' => false,
+                    'message' => 'L\'utilisateur n\'est associé à aucune entreprise configurée.'
+                ], Response::HTTP_FORBIDDEN);
+            }
+
             $totals = $this->calculateTotals($validated['items']);
             $invoiceNumber = $this->generateInvoiceNumber(
                 $validated['invoice_type'],
@@ -129,12 +139,14 @@ class InvoiceController extends Controller
                     'vat' => $item['vat'],
                     'item_price_wvat' => $itemCalculations['price_wvat'],
                     'item_total_amount' => $itemCalculations['total_amount'],
+                    'product_id' => $item['product_id'] ?? null, // Added product_id persistence
                     'user_id' => auth()->id(),
                 ]);
             }
 
             $stockMovements = null;
-            if ($validated['invoice_action'] === 'POS') {
+            // Ne traiter les mouvements de stock que pour les factures réelles (FN) POS
+            if ($validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
                 $stockMovements = $this->stockService->processSaleStockMovement(
                     $validated['items'],
                     $invoice->id,
