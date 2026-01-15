@@ -92,15 +92,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('invoice-items/{id}/restore', [InvoiceItemController::class, 'restore']);
 
     // Stock Movements
-    Route::get('stock-movements', [StockMovementController::class, 'index']);
-    Route::get('warehouse-stock/{warehouseId}', [StockMovementController::class, 'warehouseStock']);
-    Route::post('stock-entries', [StockMovementController::class, 'createEntry']);
-    Route::post('stock-exits', [StockMovementController::class, 'createExit']);
-    // Gestion des transferts
-    Route::post('warehouse-transfers', [StockMovementController::class, 'createTransfer']);
-    Route::get('warehouse-transfers/pending', [StockMovementController::class, 'pendingTransfers']);
-    Route::post('warehouse-transfers/{transferId}/approve', [StockMovementController::class, 'approveTransfer']);
-    Route::post('warehouse-transfers/{transferId}/reject', [StockMovementController::class, 'rejectTransfer']);
+    Route::get('warehouses/{warehouseId}/dashboard', [StockMovementController::class, 'dashboard']);
+    Route::get('warehouses/{warehouseId}/movements', [StockMovementController::class, 'movements']);
+    Route::post('warehouses/{warehouseId}/quick-entry', [StockMovementController::class, 'quickEntry']);
+    Route::post('warehouses/{warehouseId}/quick-exit', [StockMovementController::class, 'quickExit']);
+    Route::post('warehouses/{warehouseId}/bulk-entry', [StockMovementController::class, 'bulkEntry']);
+    Route::post('warehouses/{warehouseId}/bulk-exit', [StockMovementController::class, 'bulkExit']);
+    Route::post('warehouses/{warehouseId}/transfers', [StockMovementController::class, 'createTransfer']);
+    Route::post('warehouses/{warehouseId}/transfers/{transferId}/approve', [StockMovementController::class, 'approveTransfer']);
+    Route::post('warehouses/{warehouseId}/transfers/{transferId}/reject', [StockMovementController::class, 'rejectTransfer']);
+    Route::get('warehouses/{warehouseId}/available', [StockMovementController::class, 'availableWarehouses']);
 
 
     // Warehouse Products
