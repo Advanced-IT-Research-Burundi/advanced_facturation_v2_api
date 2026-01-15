@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\CategoryProductController;
 use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
 use App\Http\Controllers\Api\FourinsseurController;
+use App\Http\Controllers\Api\WarehouseUserController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -113,6 +114,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Fourinsseurs
     Route::apiResource('fournisseurs', FourinsseurController::class);
+
+    Route::get('warehouses/{warehouse}/users', [WarehouseUserController::class, 'getAssignedUsers']);
+
+    // Récupérer les utilisateurs disponibles (non assignés)
+    Route::get('warehouses/{warehouse}/available-users', [WarehouseUserController::class, 'getAvailableUsers']);
+    Route::post('warehouses/{warehouse}/assign-user', [WarehouseUserController::class, 'assignUser']);
+    Route::post('warehouses/{warehouse}/unassign-user', [WarehouseUserController::class, 'unassignUser']);
+    Route::post('warehouses/{warehouse}/assign-multiple-users', [WarehouseUserController::class, 'assignMultipleUsers']);
 
 });
 

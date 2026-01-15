@@ -18,6 +18,7 @@ class WarehouseResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'location' => $this->location,
+            'users_count' =>$this->users()->count(),
             'company' => $this->whenLoaded('company')->name ?? "",
         ];
     }
