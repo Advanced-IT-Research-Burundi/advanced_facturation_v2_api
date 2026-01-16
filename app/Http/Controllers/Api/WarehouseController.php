@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WarehouseResource;
+use App\Http\Resources\UserWarehouseResource;
 use App\Models\Product;
+use App\Models\UserWarehouse;
 use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
@@ -12,6 +14,14 @@ use Illuminate\Http\Response;
 
 class WarehouseController extends Controller
 {
+    public function mesStock(){
+        $stoks = UserWarehouse::with(['warehouse'])->where('user_id', auth()->user()->id)->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => UserWarehouseResource::collection($stoks)
+        ], Response::HTTP_OK);
+    }
     public function product_in_stock($stock_id){
         
         $search = request("search") ?? "";

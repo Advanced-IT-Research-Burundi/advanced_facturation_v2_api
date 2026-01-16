@@ -13,4 +13,10 @@ class UserWarehouse extends Model
         'warehouse_id',
         'assigned_at',
     ];
+    public function warehouse(){
+        return $this->belongsTo(Warehouse::class);
+    }
+    public function user(){
+        return $this->belongsTo(User::class);
+    }
 }

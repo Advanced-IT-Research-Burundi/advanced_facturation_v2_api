@@ -191,10 +191,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('pharmaceutical/critical-alerts', [PharmaceuticalDashboardController::class, 'criticalAlerts']);
     Route::get('pharmaceutical/therapeutic-classes', [PharmaceuticalDashboardController::class, 'therapeuticClasses']);
     Route::get('pharmaceutical/low-stock', [PharmaceuticalDashboardController::class, 'lowStock']);
+    Route::get('/products/{product}/barcode', [ProductController::class, 'generatebarcode'])->name('api.products.barcode');
+    Route::get('/products/{product}/qrcode', [ProductController::class, 'generateqrcode'])->name('api.products.qrcode');
+    Route::get('/products-print-labels', [ProductController::class, 'printLabels'])->name('api.products.print');
+
+    // Get Mes stock 
+    Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
+    Route::get('pos-products', [ProductController::class, 'posProducts']);
 
 });
-
-Route::get('/products/{product}/barcode', [ProductController::class, 'generatebarcode'])->name('api.products.barcode');
-Route::get('/products/{product}/qrcode', [ProductController::class, 'generateqrcode'])->name('api.products.qrcode');
-Route::get('/products-print-labels', [ProductController::class, 'printLabels'])->name('api.products.print');
 

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProductResource;
+use App\Http\Resources\WarehouseProductResource;
 use App\Models\Product;
+use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Picqer\Barcode\BarcodeGeneratorSVG;
@@ -15,6 +17,33 @@ class ProductController extends Controller
     /**
      * Display a listing of products.
      */
+
+    public function posProducts(Request $request)
+    {
+        
+        $stock_id = $request->stock_id ?? auth()->user()->warehouses?->first()?->id;
+        $search = $request->search;
+        $warehouseProducts = WarehouseProduct::
+        with(['warehouse', 'product.categoryProduct'])
+        ->with(['product' => function ($query) use($search)  {
+            $fieldsSearch = ['item_code', 'item_designation', 'barcode', 'code_product', 'marque'];
+            if ($search) {
+                $query->where(function ($query) use ($search, $fieldsSearch) {
+                    foreach ($fieldsSearch as $field) {
+                        $query->orWhere($field, 'like', "%{$search}%");
+                    }
+                });
+            }
+        }])
+        ->where('warehouse_id', $stock_id)->paginate(15);
+
+        return response()->json([
+            'success' => true,
+            'data' => WarehouseProductResource::collection($warehouseProducts),// ProductResource::collection()
+        ], Response::HTTP_OK);
+    }
+
+
     public function index(Request $request)
     {
         $query = Product::with(['company', 'productUnit', 'categoryProduct', 'user']);
