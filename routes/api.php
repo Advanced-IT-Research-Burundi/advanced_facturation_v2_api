@@ -190,5 +190,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
     Route::get('pos-products', [ProductController::class, 'posProducts']);
 
+    // Reports
+    Route::get('reports/sales', [App\Http\Controllers\Api\ReportController::class, 'sales']);
+
 });
 
