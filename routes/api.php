@@ -97,7 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('invoice-items', InvoiceItemController::class);
     Route::post('invoice-items/{id}/restore', [InvoiceItemController::class, 'restore']);
 
-    // Stock Movements
+     // Stock Movements
     Route::get('warehouses/{warehouseId}/dashboard', [StockMovementController::class, 'dashboard']);
     Route::get('warehouses/{warehouseId}/movements', [StockMovementController::class, 'movements']);
     Route::post('warehouses/{warehouseId}/quick-entry', [StockMovementController::class, 'quickEntry']);
