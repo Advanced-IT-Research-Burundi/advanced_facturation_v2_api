@@ -10,15 +10,18 @@ use App\Models\Customer;
 use App\Models\InvoiceItem;
 use Illuminate\Support\Facades\DB;
 use App\Services\StockService;
+use App\Services\ObrService;
 
 
 class InvoiceController extends Controller
 {
     protected $stockService;
+    protected $obrService;
 
-    public function __construct(StockService $stockService)
+    public function __construct(StockService $stockService, ObrService $obrService)
     {
         $this->stockService = $stockService;
+        $this->obrService = $obrService;
     }
     /**
      * Display a listing of invoices.
@@ -44,16 +47,22 @@ class InvoiceController extends Controller
         public function store(Request $request)
     {
         $validated = $request->validate([
-            'invoice_type' => 'required|in:FN,FP,FA,FC',
+            'invoice_type' => 'required|in:FN,FP,FA,FC,RC',
             'invoice_action' => 'required|in:SERVICE,POS',
             'invoice_currency' => 'required|string|max:3',
             'customer_id' => 'required|exists:customers,id',
             'warehouse_id' => 'nullable|exists:warehouses,id',
+            'payment_type' => 'nullable|string|max:50',
+            'reference_invoice_id' => 'nullable|exists:invoices,id',
+            'reference_invoice_number' => 'nullable|string',
+            'avoir_reason' => 'nullable|string',
+            'refund_reason' => 'nullable|string',
+            'deposit_reference' => 'nullable|string',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required_if:invoice_action,POS|exists:products,id',
+            'items.*.product_id' => 'nullable|exists:products,id',
             'items.*.item_designation' => 'required|string|max:255',
-            'items.*.item_quantity' => 'required|numeric|min:0.01',
-            'items.*.item_price' => 'required|numeric|min:0',
+            'items.*.item_quantity' => 'required|numeric',
+            'items.*.item_price' => 'required|numeric',
             'items.*.vat' => 'required|numeric|min:0|max:100',
             'items.*.item_ct' => 'nullable|numeric|min:0',
             'items.*.item_tl' => 'nullable|numeric|min:0',
@@ -101,6 +110,7 @@ class InvoiceController extends Controller
                 'invoice_type' => $validated['invoice_type'],
                 'invoice_identifier' => $validated['invoice_action'],
                 'invoice_currency' => $validated['invoice_currency'],
+                'payment_type' => $validated['payment_type'] ?? 'cash',
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
                 'tp_name' => $company->tp_name,
@@ -120,6 +130,12 @@ class InvoiceController extends Controller
                 'invoice_amount_nvat' => $totals['total_ht'],
                 'invoice_vat_amount' => $totals['total_vat'],
                 'invoice_total_amount' => $totals['total_ttc'],
+
+                // Références pour avoir et remboursement
+                'reference_invoice_id' => $validated['reference_invoice_id'] ?? null,
+                'cancelled_invoice_ref' => $validated['reference_invoice_number'] ?? null,
+                'cn_motif' => $validated['avoir_reason'] ?? $validated['refund_reason'] ?? null,
+                'deposit_reference' => $validated['deposit_reference'] ?? null,
 
                 'obr_submission_status' => 'PENDING',
 
@@ -366,4 +382,150 @@ class InvoiceController extends Controller
         return sprintf('%s-%s-%04d', $prefix, $year, $newNumber);
     }
 
+    /**
+     * Synchroniser les factures en attente vers OBR (appelé par cron job)
+     */
+    public function syncPendingInvoices()
+    {
+        $pendingInvoices = Invoice::where('obr_submission_status', 'PENDING')
+            ->whereIn('invoice_type', ['FN', 'FA', 'FC', 'RC']) // Exclure les proformas
+            ->with(['customer', 'invoiceItems'])
+            ->orderBy('created_at', 'asc')
+            ->limit(20) // Traiter par lot de 20
+            ->get();
+
+        $results = [
+            'total' => $pendingInvoices->count(),
+            'success' => 0,
+            'failed' => 0,
+            'errors' => []
+        ];
+
+        foreach ($pendingInvoices as $invoice) {
+            try {
+                $company = $invoice->company;
+                if (!$company) {
+                    $results['failed']++;
+                    $results['errors'][] = [
+                        'invoice_id' => $invoice->id,
+                        'error' => 'Company not found'
+                    ];
+                    continue;
+                }
+
+                $obrResult = $this->obrService->addInvoice($invoice, $company);
+
+                if ($obrResult['success']) {
+                    $invoice->update([
+                        'obr_submission_status' => 'ACCEPTED',
+                        'obr_invoice_identifier' => $obrResult['invoice_identifier'] ?? null,
+                        'obr_invoice_registered_number' => $obrResult['invoice_registered_number'] ?? null,
+                        'obr_invoice_registered_date' => $obrResult['invoice_registered_date'] ?? null,
+                        'obr_electronic_signature' => $obrResult['electronic_signature'] ?? null,
+                        'obr_sent_at' => now(),
+                        'obr_response_message' => $obrResult['message'] ?? null,
+                    ]);
+                    $results['success']++;
+                } else {
+                    $invoice->update([
+                        'obr_submission_status' => 'REJECTED',
+                        'obr_invoice_identifier' => $obrResult['invoice_identifier'] ?? null,
+                        'obr_response_message' => $obrResult['message'] ?? 'Unknown error',
+                    ]);
+                    $results['failed']++;
+                    $results['errors'][] = [
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'error' => $obrResult['message'] ?? 'Unknown error'
+                    ];
+                }
+            } catch (\Exception $e) {
+                $results['failed']++;
+                $results['errors'][] = [
+                    'invoice_id' => $invoice->id,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Synchronisation terminée: {$results['success']} réussies, {$results['failed']} échouées",
+            'data' => $results
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Renvoyer une facture rejetée à OBR
+     */
+    public function resendToObr(Invoice $invoice)
+    {
+        if ($invoice->obr_submission_status === 'ACCEPTED') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette facture a déjà été acceptée par OBR'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $company = $invoice->company;
+        if (!$company) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Entreprise non trouvée'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $obrResult = $this->obrService->addInvoice($invoice, $company);
+
+        if ($obrResult['success']) {
+            $invoice->update([
+                'obr_submission_status' => 'ACCEPTED',
+                'obr_invoice_identifier' => $obrResult['invoice_identifier'] ?? null,
+                'obr_invoice_registered_number' => $obrResult['invoice_registered_number'] ?? null,
+                'obr_invoice_registered_date' => $obrResult['invoice_registered_date'] ?? null,
+                'obr_electronic_signature' => $obrResult['electronic_signature'] ?? null,
+                'obr_sent_at' => now(),
+                'obr_response_message' => $obrResult['message'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Facture envoyée avec succès à OBR',
+                'data' => $invoice->fresh()
+            ], Response::HTTP_OK);
+        }
+
+        $invoice->update([
+            'obr_submission_status' => 'REJECTED',
+            'obr_response_message' => $obrResult['message'] ?? 'Unknown error',
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $obrResult['message'] ?? 'Erreur lors de l\'envoi à OBR'
+        ], Response::HTTP_BAD_REQUEST);
+    }
+
+    /**
+     * Obtenir les statistiques de synchronisation OBR
+     */
+    public function obrStats()
+    {
+        $stats = [
+            'pending' => Invoice::where('obr_submission_status', 'PENDING')
+                ->whereIn('invoice_type', ['FN', 'FA', 'FC', 'RC'])
+                ->count(),
+            'accepted' => Invoice::where('obr_submission_status', 'ACCEPTED')->count(),
+            'rejected' => Invoice::where('obr_submission_status', 'REJECTED')->count(),
+            'recent_errors' => Invoice::where('obr_submission_status', 'REJECTED')
+                ->orderBy('updated_at', 'desc')
+                ->limit(5)
+                ->get(['id', 'invoice_number', 'obr_response_message', 'updated_at']),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ], Response::HTTP_OK);
+    }
 }

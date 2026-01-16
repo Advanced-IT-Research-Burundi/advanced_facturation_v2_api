@@ -20,26 +20,29 @@ class ProductController extends Controller
 
     public function posProducts(Request $request)
     {
-        
         $stock_id = $request->stock_id ?? auth()->user()->warehouses?->first()?->id;
         $search = $request->search;
-        $warehouseProducts = WarehouseProduct::
-        with(['warehouse', 'product.categoryProduct'])
-        ->with(['product' => function ($query) use($search)  {
+
+        $query = WarehouseProduct::with(['warehouse', 'product.categoryProduct'])
+            ->where('warehouse_id', $stock_id);
+
+        // Filtrer par recherche sur les produits
+        if ($search) {
             $fieldsSearch = ['item_code', 'item_designation', 'barcode', 'code_product', 'marque'];
-            if ($search) {
-                $query->where(function ($query) use ($search, $fieldsSearch) {
+            $query->whereHas('product', function ($q) use ($search, $fieldsSearch) {
+                $q->where(function ($subQuery) use ($search, $fieldsSearch) {
                     foreach ($fieldsSearch as $field) {
-                        $query->orWhere($field, 'like', "%{$search}%");
+                        $subQuery->orWhere($field, 'like', "%{$search}%");
                     }
                 });
-            }
-        }])
-        ->where('warehouse_id', $stock_id)->paginate(15);
+            });
+        }
+
+        $warehouseProducts = $query->paginate(50);
 
         return response()->json([
             'success' => true,
-            'data' => WarehouseProductResource::collection($warehouseProducts),// ProductResource::collection()
+            'data' => WarehouseProductResource::collection($warehouseProducts),
         ], Response::HTTP_OK);
     }
 

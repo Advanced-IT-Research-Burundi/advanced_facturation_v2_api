@@ -81,12 +81,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Customers
     Route::apiResource('customers', CustomerController::class);
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
+    Route::get('customers/{customer}/deposits', [CustomerController::class, 'deposits']);
 
     Route::get('checkTIN/{tp_TIN}', [CustomerController::class,'checkTin']);
 
     // Invoices
+    Route::post('invoices/sync-obr', [InvoiceController::class, 'syncPendingInvoices']);
+    Route::get('invoices/obr-stats', [InvoiceController::class, 'obrStats']);
     Route::apiResource('invoices', InvoiceController::class);
     Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);
+    Route::post('invoices/{invoice}/resend-obr', [InvoiceController::class, 'resendToObr']);
 
     Route::apiResource('stocks', WarehouseController::class);
 

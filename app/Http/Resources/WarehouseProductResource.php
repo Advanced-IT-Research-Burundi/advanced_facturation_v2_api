@@ -18,12 +18,12 @@ class WarehouseProductResource extends JsonResource
 
         return [
             'id' => $this->id,
-            'name' => $this->product->item_designation,
-            'price' => $this->product->price,
+            'name' => $this->product?->item_designation,
+            'price' => $this->product?->price,
             'category' => $this->product?->categoryProduct?->name,
             'stock' => $this->quantity,
-            'vat_rate' => $this->product->vat_rate,
-            'item_code' => $this->product->item_code,
+            'vat_rate' => $this->product?->vat_rate,
+            'item_code' => $this->product?->item_code,
         ];
     }
 }

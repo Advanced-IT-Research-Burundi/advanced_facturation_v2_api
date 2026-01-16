@@ -128,4 +128,42 @@ class CustomerController extends Controller
             'data' => $customer
         ], Response::HTTP_OK);
     }
+
+    /**
+     * Get customer deposits (cautions)
+     */
+    public function deposits(Customer $customer)
+    {
+        // Get all deposits (invoice_type = FC) for this customer
+        $deposits = \App\Models\Invoice::where('customer_id', $customer->id)
+            ->where('invoice_type', 'FC')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($invoice) {
+                // Calculate refunded amount from RC invoices referencing this deposit
+                $refundedAmount = \App\Models\Invoice::where('reference_invoice_id', $invoice->id)
+                    ->where('invoice_type', 'RC')
+                    ->sum('invoice_total_amount');
+
+                return [
+                    'id' => $invoice->id,
+                    'reference' => $invoice->deposit_reference ?? $invoice->invoice_number,
+                    'amount' => abs($invoice->invoice_total_amount),
+                    'refunded_amount' => abs($refundedAmount),
+                    'remaining_amount' => abs($invoice->invoice_total_amount) - abs($refundedAmount),
+                    'currency' => $invoice->invoice_currency,
+                    'created_at' => $invoice->created_at,
+                    'invoice_number' => $invoice->invoice_number,
+                ];
+            })
+            ->filter(function ($deposit) {
+                return $deposit['remaining_amount'] > 0; // Only show deposits with remaining balance
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $deposits
+        ], Response::HTTP_OK);
+    }
 }
