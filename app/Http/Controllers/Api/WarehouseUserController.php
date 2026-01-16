@@ -12,6 +12,7 @@ class WarehouseUserController extends Controller
 {
     /**
      * Récupérer les utilisateurs assignés à un entrepôt
+     * @NiBienvenu
      */
     public function getAssignedUsers($warehouseId)
     {
@@ -36,6 +37,7 @@ class WarehouseUserController extends Controller
 
     /**
      * Récupérer les utilisateurs non assignés à un entrepôt
+     * @NiBienvenu
      */
     public function getAvailableUsers($warehouseId)
     {
@@ -61,6 +63,7 @@ class WarehouseUserController extends Controller
 
     /**
      * Assigner un utilisateur à un entrepôt
+     * @NiBienvenu
      */
     public function assignUser(Request $request, $warehouseId)
     {
@@ -99,6 +102,7 @@ class WarehouseUserController extends Controller
 
     /**
      * Désassigner un utilisateur d'un entrepôt
+     * @NiBienvenu
      */
     public function unassignUser(Request $request, $warehouseId)
     {
@@ -135,6 +139,7 @@ class WarehouseUserController extends Controller
 
     /**
      * Assigner plusieurs utilisateurs en une fois
+     * @NiBienvenu
      */
     public function assignMultipleUsers(Request $request, $warehouseId)
     {

@@ -7,417 +7,642 @@ use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use App\Models\Product;
 use App\Models\Warehouse;
+use App\Models\WarehouseProduct;
+use App\Models\WarehouseTransfer;
+use App\Models\Warehouse;
+use App\Models\Product;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 
 class StockMovementController extends Controller
 {
     /**
-     * Types de mouvements valides
+     * Dashboard du stock - Retourne tout ce qui est nécessaire pour l'interface
      */
-    const ENTRY_TYPES = ['EN', 'ER', 'EI', 'EAJ', 'ET', 'EAU'];
-    const EXIT_TYPES = ['SN', 'SP', 'SV', 'SD', 'SC', 'SAJ', 'ST', 'SAU'];
+    public function dashboard($warehouseId)
+    {
+        $warehouse = Warehouse::select('id', 'name', 'location')->findOrFail($warehouseId);
 
-    const MOVEMENT_LABELS = [
-        'EN' => 'Entree Normale',
-        'ER' => 'Entree Retour',
-        'EI' => 'Entree Inventaire',
-        'EAJ' => 'Entree Ajustement',
-        'ET' => 'Entree Transfert',
-        'EAU' => 'Entree Autres',
-        'SN' => 'Sortie Normale',
-        'SP' => 'Sortie Perte',
-        'SV' => 'Sortie Vol',
-        'SD' => 'Sortie Desuetude',
-        'SC' => 'Sortie Casse',
-        'SAJ' => 'Sortie Ajustement',
-        'ST' => 'Sortie Transfert',
-        'SAU' => 'Sortie Autres',
-    ];
+        // Stock actuel avec infos minimales
+        $stocks = WarehouseProduct::with([
+            'product:id,item_code,item_designation,item_measurement_unit',
+            'lastStockMovement:id,item_movement_type,created_at'
+        ])
+        ->where('warehouse_id', $warehouseId)
+        ->where('quantity', '>', 0)
+        ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'currency', 'last_stock_movement_id')
+        ->get();
+
+        // Produits disponibles pour ajout
+        $availableProducts = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
+            ->orderBy('item_designation')
+            ->get();
+
+        // Transferts en attente pour ce destinataire
+        $pendingTransfers = WarehouseTransfer::with([
+            'sourceWarehouse:id,name',
+            'items.product:id,item_designation,item_code',
+            'creator:id,name'
+        ])
+        ->where('destination_warehouse_id', $warehouseId)
+        ->where('status', 'PENDING')
+        ->select('id', 'transfer_code', 'source_warehouse_id', 'destination_warehouse_id', 'status', 'notes', 'created_by', 'created_at')
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'warehouse' => $warehouse,
+                'stocks' => $stocks,
+                'available_products' => $availableProducts,
+                'pending_transfers' => $pendingTransfers,
+                'pending_count' => $pendingTransfers->count()
+            ]
+        ]);
+    }
 
     /**
-     * Display a listing of stock movements.
+     * Historique des mouvements avec filtres
      */
-    public function index(Request $request)
+    public function movements(Request $request, $warehouseId)
     {
-        $query = StockMovement::with(['company', 'product', 'warehouse', 'user']);
+        $query = StockMovement::with('product:id,item_designation,item_code')
+            ->where('warehouse_id', $warehouseId)
+            ->select('id', 'item_code', 'item_designation', 'item_quantity', 'item_measurement_unit',
+                     'item_purchase_or_sale_price', 'item_purchase_or_sale_currency', 'item_movement_type',
+                     'item_movement_invoice_ref', 'item_movement_date', 'obr_submission_status',
+                     'product_id', 'warehouse_id')
+            ->orderBy('item_movement_date', 'desc');
 
-        // Filtres
-        if ($request->filled('warehouse_id')) {
-            $query->where('warehouse_id', $request->warehouse_id);
-        }
-        if ($request->filled('product_id')) {
-            $query->where('product_id', $request->product_id);
-        }
-        if ($request->filled('movement_type')) {
+        if ($request->movement_type) {
             $query->where('item_movement_type', $request->movement_type);
         }
-        if ($request->filled('date_from')) {
-            $query->whereDate('item_movement_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('item_movement_date', '<=', $request->date_to);
+
+        if ($request->date_from) {
+            $query->where('item_movement_date', '>=', $request->date_from);
         }
 
-        $movements = $query->orderBy('item_movement_date', 'desc')->paginate(20);
+        if ($request->date_to) {
+            $query->where('item_movement_date', '<=', $request->date_to);
+        }
+
+        $movements = $query->paginate(50);
 
         return response()->json([
             'success' => true,
             'data' => $movements
-        ], Response::HTTP_OK);
+        ]);
     }
 
     /**
-     * Get stock for a specific warehouse
+     * Entrée rapide d'un seul produit
      */
-    public function warehouseStock($warehouseId)
+    public function quickEntry(Request $request, $warehouseId)
     {
-        $stocks = WarehouseProduct::with(['product', 'lastStockMovement'])
-            ->where('warehouse_id', $warehouseId)
-            ->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $stocks
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Create stock entry (multiple items)
-     */
-    public function createEntry(Request $request)
-    {
-        $validated = $request->validate([
-            'warehouse_id' => 'required|exists:warehouses,id',
-            'movement_type' => ['required', Rule::in(self::ENTRY_TYPES)],
-            'movement_date' => 'required|date',
-            'invoice_ref' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.currency' => 'required|string|max:3',
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|numeric|min:0.01',
+            'unit_price' => 'required|numeric|min:0',
+            'currency' => 'required|string',
+            'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
+            'date_expiration' => 'nullable|date',
+            'invoice_ref' => 'nullable|string'
         ]);
 
-        DB::beginTransaction();
         try {
-            $warehouse = Warehouse::findOrFail($validated['warehouse_id']);
-            $movements = [];
+            DB::beginTransaction();
 
-            foreach ($validated['items'] as $item) {
-                $product = Product::findOrFail($item['product_id']);
+            $product = Product::findOrFail($request->product_id);
 
-                // Create stock movement
-                $movement = StockMovement::create([
-                    'system_or_device_id' => 'WEB-' . auth()->id(),
-                    'item_code' => $product->item_code,
-                    'item_designation' => $product->item_designation,
-                    'item_quantity' => $item['quantity'],
-                    'item_measurement_unit' => $product->item_measurement_unit ?? 'PCE',
-                    'item_purchase_or_sale_price' => $item['unit_price'],
-                    'item_purchase_or_sale_currency' => $item['currency'],
-                    'item_movement_type' => $validated['movement_type'],
-                    'item_movement_invoice_ref' => $validated['invoice_ref'],
-                    'item_movement_description' => $validated['description'],
-                    'item_movement_date' => $validated['movement_date'],
-                    'obr_submission_status' => 'PENDING',
-                    'company_id' => auth()->user()->company_id,
-                    'product_id' => $product->id,
-                    'warehouse_id' => $warehouse->id,
-                    'user_id' => auth()->id(),
-                    'created_by' => auth()->id(),
-                ]);
+            $movement = StockMovement::create([
+                'system_or_device_id' => uniqid('ENT-'),
+                'item_code' => $product->item_code,
+                'item_designation' => $product->item_designation,
+                'item_quantity' => $request->quantity,
+                'item_measurement_unit' => $product->item_measurement_unit,
+                'item_purchase_or_sale_price' => $request->unit_price,
+                'item_purchase_or_sale_currency' => $request->currency,
+                'item_movement_type' => $request->movement_type,
+                'item_movement_invoice_ref' => $request->invoice_ref,
+                'item_movement_date' => now(),
+                'obr_submission_status' => 'PENDING',
+                'company_id' => Auth::user()->company_id,
+                'product_id' => $request->product_id,
+                'warehouse_id' => $warehouseId,
+                'created_by' => Auth::id(),
+                'user_id' => Auth::id()
+            ]);
 
-                // Update or create warehouse product stock
-                $warehouseProduct = WarehouseProduct::firstOrNew([
-                    'product_id' => $product->id,
-                    'warehouse_id' => $warehouse->id,
-                ]);
+            $stock = WarehouseProduct::firstOrNew([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $request->product_id
+            ]);
 
-                $warehouseProduct->quantity = ($warehouseProduct->quantity ?? 0) + $item['quantity'];
-                $warehouseProduct->unit_price = $item['unit_price'];
-                $warehouseProduct->currency = $item['currency'];
-                $warehouseProduct->last_stock_movement_id = $movement->id;
-                $warehouseProduct->user_id = auth()->id();
-                $warehouseProduct->save();
+            $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
+            $stock->unit_price = $request->unit_price;
+            $stock->currency = $request->currency;
+            $stock->last_stock_movement_id = $movement->id;
+            $stock->user_id = Auth::id();
+            $stock->save();
 
-                $movements[] = $movement;
+            // Mettre à jour date d'expiration du produit si fournie
+            if ($request->date_expiration) {
+                $product->update(['date_expiration' => $request->date_expiration]);
             }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Entree de stock enregistree avec succes',
-                'data' => $movements
-            ], Response::HTTP_CREATED);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de l\'enregistrement: ' . $e->getMessage()
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * Create stock exit (multiple items)
-     */
-    public function createExit(Request $request)
-    {
-        $validated = $request->validate([
-            'warehouse_id' => 'required|exists:warehouses,id',
-            'movement_type' => ['required', Rule::in(self::EXIT_TYPES)],
-            'movement_date' => 'required|date',
-            'invoice_ref' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $warehouse = Warehouse::findOrFail($validated['warehouse_id']);
-            $movements = [];
-
-            foreach ($validated['items'] as $item) {
-                $product = Product::findOrFail($item['product_id']);
-
-                // Check available stock
-                $warehouseProduct = WarehouseProduct::where('product_id', $product->id)
-                    ->where('warehouse_id', $warehouse->id)
-                    ->first();
-
-                if (!$warehouseProduct || $warehouseProduct->quantity < $item['quantity']) {
-                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " .
-                        ($warehouseProduct->quantity ?? 0));
-                }
-
-                // Create stock movement
-                $movement = StockMovement::create([
-                    'system_or_device_id' => 'WEB-' . auth()->id(),
-                    'item_code' => $product->item_code,
-                    'item_designation' => $product->item_designation,
-                    'item_quantity' => $item['quantity'],
-                    'item_measurement_unit' => $product->item_measurement_unit ?? 'PCE',
-                    'item_purchase_or_sale_price' => $warehouseProduct->unit_price ?? 0,
-                    'item_purchase_or_sale_currency' => $warehouseProduct->currency ?? 'BIF',
-                    'item_movement_type' => $validated['movement_type'],
-                    'item_movement_invoice_ref' => $validated['invoice_ref'],
-                    'item_movement_description' => $validated['description'],
-                    'item_movement_date' => $validated['movement_date'],
-                    'obr_submission_status' => 'PENDING',
-                    'company_id' => auth()->user()->company_id,
-                    'product_id' => $product->id,
-                    'warehouse_id' => $warehouse->id,
-                    'user_id' => auth()->id(),
-                    'created_by' => auth()->id(),
-                ]);
-
-                // Update warehouse product stock
-                $warehouseProduct->quantity -= $item['quantity'];
-                $warehouseProduct->last_stock_movement_id = $movement->id;
-                $warehouseProduct->save();
-
-                $movements[] = $movement;
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Sortie de stock enregistree avec succes',
-                'data' => $movements
-            ], Response::HTTP_CREATED);
-
+                'message' => 'Entrée enregistrée avec succès'
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
-            ], Response::HTTP_BAD_REQUEST);
+            ], 500);
         }
     }
 
     /**
-     * Get movement types
+     * Sortie rapide d'un seul produit
      */
-    public function getMovementTypes()
+    public function quickExit(Request $request, $warehouseId)
     {
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'entry_types' => array_map(fn($code) => [
-                    'code' => $code,
-                    'label' => self::MOVEMENT_LABELS[$code]
-                ], self::ENTRY_TYPES),
-                'exit_types' => array_map(fn($code) => [
-                    'code' => $code,
-                    'label' => self::MOVEMENT_LABELS[$code]
-                ], self::EXIT_TYPES),
-            ]
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Get movements by warehouse
-     */
-    public function byWarehouse($warehouseId, Request $request)
-    {
-        $query = StockMovement::with(['product', 'user'])
-            ->where('warehouse_id', $warehouseId);
-
-        if ($request->filled('movement_type')) {
-            $query->where('item_movement_type', $request->movement_type);
-        }
-        if ($request->filled('date_from')) {
-            $query->whereDate('item_movement_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('item_movement_date', '<=', $request->date_to);
-        }
-
-        $movements = $query->orderBy('item_movement_date', 'desc')->paginate(20);
-
-        return response()->json([
-            'success' => true,
-            'data' => $movements
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Store a newly created stock movement.
-     */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'system_or_device_id' => 'required|string|max:255',
-            'item_code' => 'required|string|max:255',
-            'item_designation' => 'required|string|max:255',
-            'item_quantity' => 'required|numeric|min:0.01',
-            'item_measurement_unit' => 'required|string|max:255',
-            'item_purchase_or_sale_price' => 'required|numeric|min:0',
-            'item_purchase_or_sale_currency' => 'required|string|max:3',
-            'item_movement_type' => ['required', Rule::in(array_merge(self::ENTRY_TYPES, self::EXIT_TYPES))],
-            'item_movement_invoice_ref' => 'nullable|string|max:255',
-            'item_movement_description' => 'nullable|string',
-            'item_movement_date' => 'required|date',
-            'obr_submission_status' => 'required|in:PENDING,SENT,ACCEPTED,REJECTED',
-            'obr_response_message' => 'nullable|string',
-            'obr_sent_at' => 'nullable|date',
-            'company_id' => 'required|exists:companies,id',
+        $request->validate([
             'product_id' => 'required|exists:products,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
+            'quantity' => 'required|numeric|min:0.01',
+            'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
+            'invoice_ref' => 'nullable|string'
         ]);
 
-        $validated['user_id'] = auth()->id();
-        $validated['created_by'] = auth()->id();
-
-        DB::beginTransaction();
         try {
-            $stockMovement = StockMovement::create($validated);
+            DB::beginTransaction();
 
-            // Update warehouse product stock
-            $warehouseProduct = WarehouseProduct::firstOrNew([
-                'product_id' => $validated['product_id'],
-                'warehouse_id' => $validated['warehouse_id'],
-            ]);
+            $stock = WarehouseProduct::where('warehouse_id', $warehouseId)
+                ->where('product_id', $request->product_id)
+                ->first();
 
-            if (in_array($validated['item_movement_type'], self::ENTRY_TYPES)) {
-                $warehouseProduct->quantity = ($warehouseProduct->quantity ?? 0) + $validated['item_quantity'];
-            } else {
-                $warehouseProduct->quantity = ($warehouseProduct->quantity ?? 0) - $validated['item_quantity'];
+            if (!$stock || $stock->quantity < $request->quantity) {
+                throw new \Exception("Stock insuffisant. Disponible: " . ($stock->quantity ?? 0));
             }
 
-            $warehouseProduct->unit_price = $validated['item_purchase_or_sale_price'];
-            $warehouseProduct->currency = $validated['item_purchase_or_sale_currency'];
-            $warehouseProduct->last_stock_movement_id = $stockMovement->id;
-            $warehouseProduct->user_id = auth()->id();
-            $warehouseProduct->save();
+            $product = Product::findOrFail($request->product_id);
+
+            $movement = StockMovement::create([
+                'system_or_device_id' => uniqid('SRT-'),
+                'item_code' => $product->item_code,
+                'item_designation' => $product->item_designation,
+                'item_quantity' => $request->quantity,
+                'item_measurement_unit' => $product->item_measurement_unit,
+                'item_purchase_or_sale_price' => $stock->unit_price,
+                'item_purchase_or_sale_currency' => $stock->currency,
+                'item_movement_type' => $request->movement_type,
+                'item_movement_invoice_ref' => $request->invoice_ref,
+                'item_movement_date' => now(),
+                'obr_submission_status' => 'PENDING',
+                'company_id' => Auth::user()->company_id,
+                'product_id' => $request->product_id,
+                'warehouse_id' => $warehouseId,
+                'created_by' => Auth::id(),
+                'user_id' => Auth::id()
+            ]);
+
+            $stock->quantity -= $request->quantity;
+            $stock->last_stock_movement_id = $movement->id;
+            $stock->user_id = Auth::id();
+            $stock->save();
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Stock movement created successfully',
-                'data' => $stockMovement->load(['company', 'product', 'warehouse'])
-            ], Response::HTTP_CREATED);
-
+                'message' => 'Sortie enregistrée avec succès'
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
     /**
-     * Display the specified stock movement.
+     * Entrée multiple de produits
      */
-    public function show(StockMovement $stockMovement)
+    public function bulkEntry(Request $request, $warehouseId)
     {
-        return response()->json([
-            'success' => true,
-            'data' => $stockMovement->load(['company', 'product', 'warehouse'])
-        ], Response::HTTP_OK);
-    }
-
-    /**
-     * Update the specified stock movement.
-     */
-    public function update(Request $request, StockMovement $stockMovement)
-    {
-        $validated = $request->validate([
-            'item_quantity' => 'sometimes|required|numeric|min:0.01',
-            'item_purchase_or_sale_price' => 'sometimes|required|numeric|min:0',
-            'item_movement_invoice_ref' => 'nullable|string|max:255',
-            'item_movement_description' => 'nullable|string',
-            'item_movement_date' => 'sometimes|required|date',
-            'obr_submission_status' => 'sometimes|required|in:PENDING,SENT,ACCEPTED,REJECTED',
-            'obr_response_message' => 'nullable|string',
-            'obr_sent_at' => 'nullable|date',
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.currency' => 'required|string',
+            'items.*.date_expiration' => 'nullable|date',
+            'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
+            'invoice_ref' => 'nullable|string',
+            'description' => 'nullable|string'
         ]);
 
-        $stockMovement->update($validated);
+        try {
+            DB::beginTransaction();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Stock movement updated successfully',
-            'data' => $stockMovement->load(['company', 'product', 'warehouse'])
-        ], Response::HTTP_OK);
+            foreach ($request->items as $item) {
+                $product = Product::findOrFail($item['product_id']);
+
+                $movement = StockMovement::create([
+                    'system_or_device_id' => uniqid('BENT-'),
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_quantity' => $item['quantity'],
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $item['unit_price'],
+                    'item_purchase_or_sale_currency' => $item['currency'],
+                    'item_movement_type' => $request->movement_type,
+                    'item_movement_invoice_ref' => $request->invoice_ref,
+                    'item_movement_description' => $request->description,
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'company_id' => Auth::user()->company_id,
+                    'product_id' => $item['product_id'],
+                    'warehouse_id' => $warehouseId,
+                    'created_by' => Auth::id(),
+                    'user_id' => Auth::id()
+                ]);
+
+                $stock = WarehouseProduct::firstOrNew([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $item['product_id']
+                ]);
+
+                $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
+                $stock->unit_price = $item['unit_price'];
+                $stock->currency = $item['currency'];
+                $stock->last_stock_movement_id = $movement->id;
+                $stock->user_id = Auth::id();
+                $stock->save();
+
+                if (!empty($item['date_expiration'])) {
+                    $product->update(['date_expiration' => $item['date_expiration']]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($request->items) . ' produit(s) ajouté(s) avec succès'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Remove the specified stock movement (soft delete).
+     * Sortie multiple de produits
      */
-    public function destroy(StockMovement $stockMovement)
+    public function bulkExit(Request $request, $warehouseId)
     {
-        $stockMovement->delete();
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
+            'invoice_ref' => 'nullable|string',
+            'description' => 'nullable|string'
+        ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Stock movement deleted successfully'
-        ], Response::HTTP_OK);
+        try {
+            DB::beginTransaction();
+
+            // Vérification du stock pour tous les produits
+            foreach ($request->items as $item) {
+                $stock = WarehouseProduct::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+
+                if (!$stock || $stock->quantity < $item['quantity']) {
+                    $product = Product::findOrFail($item['product_id']);
+                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " . ($stock->quantity ?? 0));
+                }
+            }
+
+            // Création des mouvements
+            foreach ($request->items as $item) {
+                $stock = WarehouseProduct::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+
+                $product = Product::findOrFail($item['product_id']);
+
+                $movement = StockMovement::create([
+                    'system_or_device_id' => uniqid('BSRT-'),
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_quantity' => $item['quantity'],
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $stock->unit_price,
+                    'item_purchase_or_sale_currency' => $stock->currency,
+                    'item_movement_type' => $request->movement_type,
+                    'item_movement_invoice_ref' => $request->invoice_ref,
+                    'item_movement_description' => $request->description,
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'company_id' => Auth::user()->company_id,
+                    'product_id' => $item['product_id'],
+                    'warehouse_id' => $warehouseId,
+                    'created_by' => Auth::id(),
+                    'user_id' => Auth::id()
+                ]);
+
+                $stock->quantity -= $item['quantity'];
+                $stock->last_stock_movement_id = $movement->id;
+                $stock->user_id = Auth::id();
+                $stock->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($request->items) . ' produit(s) sorti(s) avec succès'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
-     * Restore a soft-deleted stock movement.
+     * Créer un transfert (source déjà connue via l'ID de route)
      */
-    public function restore($id)
+    public function createTransfer(Request $request, $warehouseId)
     {
-        $stockMovement = StockMovement::withTrashed()->findOrFail($id);
-        $stockMovement->restore();
+        $request->validate([
+            'destination_warehouse_id' => 'required|exists:warehouses,id|different:' . $warehouseId,
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'notes' => 'nullable|string'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Vérification des stocks
+            foreach ($request->items as $item) {
+                $stock = WarehouseProduct::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+
+                if (!$stock || $stock->quantity < $item['quantity']) {
+                    $product = Product::findOrFail($item['product_id']);
+                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " . ($stock->quantity ?? 0));
+                }
+            }
+
+            $transfer = WarehouseTransfer::create([
+                'transfer_code' => 'TRF-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6)),
+                'source_warehouse_id' => $warehouseId,
+                'destination_warehouse_id' => $request->destination_warehouse_id,
+                'created_by' => Auth::id(),
+                'status' => 'PENDING',
+                'notes' => $request->notes
+            ]);
+
+            $destinationName = Warehouse::find($request->destination_warehouse_id)->name;
+
+            foreach ($request->items as $item) {
+                $stock = WarehouseProduct::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+
+                $product = Product::findOrFail($item['product_id']);
+
+                $movementOut = StockMovement::create([
+                    'system_or_device_id' => uniqid('TRF-OUT-'),
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_quantity' => $item['quantity'],
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $stock->unit_price,
+                    'item_purchase_or_sale_currency' => $stock->currency,
+                    'item_movement_type' => 'ST',
+                    'item_movement_invoice_ref' => $transfer->transfer_code,
+                    'item_movement_description' => "Transfert vers {$destinationName}",
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'company_id' => Auth::user()->company_id,
+                    'product_id' => $item['product_id'],
+                    'warehouse_id' => $warehouseId,
+                    'created_by' => Auth::id(),
+                    'user_id' => Auth::id()
+                ]);
+
+                $stock->quantity -= $item['quantity'];
+                $stock->last_stock_movement_id = $movementOut->id;
+                $stock->user_id = Auth::id();
+                $stock->save();
+
+                $transfer->items()->create([
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $stock->unit_price,
+                    'currency' => $stock->currency,
+                    'stock_movement_out_id' => $movementOut->id
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfert créé avec succès. En attente d\'approbation par le destinataire.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Approuver un transfert
+     */
+    public function approveTransfer($warehouseId, $transferId)
+    {
+        try {
+            DB::beginTransaction();
+
+            $transfer = WarehouseTransfer::with('items', 'sourceWarehouse')
+                ->where('destination_warehouse_id', $warehouseId)
+                ->findOrFail($transferId);
+
+            if ($transfer->status !== 'PENDING') {
+                throw new \Exception('Ce transfert ne peut plus être approuvé');
+            }
+
+            foreach ($transfer->items as $item) {
+                $product = Product::findOrFail($item->product_id);
+
+                $movementIn = StockMovement::create([
+                    'system_or_device_id' => uniqid('TRF-IN-'),
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_quantity' => $item->quantity,
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $item->unit_price,
+                    'item_purchase_or_sale_currency' => $item->currency,
+                    'item_movement_type' => 'ET',
+                    'item_movement_invoice_ref' => $transfer->transfer_code,
+                    'item_movement_description' => "Transfert depuis {$transfer->sourceWarehouse->name}",
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'company_id' => Auth::user()->company_id,
+                    'product_id' => $item->product_id,
+                    'warehouse_id' => $warehouseId,
+                    'created_by' => Auth::id(),
+                    'user_id' => Auth::id()
+                ]);
+
+                $stock = WarehouseProduct::firstOrNew([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $item->product_id
+                ]);
+
+                $stock->quantity = ($stock->quantity ?? 0) + $item->quantity;
+                $stock->unit_price = $item->unit_price;
+                $stock->currency = $item->currency;
+                $stock->last_stock_movement_id = $movementIn->id;
+                $stock->user_id = Auth::id();
+                $stock->save();
+
+                $item->update(['stock_movement_in_id' => $movementIn->id]);
+            }
+
+            $transfer->update([
+                'status' => 'APPROVED',
+                'approved_by' => Auth::id(),
+                'approved_at' => now()
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfert approuvé avec succès'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Rejeter un transfert
+     */
+    public function rejectTransfer(Request $request, $warehouseId, $transferId)
+    {
+        $request->validate([
+            'rejection_reason' => 'required|string'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $transfer = WarehouseTransfer::with('items')
+                ->where('destination_warehouse_id', $warehouseId)
+                ->findOrFail($transferId);
+
+            if ($transfer->status !== 'PENDING') {
+                throw new \Exception('Ce transfert ne peut plus être rejeté');
+            }
+
+            // Restaurer le stock source
+            foreach ($transfer->items as $item) {
+                $stock = WarehouseProduct::where('warehouse_id', $transfer->source_warehouse_id)
+                    ->where('product_id', $item->product_id)
+                    ->first();
+
+                if ($stock) {
+                    $stock->quantity += $item->quantity;
+                    $stock->user_id = Auth::id();
+                    $stock->save();
+                }
+
+                $product = Product::findOrFail($item->product_id);
+                StockMovement::create([
+                    'system_or_device_id' => uniqid('TRF-CNCL-'),
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_quantity' => $item->quantity,
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $item->unit_price,
+                    'item_purchase_or_sale_currency' => $item->currency,
+                    'item_movement_type' => 'EAJ',
+                    'item_movement_invoice_ref' => $transfer->transfer_code,
+                    'item_movement_description' => "Annulation transfert - " . $request->rejection_reason,
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'company_id' => Auth::user()->company_id,
+                    'product_id' => $item->product_id,
+                    'warehouse_id' => $transfer->source_warehouse_id,
+                    'created_by' => Auth::id(),
+                    'user_id' => Auth::id()
+                ]);
+            }
+
+            $transfer->update([
+                'status' => 'REJECTED',
+                'rejection_reason' => $request->rejection_reason,
+                'approved_by' => Auth::id(),
+                'approved_at' => now()
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfert rejeté. Le stock source a été restauré.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Liste des entrepôts disponibles (pour transfert)
+     */
+    public function availableWarehouses($warehouseId)
+    {
+        $warehouses = Warehouse::where('id', '!=', $warehouseId)
+            ->select('id', 'name', 'location')
+            ->orderBy('name')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'message' => 'Stock movement restored successfully',
-            'data' => $stockMovement
-        ], Response::HTTP_OK);
+            'data' => $warehouses
+        ]);
     }
 }

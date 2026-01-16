@@ -87,4 +87,5 @@ class StockMovement extends Model
     {
         return $this->belongsTo(User::class);
     }
+
 }
