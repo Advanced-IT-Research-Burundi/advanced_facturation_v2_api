@@ -110,19 +110,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('warehouses/{warehouseId}/available', [StockMovementController::class, 'availableWarehouses']);
 
 
-    // Stock Movement Operations
-    Route::get('warehouse-stock/{warehouseId}', [StockMovementController::class, 'warehouseStock']);
-    Route::post('stock-entries', [StockMovementController::class, 'createEntry']);
-    Route::post('stock-exits', [StockMovementController::class, 'createExit']);
-    Route::get('movement-types', [StockMovementController::class, 'getMovementTypes']);
-    Route::get('warehouses/{warehouseId}/movements', [StockMovementController::class, 'byWarehouse']);
-
-    // Warehouse Transfers
-    Route::get('warehouse-transfers/pending', [WarehouseTransferController::class, 'pending']);
-    Route::apiResource('warehouse-transfers', WarehouseTransferController::class);
-    Route::post('warehouse-transfers/{warehouseTransfer}/approve', [WarehouseTransferController::class, 'approve']);
-    Route::post('warehouse-transfers/{warehouseTransfer}/reject', [WarehouseTransferController::class, 'reject']);
-
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
     Route::post('warehouse-products/{id}/restore', [WarehouseProductController::class, 'restore']);
