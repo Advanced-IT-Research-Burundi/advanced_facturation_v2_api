@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\ExpirationAlertController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
+use App\Http\Controllers\Api\WarehouseTransferController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -99,6 +100,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // Stock Movements
     Route::apiResource('stock-movements', StockMovementController::class);
     Route::post('stock-movements/{id}/restore', [StockMovementController::class, 'restore']);
+
+    // Stock Movement Operations
+    Route::get('warehouse-stock/{warehouseId}', [StockMovementController::class, 'warehouseStock']);
+    Route::post('stock-entries', [StockMovementController::class, 'createEntry']);
+    Route::post('stock-exits', [StockMovementController::class, 'createExit']);
+    Route::get('movement-types', [StockMovementController::class, 'getMovementTypes']);
+    Route::get('warehouses/{warehouseId}/movements', [StockMovementController::class, 'byWarehouse']);
+
+    // Warehouse Transfers
+    Route::get('warehouse-transfers/pending', [WarehouseTransferController::class, 'pending']);
+    Route::apiResource('warehouse-transfers', WarehouseTransferController::class);
+    Route::post('warehouse-transfers/{warehouseTransfer}/approve', [WarehouseTransferController::class, 'approve']);
+    Route::post('warehouse-transfers/{warehouseTransfer}/reject', [WarehouseTransferController::class, 'reject']);
 
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
