@@ -33,9 +33,9 @@ return new class extends Migration
             $table->string('customer_TIN')->nullable();
             $table->string('customer_address')->nullable();
             $table->string('vat_customer_payer');
-            $table->decimal('invoice_amount_nvat', 15, 2);
-            $table->decimal('invoice_vat_amount', 15, 2);
-            $table->decimal('invoice_total_amount', 15, 2);
+            $table->double('invoice_amount_nvat', 64, 4);
+            $table->double('invoice_vat_amount', 64, 4);
+            $table->double('invoice_total_amount', 64, 4);
             $table->string('invoice_registered_number')->nullable();
             $table->dateTime('invoice_registered_date')->nullable();
             $table->text('electronic_signature')->nullable();
@@ -45,7 +45,7 @@ return new class extends Migration
             $table->foreignId('customer_id')->constrained()->nullable();
             $table->foreignId('created_by')->constrained('users', 'id');
             $table->foreignId('user_id')->constrained();
-            $table->foreignId('created_by_id');
+            $table->foreignId('created_by_id')->constrained('users', 'id');
             $table->timestamps();
             $table->softDeletes();
         });
