@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\ExpirationAlertController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\WarehouseTransferController;
+use App\Http\Controllers\Api\DashboardController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -40,6 +41,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // Companies
     Route::apiResource('companies', CompanyController::class);
@@ -192,6 +196,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Reports
     Route::get('reports/sales', [App\Http\Controllers\Api\ReportController::class, 'sales']);
+    Route::get('reports/invoices-history', [App\Http\Controllers\Api\ReportController::class, 'invoicesHistory']);
+    Route::get('reports/stock-sheet', [App\Http\Controllers\Api\ReportController::class, 'stockSheet']);
+    Route::get('reports/stock-movements', [App\Http\Controllers\Api\ReportController::class, 'stockMovements']);
+    Route::get('reports/stock-entries', [App\Http\Controllers\Api\ReportController::class, 'stockEntries']);
+    Route::get('reports/credit-invoices', [App\Http\Controllers\Api\ReportController::class, 'creditInvoices']);
+    Route::get('reports/proformas', [App\Http\Controllers\Api\ReportController::class, 'proformas']);
+    Route::get('reports/invoices-print', [App\Http\Controllers\Api\ReportController::class, 'invoicesForPrint']);
 
 });
 
