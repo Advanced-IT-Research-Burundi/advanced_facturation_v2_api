@@ -10,7 +10,7 @@ class CompanySeeder extends Seeder
 {
     public function run()
     {
-        DB::table('companies')->insert([
+        DB::table('companies')->upsert([
             [
                 'name' => 'Advanced IT and Research Burundi',
                 'tp_type' => 1,
@@ -63,6 +63,29 @@ class CompanySeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+        ], ['tp_TIN'], [
+            'name',
+            'tp_type',
+            'tp_name',
+            'tp_trade_number',
+            'tp_postal_number',
+            'tp_phone_number',
+            'tp_address_province',
+            'tp_address_commune',
+            'tp_address_quartier',
+            'tp_address_avenue',
+            'tp_address_rue',
+            'tp_address_number',
+            'tp_fiscal_center',
+            'tp_activity_sector',
+            'tp_legal_form',
+            'vat_taxpayer',
+            'ct_taxpayer',
+            'tl_taxpayer',
+            'system_or_device_id',
+            'default_currency',
+            'user_id',
+            'updated_at'
         ]);
     }
 }

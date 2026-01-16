@@ -35,7 +35,7 @@ return new class extends Migration
             $table->double('price_tvac', 64,2)->default(0)->nullable();
             $table->double('item_ott_tax', 64,2)->default(0)->nullable();
             $table->double('item_tsce_tax', 64,2)->default(0)->nullable();
-            $table->date('date_expiration')->nullable();
+
             $table->string('image')->nullable();
             $table->string('type')->nullable();
             $table->foreignId('company_id')->nullable();
