@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\ExpirationAlertController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\WarehouseTransferController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\AnalyticsController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -193,6 +194,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get Mes stock 
     Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
     Route::get('pos-products', [ProductController::class, 'posProducts']);
+
+    // Analytics
+    Route::get('analytics/sales-chart', [AnalyticsController::class, 'salesChart']);
+    Route::get('analytics/top-products', [AnalyticsController::class, 'topProducts']);
+    Route::get('analytics/top-customers', [AnalyticsController::class, 'topCustomers']);
+    Route::get('analytics/low-stock', [AnalyticsController::class, 'lowStockAlerts']);
+    Route::get('analytics/dashboard-stats', [AnalyticsController::class, 'dashboardStats']);
 
     // Reports
     Route::get('reports/sales', [App\Http\Controllers\Api\ReportController::class, 'sales']);
