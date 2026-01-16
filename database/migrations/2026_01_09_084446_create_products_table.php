@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('item_designation');
             $table->string('item_measurement_unit');
             $table->date('date_expiration')->nullable();
+            $table->boolean('is_production')->default(false);
             $table->string('barcode')->nullable();
             $table->double('vat_rate')->default(0);
             $table->foreignId('product_unit_id')->nullable();

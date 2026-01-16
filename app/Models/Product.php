@@ -19,46 +19,7 @@ class Product extends Model
      *
      * @var array
      */
-    protected $fillable = [
-        'item_code',
-        'item_designation',
-        'item_measurement_unit',
-        'barcode',
-        'vat_rate',
-        'company_id',
-        'product_unit_id',
-        'product_category_id',
-        'user_id',
-        'code_product',
-        'marque',
-        'quantite',
-        'quantite_alert',
-        'price',
-        'price_ttc',
-        'price_max',
-        'price_min',
-        'price_tvac',
-        'item_ott_tax',
-        'item_tsce_tax',
-        'date_expiration',
-        'image',
-        'type',
-        'description',
-        // Champs pharmaceutiques
-        'is_pharmaceutical',
-        'dci',
-        'dosage',
-        'forme_galenique',
-        'laboratoire',
-        'numero_amm',
-        'requires_prescription',
-        'classe_therapeutique',
-        'contre_indications',
-        'posologie_standard',
-        'delai_alerte_expiration',
-        'is_controlled_substance',
-        'storage_conditions',
-    ];
+    protected $guarded = [];
 
     /**
      * Get the attributes that should be cast.

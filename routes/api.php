@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\ExpirationAlertController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\WarehouseTransferController;
+use App\Http\Controllers\Api\BakeryProductionController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -113,6 +114,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('warehouses/{warehouseId}/transfers/{transferId}/reject', [StockMovementController::class, 'rejectTransfer']);
     Route::get('warehouses/{warehouseId}/available', [StockMovementController::class, 'availableWarehouses']);
 
+    // Bakery Production
+    //  Route::prefix('bakery/production')->group(function () {
+    //     Route::get('/dashboard', [BakeryProductionController::class, 'dashboard']);
+    //     Route::post('/quick-entry', [BakeryProductionController::class, 'quickEntry']);
+    //     Route::post('/quick-exit', [BakeryProductionController::class, 'quickExit']);
+    //     Route::get('/finished-products', [BakeryProductionController::class, 'finishedProducts']);
+    //     Route::post('/record', [BakeryProductionController::class, 'recordProduction']);
+    //     Route::get('/transfer-data', [BakeryProductionController::class, 'transferData']);
+    //     Route::post('/transfer', [BakeryProductionController::class, 'transferToSales']);
+    //     Route::get('/history', [BakeryProductionController::class, 'productionHistory']);
+
+    //     // Route::post('/report', [BakeryProductionController::class, 'productionReport']);
+    // });
+    Route::prefix('bakery/production')->group(function () {
+        Route::get('/dashboard', [BakeryProductionController::class, 'dashboard']);
+        Route::post('/change-status', [BakeryProductionController::class, 'changeStatus']);
+        Route::post('/quick-entry', [BakeryProductionController::class, 'quickEntry']);
+        Route::post('/quick-exit', [BakeryProductionController::class, 'quickExit']);
+        Route::post('/quick-transfer', [BakeryProductionController::class, 'quickTransfer']);
+        Route::get('/finished-products', [BakeryProductionController::class, 'finishedProducts']);
+        Route::post('/record', [BakeryProductionController::class, 'recordProduction']);
+        Route::get('/transfer-data', [BakeryProductionController::class, 'transferData']);
+        Route::post('/transfer', [BakeryProductionController::class, 'transferToSales']);
+        Route::get('/history', [BakeryProductionController::class, 'productionHistory']);
+    });
 
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
@@ -186,7 +212,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/products/{product}/qrcode', [ProductController::class, 'generateqrcode'])->name('api.products.qrcode');
     Route::get('/products-print-labels', [ProductController::class, 'printLabels'])->name('api.products.print');
 
-    // Get Mes stock 
+    // Get Mes stock
     Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
     Route::get('pos-products', [ProductController::class, 'posProducts']);
 

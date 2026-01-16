@@ -23,6 +23,7 @@ return new class extends Migration
             $table->double('item_purchase_or_sale_price');
             $table->string('item_purchase_or_sale_currency');
             $table->string('item_movement_type');
+            $table->boolean('is_production')->default(false);
             $table->string('item_movement_invoice_ref')->nullable();
             $table->string('item_movement_description')->nullable();
             $table->dateTime('item_movement_date');

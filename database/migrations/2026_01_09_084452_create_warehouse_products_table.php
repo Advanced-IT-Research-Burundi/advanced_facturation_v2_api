@@ -20,6 +20,7 @@ return new class extends Migration
             $table->double('quantity',64,4);
             $table->double('unit_price',64,4);
             $table->string('currency')->nullable();
+            $table->enum('production_status', ['RAW', 'FINISHED', 'TRANSFERRED'])->default('RAW');
             $table->foreignId('last_stock_movement_id')->nullable();
             $table->foreignId('user_id')->constrained();
             $table->unique(['product_id', 'warehouse_id'])->nullable();
