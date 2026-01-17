@@ -29,6 +29,10 @@ use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\WarehouseTransferController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\AnalyticsController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\CashRegisterController;
+use App\Http\Controllers\Api\CustomerReminderController;
+use App\Http\Controllers\Api\CurrencyController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -211,6 +215,37 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reports/credit-invoices', [App\Http\Controllers\Api\ReportController::class, 'creditInvoices']);
     Route::get('reports/proformas', [App\Http\Controllers\Api\ReportController::class, 'proformas']);
     Route::get('reports/invoices-print', [App\Http\Controllers\Api\ReportController::class, 'invoicesForPrint']);
+
+    // =============================================
+    // GESTION FINANCIÈRE
+    // =============================================
+
+    // Payments (Paiements partiels)
+    Route::get('payments/methods', [PaymentController::class, 'paymentMethods']);
+    Route::get('invoices/{invoice}/payments', [PaymentController::class, 'invoicePayments']);
+    Route::apiResource('payments', PaymentController::class)->except(['update']);
+
+    // Cash Register (Caisse journalière)
+    Route::get('cash-registers/current', [CashRegisterController::class, 'current']);
+    Route::get('cash-registers/daily-summary', [CashRegisterController::class, 'dailySummary']);
+    Route::post('cash-registers/open', [CashRegisterController::class, 'open']);
+    Route::post('cash-registers/{id}/close', [CashRegisterController::class, 'close']);
+    Route::post('cash-registers/{id}/movements', [CashRegisterController::class, 'addMovement']);
+    Route::get('cash-registers/{id}/movements', [CashRegisterController::class, 'movements']);
+    Route::apiResource('cash-registers', CashRegisterController::class)->only(['index', 'show']);
+
+    // Customer Reminders (Relances clients)
+    Route::get('reminders/unpaid-invoices', [CustomerReminderController::class, 'unpaidInvoices']);
+    Route::get('reminders/stats', [CustomerReminderController::class, 'stats']);
+    Route::post('reminders/{id}/mark-sent', [CustomerReminderController::class, 'markAsSent']);
+    Route::post('reminders/{id}/mark-paid', [CustomerReminderController::class, 'markAsPaid']);
+    Route::apiResource('reminders', CustomerReminderController::class);
+
+    // Currencies (Multi-devises)
+    Route::get('currencies/convert', [CurrencyController::class, 'convert']);
+    Route::get('currencies/{id}/history', [CurrencyController::class, 'rateHistory']);
+    Route::post('currencies/{id}/rate', [CurrencyController::class, 'updateRate']);
+    Route::apiResource('currencies', CurrencyController::class);
 
 });
 

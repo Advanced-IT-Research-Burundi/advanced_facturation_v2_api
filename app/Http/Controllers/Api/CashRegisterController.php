@@ -1,0 +1,272 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\CashRegister;
+use App\Models\CashMovement;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+
+class CashRegisterController extends Controller
+{
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $companyId = $user->company_id;
+
+        $query = CashRegister::with(['openedBy', 'closedBy', 'warehouse'])
+            ->where('company_id', $companyId);
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('opened_at', [
+                Carbon::parse($request->start_date)->startOfDay(),
+                Carbon::parse($request->end_date)->endOfDay()
+            ]);
+        }
+
+        $registers = $query->orderBy('opened_at', 'desc')->paginate($request->get('per_page', 15));
+
+        return response()->json([
+            'success' => true,
+            'data' => $registers
+        ]);
+    }
+
+    public function current(Request $request)
+    {
+        $user = $request->user();
+
+        $register = CashRegister::with(['openedBy', 'warehouse', 'movements.createdBy'])
+            ->where('company_id', $user->company_id)
+            ->where('status', 'open')
+            ->first();
+
+        if (!$register) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+                'message' => 'Aucune caisse ouverte'
+            ]);
+        }
+
+        // Calculate current balance
+        $expectedBalance = $register->calculateExpectedBalance();
+        $income = $register->movements()->where('type', 'income')->sum('amount');
+        $expense = $register->movements()->where('type', 'expense')->sum('amount');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'register' => $register,
+                'summary' => [
+                    'opening_balance' => $register->opening_balance,
+                    'total_income' => $income,
+                    'total_expense' => $expense,
+                    'expected_balance' => $expectedBalance,
+                    'transaction_count' => $register->movements()->count(),
+                ]
+            ]
+        ]);
+    }
+
+    public function open(Request $request)
+    {
+        $request->validate([
+            'opening_balance' => 'required|numeric|min:0',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
+            'opening_note' => 'nullable|string',
+        ]);
+
+        $user = $request->user();
+
+        // Check if there's already an open register
+        $existingOpen = CashRegister::where('company_id', $user->company_id)
+            ->where('status', 'open')
+            ->first();
+
+        if ($existingOpen) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Une caisse est déjà ouverte. Veuillez la fermer avant d\'en ouvrir une nouvelle.'
+            ], 422);
+        }
+
+        $register = CashRegister::create([
+            'company_id' => $user->company_id,
+            'warehouse_id' => $request->warehouse_id,
+            'opened_by' => $user->id,
+            'opening_balance' => $request->opening_balance,
+            'opened_at' => now(),
+            'status' => 'open',
+            'opening_note' => $request->opening_note,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Caisse ouverte avec succès',
+            'data' => $register->load('openedBy')
+        ], 201);
+    }
+
+    public function close(Request $request, $id)
+    {
+        $request->validate([
+            'closing_balance' => 'required|numeric|min:0',
+            'closing_note' => 'nullable|string',
+        ]);
+
+        $user = $request->user();
+        $register = CashRegister::where('company_id', $user->company_id)
+            ->where('status', 'open')
+            ->findOrFail($id);
+
+        $expectedBalance = $register->calculateExpectedBalance();
+        $difference = $request->closing_balance - $expectedBalance;
+
+        $register->update([
+            'closed_by' => $user->id,
+            'closing_balance' => $request->closing_balance,
+            'expected_balance' => $expectedBalance,
+            'difference' => $difference,
+            'closed_at' => now(),
+            'status' => 'closed',
+            'closing_note' => $request->closing_note,
+        ]);
+
+        // Generate summary
+        $income = $register->movements()->where('type', 'income')->sum('amount');
+        $expense = $register->movements()->where('type', 'expense')->sum('amount');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Caisse fermée avec succès',
+            'data' => [
+                'register' => $register->fresh()->load(['openedBy', 'closedBy']),
+                'summary' => [
+                    'opening_balance' => $register->opening_balance,
+                    'total_income' => $income,
+                    'total_expense' => $expense,
+                    'expected_balance' => $expectedBalance,
+                    'closing_balance' => $request->closing_balance,
+                    'difference' => $difference,
+                    'difference_status' => $difference == 0 ? 'balanced' : ($difference > 0 ? 'surplus' : 'deficit'),
+                ]
+            ]
+        ]);
+    }
+
+    public function show(Request $request, $id)
+    {
+        $user = $request->user();
+        $register = CashRegister::with(['openedBy', 'closedBy', 'warehouse', 'movements.createdBy'])
+            ->where('company_id', $user->company_id)
+            ->findOrFail($id);
+
+        $income = $register->movements()->where('type', 'income')->sum('amount');
+        $expense = $register->movements()->where('type', 'expense')->sum('amount');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'register' => $register,
+                'summary' => [
+                    'opening_balance' => $register->opening_balance,
+                    'total_income' => $income,
+                    'total_expense' => $expense,
+                    'expected_balance' => $register->calculateExpectedBalance(),
+                    'closing_balance' => $register->closing_balance,
+                    'difference' => $register->difference,
+                ]
+            ]
+        ]);
+    }
+
+    public function addMovement(Request $request, $id)
+    {
+        $request->validate([
+            'type' => 'required|in:income,expense,adjustment',
+            'amount' => 'required|numeric|min:0.01',
+            'description' => 'required|string|max:255',
+            'reference' => 'nullable|string|max:255',
+        ]);
+
+        $user = $request->user();
+        $register = CashRegister::where('company_id', $user->company_id)
+            ->where('status', 'open')
+            ->findOrFail($id);
+
+        $movement = CashMovement::create([
+            'cash_register_id' => $register->id,
+            'type' => $request->type,
+            'amount' => $request->amount,
+            'description' => $request->description,
+            'reference' => $request->reference,
+            'created_by' => $user->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Mouvement enregistré',
+            'data' => $movement->load('createdBy')
+        ], 201);
+    }
+
+    public function movements(Request $request, $id)
+    {
+        $user = $request->user();
+        $register = CashRegister::where('company_id', $user->company_id)->findOrFail($id);
+
+        $movements = CashMovement::with(['createdBy', 'invoice', 'payment'])
+            ->where('cash_register_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $movements
+        ]);
+    }
+
+    public function dailySummary(Request $request)
+    {
+        $user = $request->user();
+        $date = $request->get('date', Carbon::today()->format('Y-m-d'));
+
+        $registers = CashRegister::with(['openedBy', 'closedBy'])
+            ->where('company_id', $user->company_id)
+            ->whereDate('opened_at', $date)
+            ->get();
+
+        $totalOpening = $registers->sum('opening_balance');
+        $totalClosing = $registers->where('status', 'closed')->sum('closing_balance');
+        $totalDifference = $registers->where('status', 'closed')->sum('difference');
+
+        $movements = CashMovement::whereIn('cash_register_id', $registers->pluck('id'))
+            ->get();
+
+        $totalIncome = $movements->where('type', 'income')->sum('amount');
+        $totalExpense = $movements->where('type', 'expense')->sum('amount');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'date' => $date,
+                'registers_count' => $registers->count(),
+                'registers' => $registers,
+                'summary' => [
+                    'total_opening' => $totalOpening,
+                    'total_income' => $totalIncome,
+                    'total_expense' => $totalExpense,
+                    'total_closing' => $totalClosing,
+                    'total_difference' => $totalDifference,
+                ]
+            ]
+        ]);
+    }
+}

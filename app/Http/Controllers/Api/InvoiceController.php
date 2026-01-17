@@ -26,9 +26,10 @@ class InvoiceController extends Controller
     /**
      * Display a listing of invoices.
      */
-    public function index()
+     public function index()
     {
         $query = Invoice::with(['company', 'customer', 'invoiceItems'])
+            ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
 
         if (request()->has('invoice_type')) {
@@ -138,6 +139,10 @@ class InvoiceController extends Controller
                 'deposit_reference' => $validated['deposit_reference'] ?? null,
 
                 'obr_submission_status' => 'PENDING',
+                
+                // Initialize payment status
+                'payment_status' => 'unpaid',
+                'total_paid' => 0,
 
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
@@ -178,6 +183,10 @@ class InvoiceController extends Controller
                 );
             }
 
+            // Optional: If POS and payment type is cash, we might want to automatically create a payment
+            // However, it's safer to keep it separate or handle it if explicitly requested. 
+            // For now, we'll stick to manual payment creation or separate endpoint call from frontend.
+
             DB::commit();
 
             return response()->json([
@@ -207,7 +216,7 @@ class InvoiceController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'stockMovements'])
+            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'stockMovements', 'payments'])
         ], Response::HTTP_OK);
     }
 

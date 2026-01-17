@@ -49,6 +49,9 @@ class Invoice extends Model
         'created_by',
         'user_id',
         'created_by_id',
+        'payment_status',
+        'total_paid',
+        'due_date',
     ];
 
     /**
@@ -70,6 +73,8 @@ class Invoice extends Model
             'created_by' => 'integer',
             'user_id' => 'integer',
             'created_by_id' => 'integer',
+            'total_paid' => 'decimal:2',
+            'due_date' => 'date',
         ];
     }
 
@@ -102,5 +107,25 @@ class Invoice extends Model
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function updatePaymentStatus()
+    {
+        $totalPaid = $this->payments()->sum('amount');
+        $this->total_paid = $totalPaid;
+
+        if ($totalPaid >= $this->invoice_total_amount) {
+            $this->payment_status = 'paid';
+        } elseif ($totalPaid > 0) {
+            $this->payment_status = 'partial';
+        } else {
+            $this->payment_status = 'unpaid';
+        }
+
+        $this->saveQuietly(); // Prevent triggering other events if not needed
     }
 }
