@@ -22,11 +22,13 @@ class BakeryProductionController extends Controller
         $prodStock = WarehouseProduct::with('product:id,item_code,item_designation,item_measurement_unit')
             ->where('warehouse_id', $prodWarehouse->id)
             ->where('quantity', '>', 0)
+            ->orderBy('updated_at', 'desc')
             ->get();
 
         $salesWarehouses = Warehouse::where('is_production', false)
             ->where('company_id', Auth::user()->company_id)
             ->select('id', 'name', 'location')
+            ->orderBy('updated_at', 'desc')
             ->get();
 
         $todayProduction = StockMovement::where('warehouse_id', $prodWarehouse->id)

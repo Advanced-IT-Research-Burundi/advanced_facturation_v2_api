@@ -18,12 +18,7 @@ class Warehouse extends Model
      *
      * @var array
      */
-    protected $fillable = [
-        'name',
-        'location',
-        'company_id',
-        'user_id',
-    ];
+    protected $guarded = [];
 
     /**
      * Get the attributes that should be cast.
