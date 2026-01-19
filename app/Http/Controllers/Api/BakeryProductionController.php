@@ -13,6 +13,7 @@ class BakeryProductionController extends Controller
     {
         $prodWarehouse = Warehouse::where('is_production', true)
             ->where('company_id', Auth::user()->company_id)
+            ->latest()
             ->first();
 
         if (!$prodWarehouse) {
