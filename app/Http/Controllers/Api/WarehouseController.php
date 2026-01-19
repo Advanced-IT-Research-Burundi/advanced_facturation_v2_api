@@ -102,7 +102,9 @@ class WarehouseController extends Controller
     }
 
     public function index(){
-        $stocks = Warehouse::with(['company'])->get();
+        $stocks = Warehouse::with(['company'])
+            ->where('company_id', auth()->user()->company_id)
+            ->get();
         
         return response()->json([
             'success' => true,
@@ -112,7 +114,9 @@ class WarehouseController extends Controller
 
     public function show($id)
     {
-        $warehouse = Warehouse::with(['company'])->findOrFail($id);
+        $warehouse = Warehouse::with(['company'])
+            ->where('company_id', auth()->user()->company_id)
+            ->findOrFail($id);
         return response()->json([
             'success' => true,
             'data' => $warehouse->load(['company'])
@@ -124,10 +128,10 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
-          //  'company_id' => 'required|exists:companies,id',
         ]);
 
         $validated['user_id'] = auth()->id() ?? 1;
+        // company_id is set by HasCompanyId trait
 
         $warehouse = Warehouse::create($validated);
 
@@ -138,9 +142,43 @@ class WarehouseController extends Controller
         ], Response::HTTP_CREATED);
     }
 
+    public function update(Request $request, $id)
+    {
+        $warehouse = Warehouse::where('company_id', auth()->user()->company_id)
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'location' => 'nullable|string|max:255',
+        ]);
+
+        $warehouse->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Entrepôt mis à jour',
+            'data' => $warehouse
+        ], Response::HTTP_OK);
+    }
+
+    public function destroy($id)
+    {
+        $warehouse = Warehouse::where('company_id', auth()->user()->company_id)
+            ->findOrFail($id);
+
+        $warehouse->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Entrepôt supprimé'
+        ], Response::HTTP_OK);
+    }
+
     public function warehouseProducts($id)
     {
-        $warehouse = Warehouse::with('warehouseProducts')->findOrFail($id);
+        $warehouse = Warehouse::with('warehouseProducts')
+            ->where('company_id', auth()->user()->company_id)
+            ->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -150,11 +188,14 @@ class WarehouseController extends Controller
 
     public function warehouseNotProducts($id)
     {
-        $warehouse = Warehouse::findOrFail($id);
+        $warehouse = Warehouse::where('company_id', auth()->user()->company_id)
+            ->findOrFail($id);
 
         $assignedProductIds = $warehouse->warehouseProducts()->pluck('product_id')->toArray();
 
-        $notAssignedProducts = Product::whereNotIn('id', $assignedProductIds)->get();
+        $notAssignedProducts = Product::where('company_id', auth()->user()->company_id)
+            ->whereNotIn('id', $assignedProductIds)
+            ->get();
 
         return response()->json([
             'success' => true,

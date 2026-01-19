@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('warehouse_transfer_items');
+        Schema::dropIfExists('warehouse_transfers');
+
         Schema::create('warehouse_transfers', function (Blueprint $table) {
             $table->id();
             $table->string('transfer_code')->unique();

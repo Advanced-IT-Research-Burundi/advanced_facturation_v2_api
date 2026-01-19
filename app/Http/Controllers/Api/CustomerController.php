@@ -36,8 +36,8 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'customer_name' => 'required|string|max:255',
-            'customer_TIN' => 'nullable|string|unique:customers|max:255',
-            'customer_phone' => 'nullable|string|unique:customers|max:255',
+            'customer_TIN' => 'nullable|string|max:255|unique:customers,customer_TIN,NULL,id,deleted_at,NULL',
+            'customer_phone' => 'nullable|string|max:255|unique:customers,customer_phone,NULL,id,deleted_at,NULL',
             'customer_address' => 'nullable|string|max:255',
             'vat_customer_payer' => 'required|string|max:255',
         ]);
