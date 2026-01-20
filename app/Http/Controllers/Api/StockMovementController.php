@@ -32,9 +32,9 @@ class StockMovementController extends Controller
         ->get();
 
         // Produits disponibles pour ajout
-        // $availableProducts = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
-        //     ->orderBy('item_designation')
-        //     ->get();
+        $availableProducts = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
+            ->orderBy('item_designation')
+            ->get();
 
         // Transferts en attente pour ce destinataire
         $pendingTransfers = WarehouseTransfer::with([
@@ -53,7 +53,7 @@ class StockMovementController extends Controller
             'data' => [
                 'warehouse' => $warehouse,
                 'stocks' => $stocks,
-                'available_products' => $stocks->pluck('product')->unique(),
+                'available_products' => $availableProducts,
                 'pending_transfers' => $pendingTransfers,
                 'pending_count' => $pendingTransfers->count()
             ]
