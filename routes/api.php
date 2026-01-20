@@ -65,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Users
     Route::apiResource('users', UserController::class);
+        // Get all roles
+    Route::get('/get-roles/all', [UserController::class, 'getRoles']);
     Route::post('users/{id}/restore', [UserController::class, 'restore']);
 
     // Products

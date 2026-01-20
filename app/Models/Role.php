@@ -4,44 +4,46 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Role extends Model
 {
     use HasFactory, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'name',
+        'label',
         'description',
+        'permissions'
+    ];
+
+    protected $casts = [
+        'permissions' => 'array'
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Relation: Role belongs to many Users
      */
-    protected function casts(): array
+    public function users()
     {
-        return [
-            'id' => 'integer',
-            'user_id' => 'integer',
-        ];
+        return $this->belongsToMany(User::class, 'role_users')
+                    ->withTimestamps()
+                    ->withPivot('id');
     }
 
-    public function users(): HasMany
+    /**
+     * Check if role has a specific permission
+     */
+    public function hasPermission($permission)
     {
-        return $this->hasMany(User::class);
+        return in_array($permission, $this->permissions ?? []);
     }
 
-    public function user(): BelongsTo
+    /**
+     * Check if role has any of the given permissions
+     */
+    public function hasAnyPermission($permissions)
     {
-        return $this->belongsTo(User::class);
+        return !empty(array_intersect($permissions, $this->permissions ?? []));
     }
 }

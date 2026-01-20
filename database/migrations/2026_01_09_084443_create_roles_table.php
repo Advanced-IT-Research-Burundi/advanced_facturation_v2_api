@@ -16,8 +16,9 @@ return new class extends Migration
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('label')->nullable();
             $table->string('description')->nullable();
-            // $table->foreignId('user_id')->constrained();
+            $table->text('permissions')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

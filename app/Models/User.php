@@ -26,6 +26,8 @@ class User extends Authenticatable
         'user_id',
     ];
 
+
+    protected $appends = ['role_names'];
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -78,5 +80,81 @@ class User extends Authenticatable
     public function warehouses()
     {
         return $this->belongsToMany(Warehouse::class, 'user_warehouse');
+    }
+
+    /**
+     * Relation: User belongs to many Roles
+     */
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'role_users')
+                    ->withTimestamps()
+                    ->withPivot('id');
+    }
+    /**
+     * Get role names as array
+     */
+    public function getRoleNamesAttribute()
+    {
+        return $this->roles->pluck('name')->toArray();
+    }
+
+    /**
+     * Check if user has a specific role
+     */
+    public function hasRole($role)
+    {
+        if (is_array($role)) {
+            return $this->roles->whereIn('name', $role)->isNotEmpty();
+        }
+        return $this->roles->where('name', $role)->isNotEmpty();
+    }
+
+    /**
+     * Check if user has any of the given roles
+     */
+    public function hasAnyRole($roles)
+    {
+        return $this->roles->whereIn('name', $roles)->isNotEmpty();
+    }
+
+    /**
+     * Check if user has all of the given roles
+     */
+    public function hasAllRoles($roles)
+    {
+        return collect($roles)->every(function ($role) {
+            return $this->hasRole($role);
+        });
+    }
+
+    /**
+     * Assign a role to user
+     */
+    public function assignRole($role)
+    {
+        if (is_string($role)) {
+            $role = Role::where('name', $role)->firstOrFail();
+        }
+
+        if (!$this->roles->contains($role->id)) {
+            $this->roles()->attach($role->id);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Remove a role from user
+     */
+    public function removeRole($role)
+    {
+        if (is_string($role)) {
+            $role = Role::where('name', $role)->firstOrFail();
+        }
+
+        $this->roles()->detach($role->id);
+
+        return $this;
     }
 }
