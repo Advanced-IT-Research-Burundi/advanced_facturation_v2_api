@@ -24,6 +24,8 @@ class User extends Authenticatable
         'password',
         'company_id',
         'user_id',
+        'is_server',
+        'server_code',
     ];
 
 
@@ -75,6 +77,11 @@ class User extends Authenticatable
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function restaurantOrders(): HasMany
+    {
+        return $this->hasMany(RestaurantOrder::class, 'server_id');
     }
 
     public function warehouses()

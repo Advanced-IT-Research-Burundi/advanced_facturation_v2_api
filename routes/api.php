@@ -34,6 +34,9 @@ use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\CustomerReminderController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\BakeryProductionController;
+use App\Http\Controllers\Api\RestaurantTableController;
+use App\Http\Controllers\Api\RestaurantOrderController;
+use App\Http\Controllers\Api\RestaurantInvoiceController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -316,6 +319,37 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     Route::get('backup/database', [App\Http\Controllers\Api\BackupController::class, 'database']);
     Route::get('backup/list', [App\Http\Controllers\Api\BackupController::class, 'list']);
+
+    // =============================================
+    // MODULE RESTAURANT
+    // =============================================
+    Route::prefix('restaurant')->group(function () {
+        // Dashboard
+        Route::get('dashboard', [RestaurantInvoiceController::class, 'dashboard']);
+        Route::get('servers', [RestaurantInvoiceController::class, 'servers']);
+
+        // Tables
+        Route::apiResource('tables', RestaurantTableController::class)->parameters(['tables' => 'restaurantTable']);
+        Route::patch('tables/{restaurantTable}/status', [RestaurantTableController::class, 'updateStatus']);
+        Route::get('tables/{tableId}/orders', [RestaurantOrderController::class, 'tableOrders']);
+        Route::get('tables/{tableId}/invoices', [RestaurantInvoiceController::class, 'tableInvoices']);
+
+        // Orders
+        Route::apiResource('orders', RestaurantOrderController::class)->parameters(['orders' => 'restaurantOrder']);
+        Route::post('orders/{restaurantOrder}/items', [RestaurantOrderController::class, 'addItems']);
+        Route::patch('orders/{restaurantOrder}/served', [RestaurantOrderController::class, 'markAsServed']);
+        Route::post('orders/{restaurantOrder}/cancel', [RestaurantOrderController::class, 'cancel']);
+        Route::patch('order-items/{itemId}/status', [RestaurantOrderController::class, 'updateItemStatus']);
+        Route::delete('order-items/{itemId}', [RestaurantOrderController::class, 'removeItem']);
+
+        // Invoices
+        Route::get('invoices', [RestaurantInvoiceController::class, 'index']);
+        Route::post('invoices/generate', [RestaurantInvoiceController::class, 'generate']);
+        Route::get('invoices/{invoice}', [RestaurantInvoiceController::class, 'show']);
+        Route::post('invoices/{invoice}/pay', [RestaurantInvoiceController::class, 'pay']);
+        Route::post('invoices/{invoice}/send-obr', [RestaurantInvoiceController::class, 'sendToObr']);
+        Route::get('invoices/{invoice}/obr-status', [RestaurantInvoiceController::class, 'obrStatus']);
+    });
 
 });
 
