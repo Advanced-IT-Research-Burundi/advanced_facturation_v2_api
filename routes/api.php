@@ -291,5 +291,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('activity-logs/export', [App\Http\Controllers\Api\ActivityLogController::class, 'export']);
     Route::apiResource('activity-logs', App\Http\Controllers\Api\ActivityLogController::class)->only(['index', 'show']);
 
+    // =============================================
+    // IMPORT / EXPORT DE DONNÉES
+    // =============================================
+    Route::get('export/products-template', [App\Http\Controllers\Api\ImportExportController::class, 'downloadProductTemplate']);
+    Route::get('export/products', [App\Http\Controllers\Api\ImportExportController::class, 'exportProducts']);
+    Route::post('import/products/preview', [App\Http\Controllers\Api\ImportExportController::class, 'previewProductImport']);
+    Route::post('import/products', [App\Http\Controllers\Api\ImportExportController::class, 'importProducts']);
+
+    // =============================================
+    // ANNULATION DE FACTURES
+    // =============================================
+    Route::post('invoices/{invoice}/cancel', [App\Http\Controllers\Api\InvoiceController::class, 'cancelInvoice']);
+
+    // =============================================
+    // LOGS OBR
+    // =============================================
+    Route::get('obr-logs/stats', [App\Http\Controllers\Api\ObrLogController::class, 'stats']);
+    Route::post('obr-logs/{obrLog}/retry', [App\Http\Controllers\Api\ObrLogController::class, 'retry']);
+    Route::apiResource('obr-logs', App\Http\Controllers\Api\ObrLogController::class)->only(['index', 'show']);
+
+    // =============================================
+    // BACKUP BASE DE DONNÉES
+    // =============================================
+    Route::get('backup/database', [App\Http\Controllers\Api\BackupController::class, 'database']);
+    Route::get('backup/list', [App\Http\Controllers\Api\BackupController::class, 'list']);
+
 });
 

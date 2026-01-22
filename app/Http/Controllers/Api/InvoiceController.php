@@ -567,4 +567,155 @@ class InvoiceController extends Controller
             'data' => $stats
         ], Response::HTTP_OK);
     }
+
+    /**
+     * Annuler une facture avec retour de stock
+     */
+    public function cancelInvoice(Request $request, Invoice $invoice)
+    {
+        $validated = $request->validate([
+            'motif' => 'required|string|min:10|max:500',
+            'restore_stock' => 'boolean',
+        ]);
+
+        // Vérifier si la facture peut être annulée
+        if ($invoice->is_cancelled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette facture est déjà annulée'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Vérifier si c'est une facture OBR
+        $requireObrCancel = in_array($invoice->invoice_type, ['FN', 'FA', 'FC', 'RC']) 
+            && $invoice->obr_submission_status === 'ACCEPTED';
+
+        try {
+            DB::beginTransaction();
+
+            // 1. Annuler sur OBR si nécessaire
+            $obrResult = ['success' => true, 'message' => 'Annulation locale'];
+            
+            if ($requireObrCancel && $invoice->obr_invoice_identifier) {
+                $obrResult = $this->obrService->cancelInvoice(
+                    $invoice->obr_invoice_identifier,
+                    $validated['motif']
+                );
+
+                if (!$obrResult['success']) {
+                    // Enregistrer le log même si échec
+                    \App\Models\ObrLog::logInvoiceCancelled($invoice, $obrResult, $validated['motif']);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $obrResult['message'] ?? 'Erreur lors de l\'annulation OBR',
+                        'obr_error' => true
+                    ], Response::HTTP_BAD_REQUEST);
+                }
+            }
+
+            // 2. Restaurer le stock si demandé et si c'était une vente POS
+            $stockRestored = [];
+            $shouldRestoreStock = $request->boolean('restore_stock', true);
+            
+            if ($shouldRestoreStock && $invoice->invoice_identifier === 'POS') {
+                $stockRestored = $this->restoreStockFromInvoice($invoice, $validated['motif']);
+            }
+
+            // 3. Mettre à jour la facture
+            $invoice->update([
+                'is_cancelled' => true,
+                'cancelled_at' => now(),
+                'cancelled_by' => auth()->id(),
+                'cancel_reason' => $validated['motif'],
+                'obr_submission_status' => $requireObrCancel ? 'CANCELLED' : $invoice->obr_submission_status,
+            ]);
+
+            // 4. Enregistrer le log OBR
+            if ($requireObrCancel) {
+                \App\Models\ObrLog::logInvoiceCancelled($invoice, $obrResult, $validated['motif']);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Facture annulée avec succès',
+                'data' => [
+                    'invoice' => $invoice->fresh(),
+                    'stock_restored' => $stockRestored,
+                    'obr_cancelled' => $requireObrCancel,
+                ]
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'annulation',
+                'error' => $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Restaurer le stock après annulation de facture
+     */
+    private function restoreStockFromInvoice(Invoice $invoice, string $motif): array
+    {
+        $stockRestored = [];
+
+        foreach ($invoice->invoiceItems as $item) {
+            if (!$item->product_id) {
+                continue;
+            }
+
+            // Trouver le mouvement de stock original
+            $originalMovement = \App\Models\StockMovement::where('invoice_id', $invoice->id)
+                ->where('product_id', $item->product_id)
+                ->where('item_movement_type', 'SN') // Sortie normale
+                ->first();
+
+            if ($originalMovement) {
+                // Créer un mouvement de retour (ER = Entrée Retour)
+                $returnMovement = \App\Models\StockMovement::create([
+                    'product_id' => $item->product_id,
+                    'warehouse_id' => $originalMovement->warehouse_id,
+                    'invoice_id' => $invoice->id,
+                    'item_code' => $originalMovement->item_code,
+                    'item_designation' => $originalMovement->item_designation,
+                    'item_quantity' => $item->item_quantity,
+                    'item_measurement_unit' => $originalMovement->item_measurement_unit,
+                    'item_purchase_or_sale_price' => $item->item_price,
+                    'item_purchase_or_sale_currency' => $invoice->invoice_currency ?? 'BIF',
+                    'item_movement_type' => 'ER', // Entrée Retour
+                    'item_movement_invoice_ref' => $invoice->invoice_number,
+                    'item_movement_description' => "Retour après annulation - {$motif}",
+                    'item_movement_date' => now(),
+                    'obr_submission_status' => 'PENDING',
+                    'user_id' => auth()->id(),
+                ]);
+
+                // Mettre à jour le stock dans l'entrepôt
+                $warehouseProduct = \App\Models\WarehouseProduct::where('warehouse_id', $originalMovement->warehouse_id)
+                    ->where('product_id', $item->product_id)
+                    ->first();
+
+                if ($warehouseProduct) {
+                    $warehouseProduct->increment('quantity', $item->item_quantity);
+                }
+
+                $stockRestored[] = [
+                    'product_id' => $item->product_id,
+                    'product_name' => $originalMovement->item_designation,
+                    'quantity_restored' => $item->item_quantity,
+                    'warehouse_id' => $originalMovement->warehouse_id,
+                    'movement_id' => $returnMovement->id,
+                ];
+            }
+        }
+
+        return $stockRestored;
+    }
 }
