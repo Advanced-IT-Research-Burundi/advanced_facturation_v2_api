@@ -26,19 +26,49 @@ class InvoiceController extends Controller
     /**
      * Display a listing of invoices.
      */
-     public function index()
+    public function index(Request $request)
     {
         $query = Invoice::with(['company', 'customer', 'invoiceItems'])
             ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
 
-        if (request()->has('invoice_type')) {
-            $query->where('invoice_type', request('invoice_type'));
+        // Filtre par type de facture
+        if ($request->has('invoice_type') && $request->invoice_type !== 'all') {
+            $query->where('invoice_type', $request->invoice_type);
+        }
+
+        // Filtre par statut OBR
+        if ($request->has('obr_status') && $request->obr_status !== 'all') {
+            $query->where('obr_submission_status', $request->obr_status);
+        }
+
+        // Filtre par statut de paiement
+        if ($request->has('payment_status') && $request->payment_status !== 'all') {
+            $query->where('payment_status', $request->payment_status);
+        }
+
+        // Recherche par numéro de facture, nom client ou NIF client
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                  ->orWhere('customer_name', 'like', "%{$search}%")
+                  ->orWhere('customer_TIN', 'like', "%{$search}%");
+            });
+        }
+
+        // Filtre par date début
+        if ($request->has('start_date') && $request->start_date) {
+            $query->whereDate('invoice_date', '>=', $request->start_date);
+        }
+
+        // Filtre par date fin
+        if ($request->has('end_date') && $request->end_date) {
+            $query->whereDate('invoice_date', '<=', $request->end_date);
         }
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate(15)
+            'data' => $query->paginate($request->input('per_page', 15))
         ], Response::HTTP_OK);
     }
 

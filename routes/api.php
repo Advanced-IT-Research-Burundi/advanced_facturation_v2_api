@@ -275,5 +275,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('currencies/{id}/rate', [CurrencyController::class, 'updateRate']);
     Route::apiResource('currencies', CurrencyController::class);
 
+    // =============================================
+    // BONS DE COMMANDE (PURCHASE ORDERS)
+    // =============================================
+    Route::get('purchase-orders/stats', [App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
+    Route::patch('purchase-orders/{purchaseOrder}/status', [App\Http\Controllers\Api\PurchaseOrderController::class, 'updateStatus']);
+    Route::apiResource('purchase-orders', App\Http\Controllers\Api\PurchaseOrderController::class);
+
+    // =============================================
+    // JOURNAL D'ACTIVITÉS (ACTIVITY LOGS)
+    // =============================================
+    Route::get('activity-logs/stats', [App\Http\Controllers\Api\ActivityLogController::class, 'stats']);
+    Route::get('activity-logs/types', [App\Http\Controllers\Api\ActivityLogController::class, 'types']);
+    Route::get('activity-logs/actions', [App\Http\Controllers\Api\ActivityLogController::class, 'actions']);
+    Route::get('activity-logs/export', [App\Http\Controllers\Api\ActivityLogController::class, 'export']);
+    Route::apiResource('activity-logs', App\Http\Controllers\Api\ActivityLogController::class)->only(['index', 'show']);
+
 });
 

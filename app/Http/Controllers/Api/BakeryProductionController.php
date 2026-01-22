@@ -11,50 +11,80 @@ class BakeryProductionController extends Controller
 {
     public function dashboard()
     {
-        $prodWarehouse = Warehouse::where('is_production', true)
-            ->where('company_id', Auth::user()->company_id)
-            ->latest()
-            ->first();
+        try {
+            // Chercher un entrepôt de production (si la colonne is_production existe)
+            $prodWarehouse = null;
+            try {
+                $prodWarehouse = Warehouse::where('is_production', true)
+                    ->where('company_id', Auth::user()->company_id)
+                    ->latest()
+                    ->first();
+            } catch (\Exception $e) {
+                // Si la colonne n'existe pas, prendre le premier entrepôt
+                $prodWarehouse = Warehouse::where('company_id', Auth::user()->company_id)
+                    ->latest()
+                    ->first();
+            }
 
-        if (!$prodWarehouse) {
-            return response()->json(['success' => false, 'message' => 'Aucun entrepôt de production'], 404);
+            if (!$prodWarehouse) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'production_warehouse' => null,
+                        'production_stock' => [],
+                        'sales_warehouses' => [],
+                        'today_production' => 0,
+                        'today_transfers' => 0,
+                        'message' => 'Aucun entrepôt de production configuré'
+                    ]
+                ]);
+            }
+
+            $prodStock = WarehouseProduct::with('product:id,item_code,item_designation,item_measurement_unit')
+                ->where('warehouse_id', $prodWarehouse->id)
+                ->where('quantity', '>', 0)
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            $salesWarehouses = Warehouse::where('company_id', Auth::user()->company_id)
+                ->where('id', '!=', $prodWarehouse->id)
+                ->select('id', 'name', 'location')
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            $todayProduction = StockMovement::where('warehouse_id', $prodWarehouse->id)
+                ->whereDate('item_movement_date', today())
+                ->where('item_movement_type', 'EN')
+                ->sum('item_quantity');
+
+            $todayTransfers = 0;
+            try {
+                $todayTransfers = WarehouseTransfer::where('source_warehouse_id', $prodWarehouse->id)
+                    ->whereDate('created_at', today())
+                    ->where('status', 'APPROVED')
+                    ->withSum('items', 'quantity')
+                    ->get()
+                    ->sum('items_sum_quantity') ?? 0;
+            } catch (\Exception $e) {
+                // Ignore si la table n'existe pas
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'production_warehouse' => $prodWarehouse,
+                    'production_stock' => $prodStock,
+                    'sales_warehouses' => $salesWarehouses,
+                    'today_production' => $todayProduction,
+                    'today_transfers' => $todayTransfers
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        $prodStock = WarehouseProduct::with('product:id,item_code,item_designation,item_measurement_unit')
-            ->where('warehouse_id', $prodWarehouse->id)
-            ->where('quantity', '>', 0)
-            ->orderBy('updated_at', 'desc')
-            ->get();
-
-        $salesWarehouses = Warehouse::where('is_production', false)
-            ->where('company_id', Auth::user()->company_id)
-            ->select('id', 'name', 'location')
-            ->orderBy('updated_at', 'desc')
-            ->get();
-
-        $todayProduction = StockMovement::where('warehouse_id', $prodWarehouse->id)
-            ->where('is_production', true)
-            ->whereDate('item_movement_date', today())
-            ->where('item_movement_type', 'EN')
-            ->sum('item_quantity');
-
-        $todayTransfers = WarehouseTransfer::where('source_warehouse_id', $prodWarehouse->id)
-            ->whereDate('created_at', today())
-            ->where('status', 'APPROVED')
-            ->withSum('items', 'quantity')
-            ->get()
-            ->sum('items_sum_quantity');
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'production_warehouse' => $prodWarehouse,
-                'production_stock' => $prodStock,
-                'sales_warehouses' => $salesWarehouses,
-                'today_production' => $todayProduction,
-                'today_transfers' => $todayTransfers
-            ]
-        ]);
     }
 
     public function changeStatus(Request $request)
