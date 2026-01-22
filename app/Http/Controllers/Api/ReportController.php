@@ -118,6 +118,9 @@ class ReportController extends Controller
 
         $query = Invoice::query()
             ->where('company_id', $companyId)
+            ->where(function($q) {
+                $q->where('is_cancelled', false)->orWhereNull('is_cancelled');
+            })
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
                 Carbon::parse($endDate)->endOfDay()
@@ -146,7 +149,7 @@ class ReportController extends Controller
                 'amount_tvac' => $invoice->invoice_total_amount,
                 'invoice_type' => $invoice->invoice_type,
                 'invoice_type_label' => $this->getInvoiceTypeLabel($invoice->invoice_type),
-                'payment_mode' => $invoice->payment_mode ?? 'cash',
+                'payment_mode' => $invoice->payment_type ?? 'cash',
                 'status' => $invoice->obr_submission_status ?? 'pending',
                 'user_name' => $invoice->user?->name ?? 'Inconnu',
                 'items' => $invoice->invoiceItems->map(function ($item) {
