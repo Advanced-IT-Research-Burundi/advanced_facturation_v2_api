@@ -77,6 +77,9 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Charger les rôles avec leurs permissions
+        $user->load('roles');
+
         $data = [
             'user' => $user,
             'access_token' => $token,
