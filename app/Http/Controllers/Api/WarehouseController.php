@@ -16,14 +16,14 @@ class WarehouseController extends Controller
 {
     public function mesStock(){
         $stoks = UserWarehouse::with(['warehouse'])->where('user_id', auth()->user()->id)->get();
-        
+
         return response()->json([
             'success' => true,
             'data' => UserWarehouseResource::collection($stoks)
         ], Response::HTTP_OK);
     }
     public function product_in_stock($stock_id){
-        
+
         $search = request("search") ?? "";
         // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
         $products = Product::whereHas('warehouseProducts', function($query) use ($stock_id) {
@@ -37,7 +37,7 @@ class WarehouseController extends Controller
             });
         })
         ->get();
-        
+
         return response()->json([
             'success' => true,
             'data' => $products,
@@ -105,7 +105,7 @@ class WarehouseController extends Controller
         $stocks = Warehouse::with(['company'])
             ->where('company_id', auth()->user()->company_id)
             ->get();
-        
+
         return response()->json([
             'success' => true,
             'data' =>  WarehouseResource::collection($stocks)
@@ -128,6 +128,7 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
+            'is_production' => 'sometimes|boolean',
         ]);
 
         $validated['user_id'] = auth()->id() ?? 1;

@@ -21,11 +21,26 @@ class CustomerController extends Controller
     /**
      * Display a listing of customers.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $query = Customer::with(['company', 'invoices']);
+        
+        // Recherche par nom, téléphone ou NIF
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('customer_name', 'like', "%{$search}%")
+                  ->orWhere('customer_phone', 'like', "%{$search}%")
+                  ->orWhere('customer_TIN', 'like', "%{$search}%")
+                  ->orWhere('customer_address', 'like', "%{$search}%");
+            });
+        }
+        
+        // Tri par défaut : plus récents d'abord
+        $query->orderBy('created_at', 'desc');
+        
         return response()->json([
             'success' => true,
-            'data' => Customer::with(['company', 'invoices'])->paginate(15)
+            'data' => $query->paginate($request->input('per_page', 15))
         ], Response::HTTP_OK);
     }
 

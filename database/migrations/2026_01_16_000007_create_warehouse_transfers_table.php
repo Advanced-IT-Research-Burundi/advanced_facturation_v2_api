@@ -14,26 +14,27 @@ return new class extends Migration
         Schema::create('warehouse_transfers', function (Blueprint $table) {
             $table->id();
             $table->string('transfer_code')->unique();
-            $table->foreignId('source_warehouse_id')->constrained('warehouses')->onDelete('cascade');
-            $table->foreignId('destination_warehouse_id')->constrained('warehouses')->onDelete('cascade');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'completed'])->default('pending');
-            $table->text('notes')->nullable();
-            $table->text('rejection_reason')->nullable();
+            $table->foreignId('source_warehouse_id')->constrained('warehouses');
+            $table->foreignId('destination_warehouse_id')->constrained('warehouses');
             $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
             $table->foreignId('approved_by')->nullable()->constrained('users')->onDelete('set null');
-            $table->timestamp('approved_at')->nullable();
-            $table->foreignId('company_id')->constrained()->onDelete('cascade');
+            $table->enum('status', ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'])->default('PENDING');
+            $table->text('notes')->nullable();
+            $table->text('rejection_reason')->nullable();
+            $table->dateTime('approved_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
 
         Schema::create('warehouse_transfer_items', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('warehouse_transfer_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
-            $table->decimal('quantity', 15, 2);
-            $table->decimal('unit_price', 15, 2)->default(0);
-            $table->string('currency', 3)->default('BIF');
+            $table->foreignId('transfer_id')->constrained('warehouse_transfers')->onDelete('cascade');
+            $table->foreignId('product_id')->constrained();
+            $table->double('quantity', 15, 4);
+            $table->double('unit_price', 15, 4)->default(0);
+            $table->string('currency');
+            $table->foreignId('stock_movement_out_id')->nullable()->constrained('stock_movements');
+            $table->foreignId('stock_movement_in_id')->nullable()->constrained('stock_movements');
             $table->timestamps();
         });
     }

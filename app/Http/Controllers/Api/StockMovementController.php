@@ -27,7 +27,7 @@ class StockMovementController extends Controller
             'lastStockMovement:id,item_movement_type,created_at'
         ])
         ->where('warehouse_id', $warehouseId)
-        ->where('quantity', '>', 0)
+        ->where('quantity', '>=', 0)
         ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'currency', 'last_stock_movement_id')
         ->get();
 

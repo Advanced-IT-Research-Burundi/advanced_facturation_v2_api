@@ -4,34 +4,35 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Role;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
     /**
-     * Display a listing of users.
+     * Display a listing of users with pagination and search.
      */
-   public function index(Request $request)
-{
-    $search = $request->query('search');
+    public function index(Request $request)
+    {
+        $query = User::with(['roles', 'company']);
 
-    $users = User::with(['role', 'company'])
-        ->when($search, function ($query) use ($search) {
-            $query->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('email', 'LIKE', "%{$search}%")
-                  ->orWhereHas('company', function ($q) use ($search) {
-                      $q->where('name', 'LIKE', "%{$search}%");
-                  });
-        })
-        ->paginate(15);
+        // Search functionality
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
 
-    return response()->json([
-        'success' => true,
-        'data' => $users
-    ], Response::HTTP_OK);
-}
+        $users = $query->latest()->paginate($request->per_page ?? 10);
 
+        return response()->json([
+            'success' => true,
+            'data' => $users
+        ], Response::HTTP_OK);
+    }
 
     /**
      * Store a newly created user.
@@ -39,21 +40,32 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'nullable|string|max:255',
+            'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users|max:255',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8|confirmed',
             'company_id' => 'required|exists:companies,id',
+            'roles' => 'required|array|min:1',
+            'roles.*' => 'exists:roles,id'
         ]);
 
         $validated['password'] = bcrypt($validated['password']);
         $validated['user_id'] = auth()->id();
 
-        $user = User::create($validated);
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'company_id' => $validated['company_id'],
+            'user_id' => $validated['user_id']
+        ]);
+
+        // Attach roles to user
+        $user->roles()->attach($validated['roles']);
 
         return response()->json([
             'success' => true,
-            'message' => 'User created successfully',
-            'data' => $user->load(['role', 'company'])
+            'message' => 'Utilisateur créé avec succès',
+            'data' => $user->load(['roles', 'company'])
         ], Response::HTTP_CREATED);
     }
 
@@ -64,7 +76,7 @@ class UserController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $user->load(['role', 'company'])
+            'data' => $user->load(['roles', 'company'])
         ], Response::HTTP_OK);
     }
 
@@ -74,37 +86,67 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'name' => 'sometimes|nullable|string|max:255',
+            'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:users,email,' . $user->id . '|max:255',
-            'password' => 'sometimes|required|string|min:6',
+            'password' => 'sometimes|nullable|string|min:8|confirmed',
             'company_id' => 'sometimes|required|exists:companies,id',
+            'roles' => 'sometimes|required|array|min:1',
+            'roles.*' => 'exists:roles,id'
         ]);
 
-        if (isset($validated['password'])) {
+        // Update password only if provided
+        if (isset($validated['password']) && !empty($validated['password'])) {
             $validated['password'] = bcrypt($validated['password']);
+        } else {
+            unset($validated['password']);
         }
 
-        $user->update($validated);
+        $user->update(array_filter([
+            'name' => $validated['name'] ?? $user->name,
+            'email' => $validated['email'] ?? $user->email,
+            'password' => $validated['password'] ?? null,
+            'company_id' => $validated['company_id'] ?? $user->company_id
+        ]));
+
+        // Sync roles if provided
+        if (isset($validated['roles'])) {
+            $user->roles()->sync($validated['roles']);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'User updated successfully',
-            'data' => $user->load(['role', 'company'])
+            'message' => 'Utilisateur mis à jour avec succès',
+            'data' => $user->load(['roles', 'company'])
         ], Response::HTTP_OK);
     }
 
     /**
-     * Remove the specified user (soft delete).
+     * Remove the specified user.
      */
     public function destroy(User $user)
     {
+        $user->roles()->detach(); // Remove role associations
         $user->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'User deleted successfully'
+            'message' => 'Utilisateur supprimé avec succès'
         ], Response::HTTP_OK);
     }
+
+    /**
+     * Get all available roles.
+     */
+    public function getRoles()
+    {
+        $roles = Role::select('id', 'name', 'label', 'description')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $roles
+        ], Response::HTTP_OK);
+    }
+
 
     /**
      * Restore a soft-deleted user.

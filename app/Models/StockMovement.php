@@ -16,29 +16,7 @@ class StockMovement extends Model
      *
      * @var array
      */
-    protected $fillable = [
-        'system_or_device_id',
-        'item_code',
-        'item_designation',
-        'item_quantity',
-        'item_measurement_unit',
-        'item_purchase_or_sale_price',
-        'item_purchase_or_sale_currency',
-        'item_movement_type',
-        'item_movement_invoice_ref',
-        'item_movement_description',
-        'item_movement_date',
-        'obr_submission_status',
-        'obr_response_message',
-        'obr_sent_at',
-        'company_id',
-        'product_id',
-        'warehouse_id',
-        'created_by',
-        'user_id',
-        'created_by_id',
-    ];
-
+    protected $guarded = [];
     /**
      * Get the attributes that should be cast.
      *

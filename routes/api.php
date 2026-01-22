@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\CustomerReminderController;
 use App\Http\Controllers\Api\CurrencyController;
+use App\Http\Controllers\Api\BakeryProductionController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -64,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Users
     Route::apiResource('users', UserController::class);
+        // Get all roles
+    Route::get('/get-roles/all', [UserController::class, 'getRoles']);
     Route::post('users/{id}/restore', [UserController::class, 'restore']);
 
     // Products
@@ -122,6 +125,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('warehouses/{warehouseId}/transfers/{transferId}/reject', [StockMovementController::class, 'rejectTransfer']);
     Route::get('warehouses/{warehouseId}/available', [StockMovementController::class, 'availableWarehouses']);
 
+    // Bakery Production
+    //  Route::prefix('bakery/production')->group(function () {
+    //     Route::get('/dashboard', [BakeryProductionController::class, 'dashboard']);
+    //     Route::post('/quick-entry', [BakeryProductionController::class, 'quickEntry']);
+    //     Route::post('/quick-exit', [BakeryProductionController::class, 'quickExit']);
+    //     Route::get('/finished-products', [BakeryProductionController::class, 'finishedProducts']);
+    //     Route::post('/record', [BakeryProductionController::class, 'recordProduction']);
+    //     Route::get('/transfer-data', [BakeryProductionController::class, 'transferData']);
+    //     Route::post('/transfer', [BakeryProductionController::class, 'transferToSales']);
+    //     Route::get('/history', [BakeryProductionController::class, 'productionHistory']);
+
+    //     // Route::post('/report', [BakeryProductionController::class, 'productionReport']);
+    // });
+    Route::prefix('bakery/production')->group(function () {
+        Route::get('/dashboard', [BakeryProductionController::class, 'dashboard']);
+        Route::post('/change-status', [BakeryProductionController::class, 'changeStatus']);
+        Route::post('/quick-entry', [BakeryProductionController::class, 'quickEntry']);
+        Route::post('/quick-exit', [BakeryProductionController::class, 'quickExit']);
+        Route::post('/quick-transfer', [BakeryProductionController::class, 'quickTransfer']);
+        Route::get('/finished-products', [BakeryProductionController::class, 'finishedProducts']);
+        Route::post('/record', [BakeryProductionController::class, 'recordProduction']);
+        Route::get('/transfer-data', [BakeryProductionController::class, 'transferData']);
+        Route::post('/transfer', [BakeryProductionController::class, 'transferToSales']);
+        Route::get('/history', [BakeryProductionController::class, 'productionHistory']);
+    });
 
     // Warehouse Products
     Route::apiResource('warehouse-products', WarehouseProductController::class);
@@ -195,7 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/products/{product}/qrcode', [ProductController::class, 'generateqrcode'])->name('api.products.qrcode');
     Route::get('/products-print-labels', [ProductController::class, 'printLabels'])->name('api.products.print');
 
-    // Get Mes stock 
+    // Get Mes stock
     Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
     Route::get('pos-products', [ProductController::class, 'posProducts']);
 
@@ -246,6 +274,48 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('currencies/{id}/history', [CurrencyController::class, 'rateHistory']);
     Route::post('currencies/{id}/rate', [CurrencyController::class, 'updateRate']);
     Route::apiResource('currencies', CurrencyController::class);
+
+    // =============================================
+    // BONS DE COMMANDE (PURCHASE ORDERS)
+    // =============================================
+    Route::get('purchase-orders/stats', [App\Http\Controllers\Api\PurchaseOrderController::class, 'stats']);
+    Route::patch('purchase-orders/{purchaseOrder}/status', [App\Http\Controllers\Api\PurchaseOrderController::class, 'updateStatus']);
+    Route::apiResource('purchase-orders', App\Http\Controllers\Api\PurchaseOrderController::class);
+
+    // =============================================
+    // JOURNAL D'ACTIVITÉS (ACTIVITY LOGS)
+    // =============================================
+    Route::get('activity-logs/stats', [App\Http\Controllers\Api\ActivityLogController::class, 'stats']);
+    Route::get('activity-logs/types', [App\Http\Controllers\Api\ActivityLogController::class, 'types']);
+    Route::get('activity-logs/actions', [App\Http\Controllers\Api\ActivityLogController::class, 'actions']);
+    Route::get('activity-logs/export', [App\Http\Controllers\Api\ActivityLogController::class, 'export']);
+    Route::apiResource('activity-logs', App\Http\Controllers\Api\ActivityLogController::class)->only(['index', 'show']);
+
+    // =============================================
+    // IMPORT / EXPORT DE DONNÉES
+    // =============================================
+    Route::get('export/products-template', [App\Http\Controllers\Api\ImportExportController::class, 'downloadProductTemplate']);
+    Route::get('export/products', [App\Http\Controllers\Api\ImportExportController::class, 'exportProducts']);
+    Route::post('import/products/preview', [App\Http\Controllers\Api\ImportExportController::class, 'previewProductImport']);
+    Route::post('import/products', [App\Http\Controllers\Api\ImportExportController::class, 'importProducts']);
+
+    // =============================================
+    // ANNULATION DE FACTURES
+    // =============================================
+    Route::post('invoices/{invoice}/cancel', [App\Http\Controllers\Api\InvoiceController::class, 'cancelInvoice']);
+
+    // =============================================
+    // LOGS OBR
+    // =============================================
+    Route::get('obr-logs/stats', [App\Http\Controllers\Api\ObrLogController::class, 'stats']);
+    Route::post('obr-logs/{obrLog}/retry', [App\Http\Controllers\Api\ObrLogController::class, 'retry']);
+    Route::apiResource('obr-logs', App\Http\Controllers\Api\ObrLogController::class)->only(['index', 'show']);
+
+    // =============================================
+    // BACKUP BASE DE DONNÉES
+    // =============================================
+    Route::get('backup/database', [App\Http\Controllers\Api\BackupController::class, 'database']);
+    Route::get('backup/list', [App\Http\Controllers\Api\BackupController::class, 'list']);
 
 });
 

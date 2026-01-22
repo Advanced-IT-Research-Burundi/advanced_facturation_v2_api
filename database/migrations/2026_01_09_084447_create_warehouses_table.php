@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('location')->nullable();
             $table->foreignId('company_id')->constrained();
+            $table->boolean('is_production')->default(false);
             $table->foreignId('user_id')->constrained();
             $table->timestamps();
             $table->softDeletes();

@@ -139,31 +139,19 @@ class AnalyticsController extends Controller
                 Carbon::parse($endDate)->endOfDay()
             ])
             ->select(
-                'invoice_items.product_id',
-                DB::raw('COALESCE(invoice_items.item_designation, "Produit") as product_name'),
+                'invoice_items.item_designation as product_name',
                 DB::raw('SUM(invoice_items.item_quantity) as total_quantity'),
                 DB::raw('SUM(invoice_items.item_total_amount) as total_amount'),
                 DB::raw('COUNT(DISTINCT invoices.id) as invoice_count')
             )
-            ->groupBy('invoice_items.product_id', 'invoice_items.item_designation')
+            ->groupBy('invoice_items.item_designation')
             ->orderByDesc('total_amount')
             ->limit($limit)
             ->get()
             ->map(function ($item, $index) {
-                // Récupérer le nom du produit si product_id existe
-                if ($item->product_id) {
-                    $product = Product::find($item->product_id);
-                    if ($product) {
-                        $item->product_name = $product->name;
-                        $item->product_code = $product->code;
-                    }
-                }
-
                 return [
                     'rank' => $index + 1,
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product_name,
-                    'product_code' => $item->product_code ?? '',
+                    'product_name' => $item->product_name ?? 'Produit',
                     'total_quantity' => (float) $item->total_quantity,
                     'total_amount' => (float) $item->total_amount,
                     'invoice_count' => (int) $item->invoice_count,
@@ -286,8 +274,8 @@ class AnalyticsController extends Controller
                 return [
                     'id' => $item->id,
                     'product_id' => $item->product_id,
-                    'product_name' => $item->product?->name ?? 'Produit inconnu',
-                    'product_code' => $item->product?->code ?? '',
+                    'product_name' => $item->product?->item_designation ?? 'Produit inconnu',
+                    'product_code' => $item->product?->item_code ?? '',
                     'warehouse_id' => $item->warehouse_id,
                     'warehouse_name' => $item->warehouse?->name ?? 'Stock inconnu',
                     'quantity' => $item->quantity,

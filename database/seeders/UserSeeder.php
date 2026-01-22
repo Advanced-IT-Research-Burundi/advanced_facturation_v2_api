@@ -13,24 +13,7 @@ class UserSeeder extends Seeder
 {
      public function run()
     {
-        // First, create roles
-        $roles = [
-            ['name' => 'Super Admin', 'description' => 'System Administrator'],
-            ['name' => 'Admin', 'description' => 'Company Administrator'],
-            ['name' => 'Manager', 'description' => 'Department Manager'],
-            ['name' => 'Cashier', 'description' => 'Sales Cashier'],
-            ['name' => 'Warehouse', 'description' => 'Warehouse Manager'],
-        ];
 
-        foreach ($roles as $role) {
-            DB::table('roles')->insert([
-                'name' => $role['name'],
-                'description' => $role['description'],
-                // 'user_id' => 1,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
 
         // Create users
         $users = [
@@ -136,14 +119,34 @@ class UserSeeder extends Seeder
 
         DB::table('users')->insert($users);
 
-        // Assign roles through role_users table
-        for ($i = 1; $i <= 10; $i++) {
-            DB::table('role_users')->insert([
-                'role_id' => $i <= 5 ? $i : ($i - 5),
-                'user_id' => $i,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+        // Map users to roles
+        $userRoleMap = [
+            'nijeanlionel@gmail.com' => 'admin',
+            'superadmin@system.com' => 'admin',
+            'bazayo@example.com' => 'admin',
+            'dev@advancedit.com' => 'admin',
+            'john.doe@company.com' => 'manager',
+            'jane.smith@company.com' => 'cashier',
+            'robert.j@company.com' => 'sales',
+            'maria.g@company.com' => 'stock_manager',
+            'david.w@company.com' => 'pharmacist',
+            'sarah.m@company.com' => 'baker',
+            'michael.b@company.com' => 'accountant',
+            'lisa.d@company.com' => 'user',
+        ];
+
+        foreach ($userRoleMap as $email => $roleName) {
+            $user = DB::table('users')->where('email', $email)->first();
+            $role = DB::table('roles')->where('name', $roleName)->first();
+
+            if ($user && $role) {
+                DB::table('role_users')->insert([
+                    'role_id' => $role->id,
+                    'user_id' => $user->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
     }
 }

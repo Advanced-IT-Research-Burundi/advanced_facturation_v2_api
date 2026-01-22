@@ -10,13 +10,7 @@ class WarehouseTransferItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'warehouse_transfer_id',
-        'product_id',
-        'quantity',
-        'unit_price',
-        'currency',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {
