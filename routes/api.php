@@ -328,6 +328,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('dashboard', [RestaurantInvoiceController::class, 'dashboard']);
         Route::get('servers', [RestaurantInvoiceController::class, 'servers']);
 
+        // Warehouses & Products for restaurant
+        Route::get('warehouses', [RestaurantInvoiceController::class, 'userWarehouses']);
+        Route::get('warehouses/{warehouseId}/products', [RestaurantInvoiceController::class, 'warehouseProducts']);
+
         // Tables
         Route::apiResource('tables', RestaurantTableController::class)->parameters(['tables' => 'restaurantTable']);
         Route::patch('tables/{restaurantTable}/status', [RestaurantTableController::class, 'updateStatus']);

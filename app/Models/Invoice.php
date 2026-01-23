@@ -55,6 +55,7 @@ class Invoice extends Model
         'cancel_reason',
         'company_id',
         'customer_id',
+        'warehouse_id',
         'created_by',
         'user_id',
         'created_by_id',
@@ -87,6 +88,7 @@ class Invoice extends Model
             'cancelled_at' => 'datetime',
             'company_id' => 'integer',
             'customer_id' => 'integer',
+            'warehouse_id' => 'integer',
             'created_by' => 'integer',
             'user_id' => 'integer',
             'created_by_id' => 'integer',
@@ -106,6 +108,11 @@ class Invoice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function createdBy(): BelongsTo

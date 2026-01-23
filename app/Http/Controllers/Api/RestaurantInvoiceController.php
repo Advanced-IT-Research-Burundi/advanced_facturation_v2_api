@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseProduct;
 use App\Services\RestaurantInvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -44,15 +46,27 @@ class RestaurantInvoiceController extends Controller
     {
         $validated = $request->validate([
             'table_id' => 'required|exists:restaurant_tables,id',
-            'customer_id' => 'nullable|exists:customers,id',
+            'customer_id' => 'required|exists:customers,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'order_ids' => 'nullable|array',
             'order_ids.*' => 'exists:restaurant_orders,id',
         ]);
 
+        // Verify user has access to warehouse
+        $user = auth()->user();
+        $hasAccess = $user->warehouses()->where('warehouses.id', $validated['warehouse_id'])->exists();
+        if (!$hasAccess) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vous n\'avez pas accès à ce dépôt',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         try {
             $invoice = $this->invoiceService->generateInvoice(
                 $validated['table_id'],
-                $validated['customer_id'] ?? null,
+                $validated['customer_id'],
+                $validated['warehouse_id'],
                 $validated['order_ids'] ?? null
             );
 
@@ -192,6 +206,64 @@ class RestaurantInvoiceController extends Controller
         return response()->json([
             'success' => true,
             'data' => $stats,
+        ]);
+    }
+
+    /**
+     * Get warehouses accessible by the current user
+     */
+    public function userWarehouses()
+    {
+        $user = auth()->user();
+
+        $warehouses = $user->warehouses()
+            ->where('company_id', $user->company_id)
+            ->withCount('warehouseProducts')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $warehouses,
+        ]);
+    }
+
+    /**
+     * Get products from a specific warehouse with stock info
+     */
+    public function warehouseProducts(int $warehouseId)
+    {
+        $user = auth()->user();
+
+        // Verify user has access to this warehouse
+        $hasAccess = $user->warehouses()->where('warehouses.id', $warehouseId)->exists();
+        if (!$hasAccess) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vous n\'avez pas accès à ce dépôt',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $products = WarehouseProduct::where('warehouse_id', $warehouseId)
+            ->where('quantity', '>', 0)
+            ->with(['product'])
+            ->get()
+            ->map(function ($wp) {
+                return [
+                    'id' => $wp->product->id,
+                    'warehouse_product_id' => $wp->id,
+                    'name' => $wp->product->name ?? $wp->product->item_designation,
+                    'item_designation' => $wp->product->item_designation,
+                    'item_code' => $wp->product->item_code,
+                    'selling_price' => $wp->unit_price ?? $wp->product->selling_price,
+                    'stock_quantity' => $wp->quantity,
+                    'item_measurement_unit' => $wp->product->item_measurement_unit,
+                    'vat' => $wp->product->vat ?? 18,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $products,
         ]);
     }
 }
