@@ -39,6 +39,13 @@ class ProductImport implements ToCollection, WithHeadingRow
             // Normaliser les clés (gérer les accents et espaces)
             $rowData = $this->normalizeRow($row);
 
+            // Détecter le format simple (juste nom + quantité)
+            $isSimpleFormat = $this->detectSimpleFormat($rowData);
+            
+            if ($isSimpleFormat) {
+                $rowData = $this->convertSimpleFormat($rowData);
+            }
+
             // Mode preview : on retourne juste les données
             if ($this->previewMode) {
                 $this->previewData[] = [
@@ -46,7 +53,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'code_product' => $rowData['code_produit'] ?? '',
                     'name' => $rowData['nom_du_produit'] ?? '',
                     'brand' => $rowData['marque'] ?? '',
-                    'unit' => $rowData['unite_de_mesure'] ?? '',
+                    'unit' => $rowData['unite_de_mesure'] ?? 'Pièce',
                     'quantity' => $rowData['quantite'] ?? 0,
                     'alert_quantity' => $rowData['quantite_alerte'] ?? 0,
                     'purchase_price' => $rowData['prix_dachat'] ?? 0,
@@ -70,7 +77,7 @@ class ProductImport implements ToCollection, WithHeadingRow
             }
 
             // Vérifier si le produit existe déjà
-            $existingProduct = Product::where('name', $rowData['nom_du_produit'])
+            $existingProduct = Product::where('item_designation', $rowData['nom_du_produit'])
                 ->orWhere(function ($query) use ($rowData) {
                     if (!empty($rowData['code_produit'])) {
                         $query->where('code_product', $rowData['code_produit']);
@@ -109,18 +116,22 @@ class ProductImport implements ToCollection, WithHeadingRow
                     $unitId = $unit->id;
                 }
 
+                // Générer item_code unique
+                $itemCode = $this->generateItemCode($rowData['nom_du_produit']);
+
                 // Créer le produit
                 $product = Product::create([
+                    'item_code' => $itemCode,
+                    'item_designation' => $rowData['nom_du_produit'],
                     'code_product' => $rowData['code_produit'] ?? $this->generateProductCode(),
-                    'name' => $rowData['nom_du_produit'],
-                    'brand' => $rowData['marque'] ?? null,
+                    'marque' => $rowData['marque'] ?? null,
                     'item_measurement_unit' => $rowData['unite_de_mesure'] ?? 'Pièce',
-                    'quantity' => floatval($rowData['quantite'] ?? 0),
-                    'alert_quantity' => floatval($rowData['quantite_alerte'] ?? 0),
-                    'purchase_price' => floatval($rowData['prix_dachat'] ?? 0),
-                    'selling_price' => floatval($rowData['prix_de_vente'] ?? 0),
+                    'quantite' => floatval($rowData['quantite'] ?? 0),
+                    'quantite_alert' => floatval($rowData['quantite_alerte'] ?? 0),
+                    'price' => floatval($rowData['prix_dachat'] ?? 0),
+                    'price_ttc' => floatval($rowData['prix_de_vente'] ?? 0),
                     'vat_rate' => floatval($rowData['taux_tva'] ?? 18),
-                    'category_product_id' => $categoryId,
+                    'product_category_id' => $categoryId,
                     'product_unit_id' => $unitId,
                     'description' => $rowData['description'] ?? null,
                     'user_id' => Auth::id(),
@@ -129,7 +140,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                 $this->results['success'][] = [
                     'row' => $rowNumber,
                     'product_id' => $product->id,
-                    'name' => $product->name,
+                    'name' => $product->item_designation,
                 ];
             } catch (\Exception $e) {
                 $this->results['errors'][] = [
@@ -139,6 +150,63 @@ class ProductImport implements ToCollection, WithHeadingRow
                 ];
             }
         }
+    }
+
+    /**
+     * Détecte si c'est un format simple (nom + quantité seulement)
+     */
+    private function detectSimpleFormat($rowData): bool
+    {
+        // Si on a des colonnes numérotées (0, 1, 2...) au lieu de noms
+        $hasNumericKeys = isset($rowData[0]) || isset($rowData[1]);
+        
+        // Ou si on n'a pas les colonnes standard
+        $hasStandardColumns = isset($rowData['nom_du_produit']) || isset($rowData['code_produit']);
+        
+        return $hasNumericKeys && !$hasStandardColumns;
+    }
+
+    /**
+     * Convertit le format simple en format standard
+     */
+    private function convertSimpleFormat($rowData): array
+    {
+        $converted = [];
+        
+        // Chercher le nom du produit (généralement en colonne C = index 2)
+        $productName = null;
+        $quantity = 0;
+        
+        // Parcourir les colonnes pour trouver le nom et la quantité
+        foreach ($rowData as $key => $value) {
+            if (is_string($value) && !empty(trim($value)) && !is_numeric($value)) {
+                $productName = trim($value);
+            } elseif (is_numeric($value) && $value > 0) {
+                $quantity = floatval($value);
+            }
+        }
+        
+        $converted['nom_du_produit'] = $productName;
+        $converted['quantite'] = $quantity;
+        
+        return $converted;
+    }
+
+    /**
+     * Génère un item_code unique basé sur le nom
+     */
+    private function generateItemCode($name): string
+    {
+        // Prendre les 3 premières lettres du nom + timestamp
+        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name), 0, 3));
+        if (empty($prefix)) {
+            $prefix = 'PRD';
+        }
+        
+        $timestamp = substr(time(), -6);
+        $random = rand(10, 99);
+        
+        return $prefix . $timestamp . $random;
     }
 
     /**

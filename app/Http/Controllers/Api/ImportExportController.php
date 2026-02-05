@@ -39,7 +39,7 @@ class ImportExportController extends Controller
 
             // Vérifier les doublons dans la base
             foreach ($previewData as &$item) {
-                $exists = Product::where('name', $item['name'])
+                $exists = Product::where('item_designation', $item['name'])
                     ->orWhere(function ($query) use ($item) {
                         if (!empty($item['code_product'])) {
                             $query->where('code_product', $item['code_product']);
@@ -153,7 +153,7 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery,
         if ($this->request->has('search')) {
             $search = $this->request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
+                $q->where('item_designation', 'like', "%{$search}%")
                   ->orWhere('code_product', 'like', "%{$search}%");
             });
         }
@@ -170,13 +170,13 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery,
     {
         return [
             $product->code_product ?? '',
-            $product->name ?? '',
-            $product->brand ?? '',
+            $product->item_designation ?? '',
+            $product->marque ?? '',
             $product->item_measurement_unit ?? $product->productUnit?->name ?? '',
-            $product->quantity ?? 0,
-            $product->alert_quantity ?? 0,
-            $product->purchase_price ?? 0,
-            $product->selling_price ?? 0,
+            $product->quantite ?? 0,
+            $product->quantite_alert ?? 0,
+            $product->price ?? 0,
+            $product->price_ttc ?? 0,
             $product->vat_rate ?? 18,
             $product->categoryProduct?->name ?? '',
             $product->description ?? '',
