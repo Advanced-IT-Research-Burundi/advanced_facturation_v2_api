@@ -87,7 +87,15 @@ class RoleSeeder extends Seeder
                 'permissions' => json_encode(['dashboard']),
                 'created_at' => now(),
                 'updated_at' => now()
-            ]
+            ],
+            [
+                'name' => 'restaurant',
+                'label' => 'Restaurant',
+                'description' => 'Gestion des tables et des commandes',
+                'permissions' => json_encode(['dashboard', 'tables', 'orders']),
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
         ];
 
         DB::table('roles')->insert($roles);

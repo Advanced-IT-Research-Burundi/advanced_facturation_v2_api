@@ -55,12 +55,17 @@ class Invoice extends Model
         'cancel_reason',
         'company_id',
         'customer_id',
+        'warehouse_id',
         'created_by',
         'user_id',
         'created_by_id',
         'payment_status',
         'total_paid',
         'due_date',
+        'restaurant_table_id',
+        'server_id',
+        'is_restaurant',
+        'restaurant_order_ids',
     ];
 
     /**
@@ -83,12 +88,15 @@ class Invoice extends Model
             'cancelled_at' => 'datetime',
             'company_id' => 'integer',
             'customer_id' => 'integer',
+            'warehouse_id' => 'integer',
             'created_by' => 'integer',
             'user_id' => 'integer',
             'created_by_id' => 'integer',
             'cancelled_by' => 'integer',
             'total_paid' => 'decimal:2',
             'due_date' => 'date',
+            'is_restaurant' => 'boolean',
+            'restaurant_order_ids' => 'array',
         ];
     }
 
@@ -100,6 +108,11 @@ class Invoice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     public function createdBy(): BelongsTo
@@ -125,6 +138,16 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function restaurantTable(): BelongsTo
+    {
+        return $this->belongsTo(RestaurantTable::class);
+    }
+
+    public function server(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'server_id');
     }
 
     public function updatePaymentStatus()
