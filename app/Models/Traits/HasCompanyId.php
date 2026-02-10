@@ -6,18 +6,17 @@ trait HasCompanyId
 {
     public function company()
     {
-        return $this->belongsTo('App\Models\Company');
+        return $this->belongsTo(\App\Models\Company::class);
     }
 
-    public function scopeCompany($query, $company)
+    protected static function bootHasCompanyId()
     {
-        return $query->where('company_id', $company);
-    }
-    public static function boot()
-    {
-        parent::boot();
+        static::addGlobalScope(new \App\Models\Scopes\CompanyScope);
+
         static::creating(function ($model) {
-            $model->company_id = auth()->user()->company_id ?? 1;
+            if (auth()->check()) {
+                $model->company_id = auth()->user()->company_id;
+            }
         });
     }
 }

@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Traits\HasCompanyId;
 
 class RestaurantOrder extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasCompanyId;
+
 
     protected $fillable = [
         'company_id',

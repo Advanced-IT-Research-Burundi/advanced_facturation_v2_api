@@ -39,8 +39,10 @@ use App\Http\Controllers\Api\RestaurantOrderController;
 use App\Http\Controllers\Api\RestaurantInvoiceController;
 
 // Public routes
+Route::post('/register-company', [AuthController::class, 'registerCompany']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {

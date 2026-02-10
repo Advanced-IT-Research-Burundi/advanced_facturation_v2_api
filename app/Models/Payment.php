@@ -5,10 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Traits\HasCompanyId;
 
 class Payment extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasCompanyId;
+
+
 
     protected $fillable = [
         'invoice_id',

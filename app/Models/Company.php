@@ -38,8 +38,9 @@ class Company extends Model
         'tl_taxpayer',
         'system_or_device_id',
         'default_currency',
-        // 'user_id',
+        'user_id',
     ];
+
 
     /**
      * Get the attributes that should be cast.
