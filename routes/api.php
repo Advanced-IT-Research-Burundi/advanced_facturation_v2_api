@@ -85,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('category-products/{id}/restore', [CategoryProductController::class, 'restore']);
 
     Route::post('warehouses/{id}/products/{product_id}', [WarehouseController::class,'addProduct']);
+    Route::delete('warehouses/{id}/products/{product_id}', [WarehouseController::class,'removeProduct']);
 
     // Warehouses
     Route::apiResource('warehouses', WarehouseController::class);

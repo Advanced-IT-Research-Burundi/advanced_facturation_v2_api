@@ -101,6 +101,40 @@ class WarehouseController extends Controller
         ], Response::HTTP_CREATED);
     }
 
+    public function removeProduct($id, $product_id)
+    {
+        $warehouse = Warehouse::findOrFail($id);
+        $product = Product::findOrFail($product_id);
+
+        // Vérifier si le produit existe dans l'entrepôt
+        $warehouseProduct = WarehouseProduct::where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        if (!$warehouseProduct) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le produit n\'existe pas dans cet entrepôt.'
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        // Vérifier si le stock est à zéro avant de supprimer
+        if ($warehouseProduct->quantity > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de supprimer un produit avec un stock non nul. Stock actuel: ' . $warehouseProduct->quantity
+            ], Response::HTTP_CONFLICT);
+        }
+
+        // Supprimer le produit de l'entrepôt
+        $warehouseProduct->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Produit retiré de l\'entrepôt avec succès.'
+        ], Response::HTTP_OK);
+    }
+
     public function index(){
         $stocks = Warehouse::with(['company'])
             ->where('company_id', auth()->user()->company_id)
