@@ -17,7 +17,8 @@ class WarehouseProductResource extends JsonResource
           
 
         return [
-            'id' => $this->id,
+            'id' => $this->product_id,
+            'warehouse_product_id' => $this->id,
             'name' => $this->product?->item_designation,
             'price' => $this->product?->price,
             'category' => $this->product?->categoryProduct?->name,
