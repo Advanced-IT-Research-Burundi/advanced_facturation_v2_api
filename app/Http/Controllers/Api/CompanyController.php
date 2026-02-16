@@ -14,9 +14,15 @@ class CompanyController extends Controller
      */
     public function index()
     {
+        $query = Company::query();
+
+        if (auth()->user()->company_id) {
+            $query->where('id', auth()->user()->company_id);
+        }
+
         return response()->json([
             'success' => true,
-            'data' => Company::paginate(15)
+            'data' => $query->paginate(15)
         ], Response::HTTP_OK);
     }
 
@@ -67,6 +73,13 @@ class CompanyController extends Controller
      */
     public function show(Company $company)
     {
+        if (auth()->user()->company_id && auth()->user()->company_id !== $company->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized access to this company'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $company
@@ -78,6 +91,13 @@ class CompanyController extends Controller
      */
     public function update(Request $request, Company $company)
     {
+        if (auth()->user()->company_id && auth()->user()->company_id !== $company->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized update for this company'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'tp_type' => 'sometimes|required|string|max:255',
@@ -116,6 +136,13 @@ class CompanyController extends Controller
      */
     public function destroy(Company $company)
     {
+        if (auth()->user()->company_id && auth()->user()->company_id !== $company->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized deletion for this company'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $company->delete();
 
         return response()->json([

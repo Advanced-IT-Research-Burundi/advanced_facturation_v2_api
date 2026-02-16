@@ -16,6 +16,7 @@ class WarehouseProduct extends Model
     protected $fillable = [
         'product_id',
         'warehouse_id',
+        'company_id',
         'quantity',
         'unit_price',
         'currency',
@@ -29,6 +30,7 @@ class WarehouseProduct extends Model
             'id' => 'integer',
             'product_id' => 'integer',
             'warehouse_id' => 'integer',
+            'company_id' => 'integer',
             'quantity' => 'double', // Crucial pour les stocks fractionnables
             'unit_price' => 'double',
             'last_stock_movement_id' => 'integer',
