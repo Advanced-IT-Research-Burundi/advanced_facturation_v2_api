@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
 use App\Models\WarehouseTransfer;
-use App\Models\Warehouse;
-use App\Models\Product;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class StockMovementController extends Controller
 {
@@ -24,12 +24,12 @@ class StockMovementController extends Controller
         // Stock actuel avec infos minimales
         $stocks = WarehouseProduct::with([
             'product:id,item_code,item_designation,item_measurement_unit',
-            'lastStockMovement:id,item_movement_type,created_at'
+            'lastStockMovement:id,item_movement_type,created_at',
         ])
-        ->where('warehouse_id', $warehouseId)
-        ->where('quantity', '>=', 0)
-        ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'currency', 'last_stock_movement_id')
-        ->get();
+            ->where('warehouse_id', $warehouseId)
+            ->where('quantity', '>=', 0)
+            ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'currency', 'last_stock_movement_id')
+            ->get();
 
         // Produits disponibles pour ajout
         $availableProducts = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
@@ -40,13 +40,13 @@ class StockMovementController extends Controller
         $pendingTransfers = WarehouseTransfer::with([
             'sourceWarehouse:id,name',
             'items.product:id,item_designation,item_code',
-            'creator:id,name'
+            'creator:id,name',
         ])
-        ->where('destination_warehouse_id', $warehouseId)
-        ->where('status', 'PENDING')
-        ->select('id', 'transfer_code', 'source_warehouse_id', 'destination_warehouse_id', 'status', 'notes', 'created_by', 'created_at')
-        ->orderBy('created_at', 'desc')
-        ->get();
+            ->where('destination_warehouse_id', $warehouseId)
+            ->where('status', 'PENDING')
+            ->select('id', 'transfer_code', 'source_warehouse_id', 'destination_warehouse_id', 'status', 'notes', 'created_by', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -55,8 +55,8 @@ class StockMovementController extends Controller
                 'stocks' => $stocks,
                 'available_products' => $availableProducts,
                 'pending_transfers' => $pendingTransfers,
-                'pending_count' => $pendingTransfers->count()
-            ]
+                'pending_count' => $pendingTransfers->count(),
+            ],
         ]);
     }
 
@@ -68,9 +68,9 @@ class StockMovementController extends Controller
         $query = StockMovement::with('product:id,item_designation,item_code')
             ->where('warehouse_id', $warehouseId)
             ->select('id', 'item_code', 'item_designation', 'item_quantity', 'item_measurement_unit',
-                     'item_purchase_or_sale_price', 'item_purchase_or_sale_currency', 'item_movement_type',
-                     'item_movement_invoice_ref', 'item_movement_date', 'obr_submission_status',
-                     'product_id', 'warehouse_id')
+                'item_purchase_or_sale_price', 'item_purchase_or_sale_currency', 'item_movement_type',
+                'item_movement_invoice_ref', 'item_movement_date', 'obr_submission_status',
+                'product_id', 'warehouse_id')
             ->orderBy('item_movement_date', 'desc');
 
         if ($request->movement_type) {
@@ -89,7 +89,7 @@ class StockMovementController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $movements
+            'data' => $movements,
         ]);
     }
 
@@ -105,7 +105,7 @@ class StockMovementController extends Controller
             'currency' => 'required|string',
             'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
             'date_expiration' => 'nullable|date',
-            'invoice_ref' => 'nullable|string'
+            'invoice_ref' => 'nullable|string',
         ]);
 
         try {
@@ -129,13 +129,23 @@ class StockMovementController extends Controller
                 'product_id' => $request->product_id,
                 'warehouse_id' => $warehouseId,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             $stock = WarehouseProduct::firstOrNew([
                 'warehouse_id' => $warehouseId,
-                'product_id' => $request->product_id
+                'product_id' => $request->product_id,
             ]);
+
+            // Vérifier la disponibilité si c'est un nouveau produit ou une augmentation
+            $quantityToAdd = $request->quantity;
+            if (! $stock->exists || $quantityToAdd > 0) {
+                if ($product->quantite < $quantityToAdd) {
+                    throw new \Exception("Quantité insuffisante dans le stock global. Disponible: {$product->quantite}, Demandée: {$quantityToAdd}");
+                }
+                // Diminuer la quantité du produit global
+                $product->decrement('quantite', $quantityToAdd);
+            }
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
             $stock->unit_price = $request->unit_price;
@@ -153,13 +163,14 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Entrée enregistrée avec succès'
+                'message' => 'Entrée enregistrée avec succès',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -173,7 +184,7 @@ class StockMovementController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
-            'invoice_ref' => 'nullable|string'
+            'invoice_ref' => 'nullable|string',
         ]);
 
         try {
@@ -183,8 +194,8 @@ class StockMovementController extends Controller
                 ->where('product_id', $request->product_id)
                 ->first();
 
-            if (!$stock || $stock->quantity < $request->quantity) {
-                throw new \Exception("Stock insuffisant. Disponible: " . ($stock->quantity ?? 0));
+            if (! $stock || $stock->quantity < $request->quantity) {
+                throw new \Exception('Stock insuffisant. Disponible: '.($stock->quantity ?? 0));
             }
 
             $product = Product::findOrFail($request->product_id);
@@ -205,7 +216,7 @@ class StockMovementController extends Controller
                 'product_id' => $request->product_id,
                 'warehouse_id' => $warehouseId,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             $stock->quantity -= $request->quantity;
@@ -217,13 +228,14 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Sortie enregistrée avec succès'
+                'message' => 'Sortie enregistrée avec succès',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -242,7 +254,7 @@ class StockMovementController extends Controller
             'items.*.date_expiration' => 'nullable|date',
             'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
             'invoice_ref' => 'nullable|string',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
         ]);
 
         try {
@@ -268,13 +280,22 @@ class StockMovementController extends Controller
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $warehouseId,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $stock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $warehouseId,
-                    'product_id' => $item['product_id']
+                    'product_id' => $item['product_id'],
                 ]);
+
+                // Vérifier la disponibilité et diminuer la quantité du produit global
+                $quantityToAdd = $item['quantity'];
+                if (! $stock->exists || $quantityToAdd > 0) {
+                    if ($product->quantite < $quantityToAdd) {
+                        throw new \Exception("Quantité insuffisante pour {$product->item_designation}. Disponible: {$product->quantite}, Demandée: {$quantityToAdd}");
+                    }
+                    $product->decrement('quantite', $quantityToAdd);
+                }
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
                 $stock->unit_price = $item['unit_price'];
@@ -283,7 +304,7 @@ class StockMovementController extends Controller
                 $stock->user_id = Auth::id();
                 $stock->save();
 
-                if (!empty($item['date_expiration'])) {
+                if (! empty($item['date_expiration'])) {
                     $product->update(['date_expiration' => $item['date_expiration']]);
                 }
             }
@@ -292,13 +313,14 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => count($request->items) . ' produit(s) ajouté(s) avec succès'
+                'message' => count($request->items).' produit(s) ajouté(s) avec succès',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -314,7 +336,7 @@ class StockMovementController extends Controller
             'items.*.quantity' => 'required|numeric|min:0.01',
             'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
             'invoice_ref' => 'nullable|string',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
         ]);
 
         try {
@@ -326,9 +348,9 @@ class StockMovementController extends Controller
                     ->where('product_id', $item['product_id'])
                     ->first();
 
-                if (!$stock || $stock->quantity < $item['quantity']) {
+                if (! $stock || $stock->quantity < $item['quantity']) {
                     $product = Product::findOrFail($item['product_id']);
-                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " . ($stock->quantity ?? 0));
+                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: ".($stock->quantity ?? 0));
                 }
             }
 
@@ -357,7 +379,7 @@ class StockMovementController extends Controller
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $warehouseId,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $stock->quantity -= $item['quantity'];
@@ -370,13 +392,14 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => count($request->items) . ' produit(s) sorti(s) avec succès'
+                'message' => count($request->items).' produit(s) sorti(s) avec succès',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -387,11 +410,11 @@ class StockMovementController extends Controller
     public function createTransfer(Request $request, $warehouseId)
     {
         $request->validate([
-            'destination_warehouse_id' => 'required|exists:warehouses,id|different:' . $warehouseId,
+            'destination_warehouse_id' => 'required|exists:warehouses,id|different:'.$warehouseId,
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -403,19 +426,19 @@ class StockMovementController extends Controller
                     ->where('product_id', $item['product_id'])
                     ->first();
 
-                if (!$stock || $stock->quantity < $item['quantity']) {
+                if (! $stock || $stock->quantity < $item['quantity']) {
                     $product = Product::findOrFail($item['product_id']);
-                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " . ($stock->quantity ?? 0));
+                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: ".($stock->quantity ?? 0));
                 }
             }
 
             $transfer = WarehouseTransfer::create([
-                'transfer_code' => 'TRF-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6)),
+                'transfer_code' => 'TRF-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -6)),
                 'source_warehouse_id' => $warehouseId,
                 'destination_warehouse_id' => $request->destination_warehouse_id,
                 'created_by' => Auth::id(),
                 'status' => 'PENDING',
-                'notes' => $request->notes
+                'notes' => $request->notes,
             ]);
 
             $destinationName = Warehouse::find($request->destination_warehouse_id)->name;
@@ -444,7 +467,7 @@ class StockMovementController extends Controller
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $warehouseId,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $stock->quantity -= $item['quantity'];
@@ -457,7 +480,7 @@ class StockMovementController extends Controller
                     'quantity' => $item['quantity'],
                     'unit_price' => $stock->unit_price,
                     'currency' => $stock->currency,
-                    'stock_movement_out_id' => $movementOut->id
+                    'stock_movement_out_id' => $movementOut->id,
                 ]);
             }
 
@@ -465,13 +488,14 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transfert créé avec succès. En attente d\'approbation par le destinataire.'
+                'message' => 'Transfert créé avec succès. En attente d\'approbation par le destinataire.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -512,12 +536,12 @@ class StockMovementController extends Controller
                     'product_id' => $item->product_id,
                     'warehouse_id' => $warehouseId,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $stock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $warehouseId,
-                    'product_id' => $item->product_id
+                    'product_id' => $item->product_id,
                 ]);
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item->quantity;
@@ -533,20 +557,21 @@ class StockMovementController extends Controller
             $transfer->update([
                 'status' => 'APPROVED',
                 'approved_by' => Auth::id(),
-                'approved_at' => now()
+                'approved_at' => now(),
             ]);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transfert approuvé avec succès'
+                'message' => 'Transfert approuvé avec succès',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -557,7 +582,7 @@ class StockMovementController extends Controller
     public function rejectTransfer(Request $request, $warehouseId, $transferId)
     {
         $request->validate([
-            'rejection_reason' => 'required|string'
+            'rejection_reason' => 'required|string',
         ]);
 
         try {
@@ -594,14 +619,14 @@ class StockMovementController extends Controller
                     'item_purchase_or_sale_currency' => $item->currency,
                     'item_movement_type' => 'EAJ',
                     'item_movement_invoice_ref' => $transfer->transfer_code,
-                    'item_movement_description' => "Annulation transfert - " . $request->rejection_reason,
+                    'item_movement_description' => 'Annulation transfert - '.$request->rejection_reason,
                     'item_movement_date' => now(),
                     'obr_submission_status' => 'PENDING',
                     'company_id' => Auth::user()->company_id,
                     'product_id' => $item->product_id,
                     'warehouse_id' => $transfer->source_warehouse_id,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
             }
 
@@ -609,20 +634,21 @@ class StockMovementController extends Controller
                 'status' => 'REJECTED',
                 'rejection_reason' => $request->rejection_reason,
                 'approved_by' => Auth::id(),
-                'approved_at' => now()
+                'approved_at' => now(),
             ]);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transfert rejeté. Le stock source a été restauré.'
+                'message' => 'Transfert rejeté. Le stock source a été restauré.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -639,7 +665,7 @@ class StockMovementController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $warehouses
+            'data' => $warehouses,
         ]);
     }
 }
