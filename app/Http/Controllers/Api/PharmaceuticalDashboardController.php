@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
-use App\Models\ProductLot;
-use App\Models\Prescription;
 use App\Models\ExpirationAlert;
 use App\Models\PatientHistory;
+use App\Models\Prescription;
+use App\Models\Product;
+use App\Models\ProductLot;
 use App\Services\PharmaceuticalService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Carbon\Carbon;
 
 class PharmaceuticalDashboardController extends Controller
 {
@@ -114,14 +114,25 @@ class PharmaceuticalDashboardController extends Controller
         $query = Product::with(['productUnit', 'categoryProduct', 'lots' => function ($q) {
             $q->active()->orderBy('expiration_date', 'asc');
         }])
-        ->pharmaceutical();
+            ->where(function ($q) {
+                // Filtrer par catégorie pharmaceutique OU par le flag is_pharmaceutical
+                $q->where('is_pharmaceutical', true)
+                    ->orWhereHas('categoryProduct', function ($query) {
+                        $query->where(function ($subQuery) {
+                            $subQuery->where('name', 'LIKE', '%pharma%')
+                                ->orWhere('name', 'LIKE', '%Pharma%')
+                                ->orWhere('name', 'LIKE', '%pharmacy%')
+                                ->orWhere('name', 'LIKE', '%Pharmacy%');
+                        });
+                    });
+            });
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('item_designation', 'like', "%{$search}%")
-                  ->orWhere('item_code', 'like', "%{$search}%")
-                  ->orWhere('dci', 'like', "%{$search}%");
+                    ->orWhere('item_code', 'like', "%{$search}%")
+                    ->orWhere('dci', 'like', "%{$search}%");
             });
         }
 

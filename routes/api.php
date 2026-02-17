@@ -75,6 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('users/{id}/restore', [UserController::class, 'restore']);
 
     // Products
+    // Route spécifique pour les produits pharmaceutiques (DOIT être avant apiResource)
+    Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
+    
     Route::apiResource('products', ProductController::class);
     Route::post('products/{id}/restore', [ProductController::class, 'restore']);
 
@@ -189,8 +192,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ROUTES PHARMACEUTIQUES
     // =============================================
 
-    // Produits pharmaceutiques
-    Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
+    // Produits pharmaceutiques (déplacé avant apiResource 'products' - voir ligne ~78)
 
     // Product Lots (Gestion des lots)
     Route::apiResource('product-lots', ProductLotController::class);

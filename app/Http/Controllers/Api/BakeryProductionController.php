@@ -3,9 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\{StockMovement, WarehouseProduct, Warehouse, Product, WarehouseTransfer, WarehouseTransferItem};
+use App\Models\Product;
+use App\Models\StockMovement;
+use App\Models\Warehouse;
+use App\Models\WarehouseProduct;
+use App\Models\WarehouseTransfer;
+use App\Models\WarehouseTransferItem;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Auth};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class BakeryProductionController extends Controller
 {
@@ -26,7 +32,7 @@ class BakeryProductionController extends Controller
                     ->first();
             }
 
-            if (!$prodWarehouse) {
+            if (! $prodWarehouse) {
                 return response()->json([
                     'success' => true,
                     'data' => [
@@ -35,14 +41,24 @@ class BakeryProductionController extends Controller
                         'sales_warehouses' => [],
                         'today_production' => 0,
                         'today_transfers' => 0,
-                        'message' => 'Aucun entrepôt de production configuré'
-                    ]
+                        'message' => 'Aucun entrepôt de production configuré',
+                    ],
                 ]);
             }
 
-            $prodStock = WarehouseProduct::with('product:id,item_code,item_designation,item_measurement_unit')
+            $prodStock = WarehouseProduct::with(['product' => function ($query) {
+                $query->select('id', 'item_code', 'item_designation', 'item_measurement_unit', 'product_category_id')
+                    ->with(['categoryProduct:id,name']);
+            }])
                 ->where('warehouse_id', $prodWarehouse->id)
                 ->where('quantity', '>', 0)
+                ->whereHas('product.categoryProduct', function ($query) {
+                    $query->where(function ($q) {
+                        $q->where('name', 'LIKE', '%boulang%')
+                            ->orWhere('name', 'LIKE', '%bakery%')
+                            ->orWhere('name', 'LIKE', '%Bakery%');
+                    });
+                })
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
@@ -76,13 +92,13 @@ class BakeryProductionController extends Controller
                     'production_stock' => $prodStock,
                     'sales_warehouses' => $salesWarehouses,
                     'today_production' => $todayProduction,
-                    'today_transfers' => $todayTransfers
-                ]
+                    'today_transfers' => $todayTransfers,
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -91,7 +107,7 @@ class BakeryProductionController extends Controller
     {
         $request->validate([
             'warehouse_product_id' => 'required|exists:warehouse_products,id',
-            'status' => 'required|in:RAW,FINISHED'
+            'status' => 'required|in:RAW,FINISHED',
         ]);
 
         try {
@@ -101,7 +117,7 @@ class BakeryProductionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Statut modifié avec succès'
+                'message' => 'Statut modifié avec succès',
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
@@ -115,7 +131,7 @@ class BakeryProductionController extends Controller
             'quantity' => 'required|numeric|min:0.01',
             'unit_price' => 'required|numeric|min:0',
             'currency' => 'required|string',
-            'movement_type' => 'required|in:EN,ER,EI,EAJ'
+            'movement_type' => 'required|in:EN,ER,EI,EAJ',
         ]);
 
         try {
@@ -144,12 +160,12 @@ class BakeryProductionController extends Controller
                 'product_id' => $request->product_id,
                 'warehouse_id' => $prodWarehouse->id,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             $stock = WarehouseProduct::firstOrNew([
                 'warehouse_id' => $prodWarehouse->id,
-                'product_id' => $request->product_id
+                'product_id' => $request->product_id,
             ]);
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
@@ -165,6 +181,7 @@ class BakeryProductionController extends Controller
             return response()->json(['success' => true, 'message' => 'Entrée enregistrée avec succès']);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -174,7 +191,7 @@ class BakeryProductionController extends Controller
         $request->validate([
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
-            'movement_type' => 'required|in:SC,SP,SD,SAJ'
+            'movement_type' => 'required|in:SC,SP,SD,SAJ',
         ]);
 
         try {
@@ -188,7 +205,7 @@ class BakeryProductionController extends Controller
                 ->where('product_id', $request->product_id)
                 ->first();
 
-            if (!$stock || $stock->quantity < $request->quantity) {
+            if (! $stock || $stock->quantity < $request->quantity) {
                 throw new \Exception('Stock insuffisant');
             }
 
@@ -211,7 +228,7 @@ class BakeryProductionController extends Controller
                 'product_id' => $request->product_id,
                 'warehouse_id' => $prodWarehouse->id,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             $stock->quantity -= $request->quantity;
@@ -225,14 +242,22 @@ class BakeryProductionController extends Controller
             return response()->json(['success' => true, 'message' => 'Sortie enregistrée avec succès']);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     public function finishedProducts()
     {
-        $products = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
-            ->where('is_production',true)
+        $products = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit', 'product_category_id')
+            ->where('is_production', true)
+            ->whereHas('categoryProduct', function ($query) {
+                $query->where(function ($q) {
+                    $q->where('name', 'LIKE', '%boulang%')
+                        ->orWhere('name', 'LIKE', '%bakery%')
+                        ->orWhere('name', 'LIKE', '%Bakery%');
+                });
+            })
             ->orderBy('item_designation')
             ->get();
 
@@ -249,7 +274,7 @@ class BakeryProductionController extends Controller
             'items.*.currency' => 'required|string',
             'production_date' => 'required|date',
             'batch_number' => 'nullable|string',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -259,7 +284,7 @@ class BakeryProductionController extends Controller
                 ->where('company_id', Auth::user()->company_id)
                 ->firstOrFail();
 
-            $batchRef = $request->batch_number ?? 'PROD-' . date('Ymd-His');
+            $batchRef = $request->batch_number ?? 'PROD-'.date('Ymd-His');
 
             foreach ($request->items as $item) {
                 $product = Product::findOrFail($item['product_id']);
@@ -282,12 +307,12 @@ class BakeryProductionController extends Controller
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $prodWarehouse->id,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $stock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $prodWarehouse->id,
-                    'product_id' => $item['product_id']
+                    'product_id' => $item['product_id'],
                 ]);
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
@@ -304,10 +329,11 @@ class BakeryProductionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Production enregistrée avec succès',
-                'batch_number' => $batchRef
+                'batch_number' => $batchRef,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -318,7 +344,7 @@ class BakeryProductionController extends Controller
             ->where('company_id', Auth::user()->company_id)
             ->first();
 
-        if (!$prodWarehouse) {
+        if (! $prodWarehouse) {
             return response()->json(['success' => false, 'message' => 'Aucun entrepôt de production'], 404);
         }
 
@@ -337,8 +363,8 @@ class BakeryProductionController extends Controller
             'success' => true,
             'data' => [
                 'sales_warehouses' => $salesWarehouses,
-                'finished_stock' => $finishedStock
-            ]
+                'finished_stock' => $finishedStock,
+            ],
         ]);
     }
 
@@ -348,7 +374,7 @@ class BakeryProductionController extends Controller
             'product_id' => 'required|exists:products,id',
             'destination_warehouse_id' => 'required|exists:warehouses,id',
             'quantity' => 'required|numeric|min:0.01',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -364,12 +390,12 @@ class BakeryProductionController extends Controller
                 ->where('product_id', $request->product_id)
                 ->first();
 
-            if (!$stock || $stock->quantity < $request->quantity) {
+            if (! $stock || $stock->quantity < $request->quantity) {
                 throw new \Exception('Stock insuffisant');
             }
 
             $product = Product::findOrFail($request->product_id);
-            $transferCode = 'TRF-' . date('Ymd-His');
+            $transferCode = 'TRF-'.date('Ymd-His');
 
             $transfer = WarehouseTransfer::create([
                 'transfer_code' => $transferCode,
@@ -379,7 +405,7 @@ class BakeryProductionController extends Controller
                 'notes' => $request->notes,
                 'created_by' => Auth::id(),
                 'approved_by' => Auth::id(),
-                'approved_at' => now()
+                'approved_at' => now(),
             ]);
 
             $movementOut = StockMovement::create([
@@ -400,7 +426,7 @@ class BakeryProductionController extends Controller
                 'product_id' => $request->product_id,
                 'warehouse_id' => $prodWarehouse->id,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             $movementIn = StockMovement::create([
@@ -414,16 +440,15 @@ class BakeryProductionController extends Controller
                 'item_movement_type' => 'ET',
                 'is_production' => false,
                 'item_movement_invoice_ref' => $transferCode,
-                'item_movement_description' => "Réception de production",
+                'item_movement_description' => 'Réception de production',
                 'item_movement_date' => now(),
                 'obr_submission_status' => 'PENDING',
                 'company_id' => Auth::user()->company_id,
                 'product_id' => $request->product_id,
                 'warehouse_id' => $salesWarehouse->id,
                 'created_by' => Auth::id(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
-
 
             $res = WarehouseTransferItem::create([
                 'transfer_id' => $transfer->id,
@@ -432,7 +457,7 @@ class BakeryProductionController extends Controller
                 'unit_price' => $stock->unit_price,
                 'currency' => $stock->currency,
                 'stock_movement_out_id' => $movementOut->id,
-                'stock_movement_in_id' => $movementIn->id
+                'stock_movement_in_id' => $movementIn->id,
             ]);
             // return $res;
             $stock->quantity -= $request->quantity;
@@ -442,7 +467,7 @@ class BakeryProductionController extends Controller
 
             $salesStock = WarehouseProduct::firstOrNew([
                 'warehouse_id' => $salesWarehouse->id,
-                'product_id' => $request->product_id
+                'product_id' => $request->product_id,
             ]);
 
             $salesStock->quantity = ($salesStock->quantity ?? 0) + $request->quantity;
@@ -458,10 +483,11 @@ class BakeryProductionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Transfert effectué avec succès',
-                'transfer_code' => $transferCode
+                'transfer_code' => $transferCode,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -474,7 +500,7 @@ class BakeryProductionController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'transfer_date' => 'required|date',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -491,13 +517,13 @@ class BakeryProductionController extends Controller
                     ->where('product_id', $item['product_id'])
                     ->first();
 
-                if (!$stock || $stock->quantity < $item['quantity']) {
+                if (! $stock || $stock->quantity < $item['quantity']) {
                     $product = Product::findOrFail($item['product_id']);
                     throw new \Exception("Stock insuffisant pour {$product->item_designation}");
                 }
             }
 
-            $transferCode = 'TRF-' . date('Ymd-His');
+            $transferCode = 'TRF-'.date('Ymd-His');
             $transfer = WarehouseTransfer::create([
                 'transfer_code' => $transferCode,
                 'source_warehouse_id' => $prodWarehouse->id,
@@ -506,7 +532,7 @@ class BakeryProductionController extends Controller
                 'notes' => $request->notes,
                 'created_by' => Auth::id(),
                 'approved_by' => Auth::id(),
-                'approved_at' => now()
+                'approved_at' => now(),
             ]);
 
             foreach ($request->items as $item) {
@@ -534,7 +560,7 @@ class BakeryProductionController extends Controller
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $prodWarehouse->id,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 $movementIn = StockMovement::create([
@@ -548,14 +574,14 @@ class BakeryProductionController extends Controller
                     'item_movement_type' => 'ET',
                     'is_production' => false,
                     'item_movement_invoice_ref' => $transferCode,
-                    'item_movement_description' => "Réception de production",
+                    'item_movement_description' => 'Réception de production',
                     'item_movement_date' => $request->transfer_date,
                     'obr_submission_status' => 'PENDING',
                     'company_id' => Auth::user()->company_id,
                     'product_id' => $item['product_id'],
                     'warehouse_id' => $salesWarehouse->id,
                     'created_by' => Auth::id(),
-                    'user_id' => Auth::id()
+                    'user_id' => Auth::id(),
                 ]);
 
                 WarehouseTransferItem::create([
@@ -565,7 +591,7 @@ class BakeryProductionController extends Controller
                     'unit_price' => $stock->unit_price,
                     'currency' => $stock->currency,
                     'stock_movement_out_id' => $movementOut->id,
-                    'stock_movement_in_id' => $movementIn->id
+                    'stock_movement_in_id' => $movementIn->id,
                 ]);
 
                 $stock->quantity -= $item['quantity'];
@@ -575,7 +601,7 @@ class BakeryProductionController extends Controller
 
                 $salesStock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $salesWarehouse->id,
-                    'product_id' => $item['product_id']
+                    'product_id' => $item['product_id'],
                 ]);
 
                 $salesStock->quantity = ($salesStock->quantity ?? 0) + $item['quantity'];
@@ -592,10 +618,11 @@ class BakeryProductionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Transfert effectué avec succès',
-                'transfer_code' => $transferCode
+                'transfer_code' => $transferCode,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -606,9 +633,7 @@ class BakeryProductionController extends Controller
             ->where('company_id', Auth::user()->company_id)
             ->first();
 
-
-
-        if (!$prodWarehouse) {
+        if (! $prodWarehouse) {
             return response()->json(['success' => true, 'data' => ['data' => [], 'total' => 0]]);
         }
 
