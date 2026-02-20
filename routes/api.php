@@ -1,48 +1,46 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\CompanyController;
-use App\Http\Controllers\Api\RoleController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\ProductUnitController;
-use App\Http\Controllers\Api\WarehouseController;
-use App\Http\Controllers\Api\CustomerController;
-use App\Http\Controllers\Api\InvoiceController;
-use App\Http\Controllers\Api\InvoiceItemController;
-use App\Http\Controllers\Api\StockMovementController;
-use App\Http\Controllers\Api\WarehouseProductController;
-use App\Http\Controllers\Api\RoleUserController;
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AppConfigController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BakeryProductionController;
+use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\CategoryProductController;
+use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\CurrencyController;
+use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\CustomerReminderController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
-use App\Http\Controllers\Api\FourinsseurController;
-use App\Http\Controllers\Api\WarehouseUserController;
-use App\Http\Controllers\Api\ProductLotController;
-use App\Http\Controllers\Api\PrescriptionController;
-use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\ExpirationAlertController;
-use App\Http\Controllers\Api\PharmaceuticalDashboardController;
-use App\Http\Controllers\Api\WarehouseTransferController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\AnalyticsController;
+use App\Http\Controllers\Api\FourinsseurController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\InvoiceItemController;
+use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\CashRegisterController;
-use App\Http\Controllers\Api\CustomerReminderController;
-use App\Http\Controllers\Api\CurrencyController;
-use App\Http\Controllers\Api\BakeryProductionController;
-use App\Http\Controllers\Api\RestaurantTableController;
-use App\Http\Controllers\Api\RestaurantOrderController;
+use App\Http\Controllers\Api\PharmaceuticalDashboardController;
+use App\Http\Controllers\Api\PrescriptionController;
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductLotController;
+use App\Http\Controllers\Api\ProductUnitController;
 use App\Http\Controllers\Api\RestaurantInvoiceController;
+use App\Http\Controllers\Api\RestaurantOrderController;
+use App\Http\Controllers\Api\RestaurantTableController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\RoleUserController;
+use App\Http\Controllers\Api\StockMovementController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\WarehouseController;
+use App\Http\Controllers\Api\WarehouseProductController;
+use App\Http\Controllers\Api\WarehouseUserController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::post('/register-company', [AuthController::class, 'registerCompany']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -70,14 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Users
     Route::apiResource('users', UserController::class);
-        // Get all roles
+    // Get all roles
     Route::get('/get-roles/all', [UserController::class, 'getRoles']);
     Route::post('users/{id}/restore', [UserController::class, 'restore']);
 
     // Products
     // Route spécifique pour les produits pharmaceutiques (DOIT être avant apiResource)
     Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
-    
+
     Route::apiResource('products', ProductController::class);
     Route::post('products/{id}/restore', [ProductController::class, 'restore']);
 
@@ -89,8 +87,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('category-products', CategoryProductController::class);
     Route::post('category-products/{id}/restore', [CategoryProductController::class, 'restore']);
 
-    Route::post('warehouses/{id}/products/{product_id}', [WarehouseController::class,'addProduct']);
-    Route::delete('warehouses/{id}/products/{product_id}', [WarehouseController::class,'removeProduct']);
+    Route::post('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'addProduct']);
+    Route::delete('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'removeProduct']);
 
     // Warehouses
     Route::apiResource('warehouses', WarehouseController::class);
@@ -104,7 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
     Route::get('customers/{customer}/deposits', [CustomerController::class, 'deposits']);
 
-    Route::get('checkTIN/{tp_TIN}', [CustomerController::class,'checkTin']);
+    Route::get('checkTIN/{tp_TIN}', [CustomerController::class, 'checkTin']);
 
     // Invoices
     Route::post('invoices/sync-obr', [InvoiceController::class, 'syncPendingInvoices']);
@@ -115,14 +113,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('stocks', WarehouseController::class);
 
-    Route::get('stocks/{id}/products', [WarehouseController::class,'warehouseProducts']);
-    Route::get('stocks/{id}/notproducts', [WarehouseController::class,'warehouseNotProducts']);
+    Route::get('stocks/{id}/products', [WarehouseController::class, 'warehouseProducts']);
+    Route::get('stocks/{id}/notproducts', [WarehouseController::class, 'warehouseNotProducts']);
 
     // Invoice Items
     Route::apiResource('invoice-items', InvoiceItemController::class);
     Route::post('invoice-items/{id}/restore', [InvoiceItemController::class, 'restore']);
 
-     // Stock Movements
+    // Stock Movements
     Route::get('warehouses/{warehouseId}/dashboard', [StockMovementController::class, 'dashboard']);
     Route::get('warehouses/{warehouseId}/movements', [StockMovementController::class, 'movements']);
     Route::post('warehouses/{warehouseId}/quick-entry', [StockMovementController::class, 'quickEntry']);
@@ -360,5 +358,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('invoices/{invoice}/obr-status', [RestaurantInvoiceController::class, 'obrStatus']);
     });
 
-});
+    // =============================================
+    // MODULE HOTEL
+    // =============================================
+    Route::prefix('hotel')->group(function () {
+        // Dashboard
+        Route::get('dashboard', [App\Http\Controllers\Api\HotelDashboardController::class, 'index']);
 
+        // Rooms
+        Route::apiResource('rooms', App\Http\Controllers\Api\HotelRoomController::class)->parameters(['rooms' => 'hotelRoom']);
+
+        // Reservations
+        Route::apiResource('reservations', App\Http\Controllers\Api\HotelReservationController::class)->parameters(['reservations' => 'hotelReservation']);
+        Route::post('reservations/{hotelReservation}/check-in', [App\Http\Controllers\Api\HotelReservationController::class, 'checkIn']);
+        Route::post('reservations/{hotelReservation}/check-out', [App\Http\Controllers\Api\HotelReservationController::class, 'checkOut']);
+        Route::post('reservations/{hotelReservation}/cancel', [App\Http\Controllers\Api\HotelReservationController::class, 'cancel']);
+    });
+
+});
