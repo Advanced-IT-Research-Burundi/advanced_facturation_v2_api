@@ -7,12 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Invoice extends Model
 {
-    use HasFactory, SoftDeletes, HasCompanyId;
-
+    use HasCompanyId, HasFactory, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -122,7 +122,6 @@ class Invoice extends Model
         return $this->belongsTo(User::class);
     }
 
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -137,6 +136,7 @@ class Invoice extends Model
     {
         return $this->hasMany(StockMovement::class);
     }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
@@ -150,6 +150,11 @@ class Invoice extends Model
     public function server(): BelongsTo
     {
         return $this->belongsTo(User::class, 'server_id');
+    }
+
+    public function hotelReservation(): HasOne
+    {
+        return $this->hasOne(HotelReservation::class);
     }
 
     public function updatePaymentStatus()

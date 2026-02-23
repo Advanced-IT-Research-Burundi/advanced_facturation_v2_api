@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\HotelReservation;
 use App\Models\HotelRoom;
+use App\Models\Invoice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -291,5 +293,84 @@ class HotelTest extends TestCase
             ->assertJsonPath('data.rooms.total', 3)
             ->assertJsonPath('data.rooms.available', 2)
             ->assertJsonPath('data.rooms.occupied', 1);
+    }
+
+    // =============================================
+    // HOTEL INVOICES
+    // =============================================
+
+    public function test_can_generate_invoice_for_checked_out_reservation_with_customer(): void
+    {
+        $room = HotelRoom::factory()->create([
+            'company_id' => $this->company->id,
+            'room_number' => '201',
+            'type' => 'standard',
+            'price_per_night' => 75000,
+        ]);
+        $customer = Customer::factory()->create(['company_id' => $this->company->id]);
+        $reservation = HotelReservation::factory()->create([
+            'company_id' => $this->company->id,
+            'hotel_room_id' => $room->id,
+            'customer_id' => $customer->id,
+            'guest_name' => $customer->customer_name,
+            'status' => 'checked_out',
+            'nights' => 2,
+            'price_per_night' => 75000,
+            'total_amount' => 150000,
+        ]);
+
+        $response = $this->postJson("/api/hotel/reservations/{$reservation->id}/invoice");
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.invoice_identifier', 'HOTEL')
+            ->assertJsonPath('data.invoice_total_amount', 150000.0);
+
+        $this->assertDatabaseHas('invoices', [
+            'invoice_identifier' => 'HOTEL',
+            'customer_id' => $customer->id,
+        ]);
+        $reservation->refresh();
+        $this->assertNotNull($reservation->invoice_id);
+    }
+
+    public function test_cannot_generate_invoice_when_reservation_has_no_customer(): void
+    {
+        $room = HotelRoom::factory()->create(['company_id' => $this->company->id]);
+        $reservation = HotelReservation::factory()->create([
+            'company_id' => $this->company->id,
+            'hotel_room_id' => $room->id,
+            'customer_id' => null,
+            'status' => 'checked_out',
+        ]);
+
+        $response = $this->postJson("/api/hotel/reservations/{$reservation->id}/invoice");
+
+        $response->assertStatus(400)->assertJsonPath('success', false);
+    }
+
+    public function test_cannot_generate_invoice_twice_for_same_reservation(): void
+    {
+        $room = HotelRoom::factory()->create(['company_id' => $this->company->id]);
+        $customer = Customer::factory()->create(['company_id' => $this->company->id]);
+        $invoice = Invoice::factory()->create([
+            'company_id' => $this->company->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_by' => $this->user->id,
+            'created_by_id' => $this->user->id,
+            'invoice_identifier' => 'HOTEL',
+        ]);
+        $reservation = HotelReservation::factory()->create([
+            'company_id' => $this->company->id,
+            'hotel_room_id' => $room->id,
+            'customer_id' => $customer->id,
+            'status' => 'checked_out',
+            'invoice_id' => $invoice->id,
+        ]);
+
+        $response = $this->postJson("/api/hotel/reservations/{$reservation->id}/invoice");
+
+        $response->assertStatus(400)->assertJsonPath('success', false);
     }
 }

@@ -373,6 +373,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('reservations/{hotelReservation}/check-in', [App\Http\Controllers\Api\HotelReservationController::class, 'checkIn']);
         Route::post('reservations/{hotelReservation}/check-out', [App\Http\Controllers\Api\HotelReservationController::class, 'checkOut']);
         Route::post('reservations/{hotelReservation}/cancel', [App\Http\Controllers\Api\HotelReservationController::class, 'cancel']);
+        Route::post('reservations/{hotelReservation}/invoice', [App\Http\Controllers\Api\HotelInvoiceController::class, 'generate']);
+
+        // Hotel invoices
+        Route::get('invoices', [App\Http\Controllers\Api\HotelInvoiceController::class, 'index']);
+        Route::get('invoices/{invoice}', [App\Http\Controllers\Api\HotelInvoiceController::class, 'show']);
     });
 
 });
