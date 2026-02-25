@@ -378,6 +378,36 @@ Route::middleware('auth:sanctum')->group(function () {
         // Hotel invoices
         Route::get('invoices', [App\Http\Controllers\Api\HotelInvoiceController::class, 'index']);
         Route::get('invoices/{invoice}', [App\Http\Controllers\Api\HotelInvoiceController::class, 'show']);
+
+        // Conference rooms
+        Route::apiResource('conference-rooms', App\Http\Controllers\Api\HotelConferenceRoomController::class)
+            ->parameters(['conference-rooms' => 'hotelConferenceRoom']);
+        Route::get('conference-bookings', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'index']);
+        Route::post('conference-bookings', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'store']);
+        Route::post('conference-bookings/{hotelConferenceBooking}/cancel', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'cancel']);
+
+        // Restaurant-Bar
+        Route::apiResource('restaurant-tables', App\Http\Controllers\Api\HotelRestaurantTableController::class)
+            ->parameters(['restaurant-tables' => 'hotelRestaurantTable'])
+            ->except(['show', 'create', 'edit']);
+        Route::get('restaurant-orders', [App\Http\Controllers\Api\HotelRestaurantOrderController::class, 'index']);
+        Route::post('restaurant-orders', [App\Http\Controllers\Api\HotelRestaurantOrderController::class, 'store']);
+        Route::put('restaurant-orders/{hotelRestaurantOrder}/status', [App\Http\Controllers\Api\HotelRestaurantOrderController::class, 'updateStatus']);
+        Route::apiResource('menu-items', App\Http\Controllers\Api\HotelMenuItemController::class)
+            ->parameters(['menu-items' => 'hotelMenuItem'])
+            ->except(['show', 'create', 'edit']);
+
+        // Kitchen
+        Route::get('kitchen/orders', [App\Http\Controllers\Api\HotelKitchenController::class, 'orders']);
+        Route::apiResource('dishes', App\Http\Controllers\Api\HotelDishController::class)
+            ->parameters(['dishes' => 'hotelDish'])
+            ->except(['show', 'create', 'edit']);
+        Route::apiResource('kitchen-stock', App\Http\Controllers\Api\HotelKitchenStockController::class)
+            ->parameters(['kitchen-stock' => 'hotelKitchenStock'])
+            ->except(['show', 'create', 'edit']);
+        Route::apiResource('bar-stock', App\Http\Controllers\Api\HotelBarStockController::class)
+            ->parameters(['bar-stock' => 'hotelBarStock'])
+            ->except(['show', 'create', 'edit']);
     });
 
 });

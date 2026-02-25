@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\HotelReservation;
 use App\Models\HotelRoom;
+use App\Models\Invoice;
+use App\Services\HotelInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -150,6 +152,10 @@ class HotelReservationController extends Controller
 
         $hotelReservation->update($validated);
 
+        if (isset($validated['advance_payment'])) {
+            $this->syncInvoicePaymentStatus($hotelReservation, (float) $validated['advance_payment']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Réservation mise à jour',
@@ -212,19 +218,41 @@ class HotelReservationController extends Controller
         ]);
 
         DB::transaction(function () use ($hotelReservation, $validated) {
+            $totalPaid = (float) ($validated['advance_payment'] ?? $hotelReservation->advance_payment);
+
             $hotelReservation->update([
                 'status' => 'checked_out',
                 'actual_check_out_at' => now(),
-                'advance_payment' => $validated['advance_payment'] ?? $hotelReservation->advance_payment,
-                'balance_due' => $hotelReservation->total_amount - ($validated['advance_payment'] ?? $hotelReservation->advance_payment),
+                'advance_payment' => $totalPaid,
+                'balance_due' => $hotelReservation->total_amount - $totalPaid,
             ]);
+
             $hotelReservation->room->updateStatusFromReservations();
+
+            $this->syncInvoicePaymentStatus($hotelReservation, $totalPaid);
         });
 
         return response()->json([
             'success' => true,
             'message' => 'Check-out effectué avec succès',
             'data' => $hotelReservation->load(['room', 'customer']),
+        ]);
+    }
+
+    private function syncInvoicePaymentStatus(HotelReservation $reservation, float $totalPaid): void
+    {
+        $invoice = Invoice::where('hotel_reservation_id', $reservation->id)->first();
+
+        if (! $invoice) {
+            return;
+        }
+
+        $service = new HotelInvoiceService;
+        $status = $service->resolvePaymentStatus($totalPaid, (float) $invoice->invoice_total_amount);
+
+        $invoice->update([
+            'total_paid' => $totalPaid,
+            'payment_status' => $status,
         ]);
     }
 

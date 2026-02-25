@@ -16,7 +16,8 @@ class Company extends Model
      * The attributes that are mass assignable.
      *
      * @var array
-     */protected $fillable = [
+     */
+    protected $fillable = [
         'name',
         'tp_type',
         'tp_name',
@@ -38,9 +39,9 @@ class Company extends Model
         'tl_taxpayer',
         'system_or_device_id',
         'default_currency',
+        'domain',
         'user_id',
     ];
-
 
     /**
      * Get the attributes that should be cast.

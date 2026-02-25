@@ -32,10 +32,12 @@ class HotelInvoiceService
         return DB::transaction(function () use ($reservation, $customer, $company) {
             $invoiceNumber = $this->generateInvoiceNumber();
             $room = $reservation->room;
+            $roomNumber = $room?->room_number ?? 'N/A';
+            $roomType = $room ? $this->getRoomTypeLabel($room->type) : '—';
             $designation = sprintf(
                 'Hébergement - Chambre %s (%s), %d nuit(s) du %s au %s',
-                $room->room_number,
-                $this->getRoomTypeLabel($room->type),
+                $roomNumber,
+                $roomType,
                 $reservation->nights,
                 $reservation->check_in_date->format('d/m/Y'),
                 $reservation->check_out_date->format('d/m/Y')
@@ -72,9 +74,10 @@ class HotelInvoiceService
                 'invoice_total_amount' => $totalTTC,
 
                 'obr_submission_status' => 'PENDING',
-                'payment_status' => 'unpaid',
-                'total_paid' => 0,
+                'payment_status' => $this->resolvePaymentStatus((float) $reservation->advance_payment, $totalTTC),
+                'total_paid' => (float) $reservation->advance_payment,
 
+                'hotel_reservation_id' => $reservation->id,
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'user_id' => auth()->id(),
@@ -107,15 +110,32 @@ class HotelInvoiceService
     private function createCustomerFromReservation(HotelReservation $reservation): Customer
     {
         $company = $reservation->company ?? auth()->user()->company;
+        $phone = $reservation->guest_phone ?? null;
+
+        // If a phone number is provided, search globally (bypassing CompanyScope)
+        // because customer_phone has a global unique constraint across all companies.
+        if ($phone) {
+            $existing = Customer::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
+                ->where('customer_phone', $phone)
+                ->first();
+
+            if ($existing) {
+                $reservation->update(['customer_id' => $existing->id]);
+
+                return $existing;
+            }
+        }
+
         $customer = Customer::create([
             'customer_name' => $reservation->guest_name,
-            'customer_phone' => $reservation->guest_phone ?? '',
-            'customer_address' => $reservation->guest_email ? "Email: {$reservation->guest_email}" : '',
+            'customer_phone' => $phone,
+            'customer_address' => $reservation->guest_email ? "Email: {$reservation->guest_email}" : null,
             'customer_TIN' => null,
             'vat_customer_payer' => '0',
             'company_id' => $company->id,
             'user_id' => auth()->id(),
         ]);
+
         $reservation->update(['customer_id' => $customer->id]);
 
         return $customer;
@@ -133,6 +153,26 @@ class HotelInvoiceService
         $number = $last ? ((int) substr($last->invoice_number, -4) + 1) : 1;
 
         return sprintf('%s-%04d', $prefix, $number);
+    }
+
+    public function resolvePaymentStatus(float|string $paid, float|string $total): string
+    {
+        $paid = (float) $paid;
+        $total = (float) $total;
+
+        if ($total <= 0) {
+            return 'paid';
+        }
+
+        if ($paid >= $total) {
+            return 'paid';
+        }
+
+        if ($paid > 0) {
+            return 'partial';
+        }
+
+        return 'unpaid';
     }
 
     private function getRoomTypeLabel(?string $type): string

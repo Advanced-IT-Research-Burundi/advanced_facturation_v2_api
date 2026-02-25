@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -20,9 +20,9 @@ class UserController extends Controller
         // Search functionality
         if ($request->has('search') && $request->search) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('email', 'LIKE', "%{$search}%");
+                    ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
 
@@ -30,7 +30,7 @@ class UserController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $users
+            'data' => $users,
         ], Response::HTTP_OK);
     }
 
@@ -45,7 +45,7 @@ class UserController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'company_id' => 'required|exists:companies,id',
             'roles' => 'required|array|min:1',
-            'roles.*' => 'exists:roles,id'
+            'roles.*' => 'exists:roles,id',
         ]);
 
         $validated['password'] = bcrypt($validated['password']);
@@ -56,7 +56,7 @@ class UserController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'company_id' => $validated['company_id'],
-            'user_id' => $validated['user_id']
+            'user_id' => $validated['user_id'],
         ]);
 
         // Attach roles to user
@@ -65,7 +65,7 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Utilisateur créé avec succès',
-            'data' => $user->load(['roles', 'company'])
+            'data' => $user->load(['roles', 'company']),
         ], Response::HTTP_CREATED);
     }
 
@@ -76,7 +76,7 @@ class UserController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $user->load(['roles', 'company'])
+            'data' => $user->load(['roles', 'company']),
         ], Response::HTTP_OK);
     }
 
@@ -87,15 +87,15 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:users,email,' . $user->id . '|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,'.$user->id.'|max:255',
             'password' => 'sometimes|nullable|string|min:8|confirmed',
             'company_id' => 'sometimes|required|exists:companies,id',
             'roles' => 'sometimes|required|array|min:1',
-            'roles.*' => 'exists:roles,id'
+            'roles.*' => 'exists:roles,id',
         ]);
 
         // Update password only if provided
-        if (isset($validated['password']) && !empty($validated['password'])) {
+        if (isset($validated['password']) && ! empty($validated['password'])) {
             $validated['password'] = bcrypt($validated['password']);
         } else {
             unset($validated['password']);
@@ -105,7 +105,7 @@ class UserController extends Controller
             'name' => $validated['name'] ?? $user->name,
             'email' => $validated['email'] ?? $user->email,
             'password' => $validated['password'] ?? null,
-            'company_id' => $validated['company_id'] ?? $user->company_id
+            'company_id' => $validated['company_id'] ?? $user->company_id,
         ]));
 
         // Sync roles if provided
@@ -116,7 +116,7 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Utilisateur mis à jour avec succès',
-            'data' => $user->load(['roles', 'company'])
+            'data' => $user->load(['roles', 'company']),
         ], Response::HTTP_OK);
     }
 
@@ -130,23 +130,31 @@ class UserController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Utilisateur supprimé avec succès'
+            'message' => 'Utilisateur supprimé avec succès',
         ], Response::HTTP_OK);
     }
 
     /**
      * Get all available roles.
      */
-    public function getRoles()
+    public function getRoles(): \Illuminate\Http\JsonResponse
     {
-        $roles = Role::select('id', 'name', 'label', 'description')->get();
+        $companyDomain = auth()->user()?->company?->domain ?? 'general';
+
+        $roles = Role::select('id', 'name', 'label', 'description', 'domain')
+            ->where(function ($query) use ($companyDomain) {
+                // Rôles universels (domain = null) + rôles du domaine de l'entreprise
+                $query->whereNull('domain')
+                    ->orWhere('domain', $companyDomain);
+            })
+            ->orderByRaw('ISNULL(domain), domain, label')
+            ->get();
 
         return response()->json([
             'success' => true,
-            'data' => $roles
+            'data' => $roles,
         ], Response::HTTP_OK);
     }
-
 
     /**
      * Restore a soft-deleted user.
@@ -159,7 +167,7 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'User restored successfully',
-            'data' => $user
+            'data' => $user,
         ], Response::HTTP_OK);
     }
 }

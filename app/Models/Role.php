@@ -14,11 +14,12 @@ class Role extends Model
         'name',
         'label',
         'description',
-        'permissions'
+        'domain',
+        'permissions',
     ];
 
     protected $casts = [
-        'permissions' => 'array'
+        'permissions' => 'array',
     ];
 
     /**
@@ -27,8 +28,8 @@ class Role extends Model
     public function users()
     {
         return $this->belongsToMany(User::class, 'role_users')
-                    ->withTimestamps()
-                    ->withPivot('id');
+            ->withTimestamps()
+            ->withPivot('id');
     }
 
     /**
@@ -44,6 +45,6 @@ class Role extends Model
      */
     public function hasAnyPermission($permissions)
     {
-        return !empty(array_intersect($permissions, $this->permissions ?? []));
+        return ! empty(array_intersect($permissions, $this->permissions ?? []));
     }
 }

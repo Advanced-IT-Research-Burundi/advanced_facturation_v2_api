@@ -3,20 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use function sendResponse;
-use function sendError;
-
-
-use Illuminate\Support\Facades\Log;
 use App\Models\Company;
 use App\Models\Role;
-
+use App\Models\User;
 use DB;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+
+use function sendError;
+use function sendResponse;
 
 class AuthController extends Controller
 {
@@ -25,6 +22,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
             'tp_TIN' => 'required|string|max:255|unique:companies',
+            'domain' => 'nullable|string|in:general,hotel,pharmaceutical,restaurant,bakery',
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
@@ -42,6 +40,7 @@ class AuthController extends Controller
                 'name' => $request->company_name,
                 'tp_name' => $request->company_name,
                 'tp_TIN' => $request->tp_TIN,
+                'domain' => $request->input('domain', 'general'),
                 'vat_taxpayer' => 'NO',
                 'ct_taxpayer' => 'NO',
                 'tl_taxpayer' => 'NO',
@@ -72,17 +71,18 @@ class AuthController extends Controller
             $data = [
                 'user' => $user->load('company', 'roles'),
                 'token' => $token,
-                'token_type' => 'Bearer'
+                'token_type' => 'Bearer',
             ];
 
             return sendResponse($data, 'Entreprise et utilisateur créés avec succès', 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Registration Error: ' . $e->getMessage(), [
+            Log::error('Registration Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
+                'request' => $request->all(),
             ]);
+
             return sendError('Erreur lors de la création de l\'entreprise', 500, ['error' => $e->getMessage()]);
         }
 
@@ -113,8 +113,9 @@ class AuthController extends Controller
         $data = [
             'user' => $user->load('company', 'roles'),
             'token' => $token,
-            'token_type' => 'Bearer'
+            'token_type' => 'Bearer',
         ];
+
         return sendResponse($data, 'Utilisateur créé avec succès', 201);
     }
 
@@ -131,9 +132,9 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return sendError('Identifiants invalides', 401, [
-                'email' => ['Les identifiants fournis ne correspondent pas à nos enregistrements.']
+                'email' => ['Les identifiants fournis ne correspondent pas à nos enregistrements.'],
             ]);
         }
 
@@ -146,11 +147,11 @@ class AuthController extends Controller
             'user' => $user,
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'expires_at' => now()->addHours(8)->toDateTimeString()
+            'expires_at' => now()->addHours(8)->toDateTimeString(),
         ];
+
         return sendResponse($data, 'Connexion réussie', 200);
     }
-
 
     public function logout(Request $request)
     {
