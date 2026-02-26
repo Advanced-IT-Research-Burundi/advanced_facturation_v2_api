@@ -7,6 +7,7 @@ use App\Models\HotelDish;
 use App\Models\HotelMenuItem;
 use App\Models\HotelRestaurantOrder;
 use App\Models\HotelRestaurantTable;
+use App\Services\HotelInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,9 +15,11 @@ use Illuminate\Support\Facades\DB;
 
 class HotelRestaurantOrderController extends Controller
 {
+    public function __construct(protected HotelInvoiceService $hotelInvoiceService) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = HotelRestaurantOrder::with(['table', 'items'])
+        $query = HotelRestaurantOrder::with(['restaurantTable', 'items'])
             ->orderBy('created_at', 'desc');
 
         if ($status = $request->input('status')) {
@@ -136,7 +139,7 @@ class HotelRestaurantOrderController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Commande créée avec succès',
-                'data' => $order->load(['table', 'items']),
+                'data' => $order->load(['restaurantTable', 'items']),
             ], Response::HTTP_CREATED);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -162,16 +165,28 @@ class HotelRestaurantOrderController extends Controller
         ]);
 
         if ($validated['status'] === 'paid' || $validated['status'] === 'cancelled') {
-            $table = $hotelRestaurantOrder->table;
+            $table = $hotelRestaurantOrder->restaurantTable;
             if ($table && ! $table->activeOrders()->exists()) {
                 $table->update(['status' => 'free']);
+            }
+        }
+
+        $invoice = null;
+        if ($validated['status'] === 'paid' && ! $hotelRestaurantOrder->invoice_id) {
+            try {
+                $invoice = $this->hotelInvoiceService->generateRestaurantOrderInvoice(
+                    $hotelRestaurantOrder->fresh(['items', 'restaurantTable'])
+                );
+            } catch (\Exception $e) {
+                \Log::warning('Impossible de créer la facture pour la commande '.$hotelRestaurantOrder->id.': '.$e->getMessage());
             }
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Statut mis à jour',
-            'data' => $hotelRestaurantOrder->load(['table', 'items']),
+            'data' => $hotelRestaurantOrder->load(['restaurantTable', 'items', 'invoice']),
+            'invoice' => $invoice,
         ]);
     }
 }

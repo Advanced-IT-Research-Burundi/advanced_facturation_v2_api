@@ -157,6 +157,16 @@ class Invoice extends Model
         return $this->hasOne(HotelReservation::class);
     }
 
+    public function hotelReceptionBooking(): HasOne
+    {
+        return $this->hasOne(HotelReceptionBooking::class);
+    }
+
+    public function hotelConferenceBooking(): HasOne
+    {
+        return $this->hasOne(HotelConferenceBooking::class);
+    }
+
     public function updatePaymentStatus()
     {
         $totalPaid = $this->payments()->sum('amount');

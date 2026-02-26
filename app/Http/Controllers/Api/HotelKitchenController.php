@@ -10,7 +10,7 @@ class HotelKitchenController extends Controller
 {
     public function orders(): JsonResponse
     {
-        $orders = HotelRestaurantOrder::with(['table', 'items'])
+        $orders = HotelRestaurantOrder::with(['restaurantTable', 'items'])
             ->whereIn('status', ['pending', 'preparing', 'ready'])
             ->orderBy('created_at', 'asc')
             ->get()

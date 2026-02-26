@@ -40,7 +40,7 @@ class HotelReservationController extends Controller
             });
         }
 
-        $reservations = $query->orderBy('check_in_date', 'desc')->paginate(20);
+        $reservations = $query->orderBy('created_at', 'desc')->paginate(20);
 
         return response()->json([
             'success' => true,
@@ -284,6 +284,74 @@ class HotelReservationController extends Controller
             'success' => true,
             'message' => 'Réservation annulée',
             'data' => $hotelReservation->load(['room']),
+        ]);
+    }
+
+    /**
+     * Extend a reservation by adding extra nights and updating the invoice.
+     */
+    public function extend(Request $request, HotelReservation $hotelReservation): JsonResponse
+    {
+        $validated = $request->validate([
+            'extra_nights' => 'required|integer|min:1',
+        ]);
+
+        if (! in_array($hotelReservation->status, ['reserved', 'checked_in'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette réservation ne peut pas être prolongée',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $extraNights = $validated['extra_nights'];
+        $pricePerNight = (float) $hotelReservation->price_per_night;
+        $extraAmount = $extraNights * $pricePerNight;
+
+        DB::transaction(function () use ($hotelReservation, $extraNights, $extraAmount) {
+            $newCheckOut = \Carbon\Carbon::parse($hotelReservation->check_out_date)
+                ->addDays($extraNights);
+
+            $hotelReservation->update([
+                'check_out_date' => $newCheckOut->toDateString(),
+                'nights' => $hotelReservation->nights + $extraNights,
+                'total_amount' => (float) $hotelReservation->total_amount + $extraAmount,
+            ]);
+
+            if ($hotelReservation->invoice_id) {
+                $invoice = $hotelReservation->invoice;
+                if ($invoice) {
+                    $newTotal = (float) $invoice->invoice_total_amount + $extraAmount;
+                    $invoice->update([
+                        'invoice_total_amount' => $newTotal,
+                        'invoice_amount_nvat' => $newTotal,
+                    ]);
+
+                    \App\Models\InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'item_designation' => "Prolongation — {$extraNights} nuit(s) supplémentaire(s)",
+                        'item_quantity' => $extraNights,
+                        'item_price' => $pricePerNight,
+                        'item_ct' => 0,
+                        'item_tl' => 0,
+                        'item_ott_tax' => 0,
+                        'item_tsce_tax' => 0,
+                        'item_price_nvat' => $extraAmount,
+                        'vat' => 0,
+                        'item_price_wvat' => $extraAmount,
+                        'item_total_amount' => $extraAmount,
+                        'user_id' => auth()->id(),
+                    ]);
+
+                    $invoice->updatePaymentStatus();
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Réservation prolongée de {$extraNights} nuit(s)",
+            'data' => $hotelReservation->fresh(['room', 'invoice']),
+            'extra_amount' => $extraAmount,
         ]);
     }
 }

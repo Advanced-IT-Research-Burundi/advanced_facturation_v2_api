@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class HotelConferenceBooking extends Model
+class HotelReceptionBooking extends Model
 {
     use HasCompanyId, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'company_id',
-        'hotel_conference_room_id',
+        'hotel_reception_hall_id',
         'guest_name',
         'guest_phone',
         'booking_date',
@@ -37,9 +37,9 @@ class HotelConferenceBooking extends Model
         ];
     }
 
-    public function conferenceRoom(): BelongsTo
+    public function receptionHall(): BelongsTo
     {
-        return $this->belongsTo(HotelConferenceRoom::class, 'hotel_conference_room_id');
+        return $this->belongsTo(HotelReceptionHall::class, 'hotel_reception_hall_id');
     }
 
     public function invoice(): BelongsTo

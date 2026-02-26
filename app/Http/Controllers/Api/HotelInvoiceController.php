@@ -19,11 +19,15 @@ class HotelInvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Invoice::where('company_id', auth()->user()->company_id)
-            ->where('invoice_identifier', 'HOTEL')
-            ->with(['customer', 'invoiceItems', 'hotelReservation.room']);
+            ->whereIn('invoice_identifier', ['HOTEL', 'RESTAURANT'])
+            ->with(['customer', 'invoiceItems', 'hotelReservation.room', 'hotelReceptionBooking.receptionHall', 'hotelConferenceBooking.conferenceRoom']);
 
         if ($status = $request->input('payment_status')) {
             $query->where('payment_status', $status);
+        }
+
+        if ($type = $request->input('invoice_type')) {
+            $query->where('invoice_identifier', strtoupper($type));
         }
 
         if ($obrStatus = $request->input('obr_status')) {
@@ -65,7 +69,8 @@ class HotelInvoiceController extends Controller
 
     public function show(Invoice $invoice): JsonResponse
     {
-        if ($invoice->company_id !== auth()->user()->company_id || $invoice->invoice_identifier !== 'HOTEL') {
+        if ($invoice->company_id !== auth()->user()->company_id
+            || ! in_array($invoice->invoice_identifier, ['HOTEL', 'RESTAURANT'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Facture non trouvée',

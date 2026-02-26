@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
-use App\Models\Invoice;
-use App\Models\CashRegister;
 use App\Models\CashMovement;
+use App\Models\CashRegister;
+use App\Models\Invoice;
+use App\Models\Payment;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class PaymentController extends Controller
 {
@@ -30,7 +30,7 @@ class PaymentController extends Controller
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('payment_date', [
                 Carbon::parse($request->start_date)->startOfDay(),
-                Carbon::parse($request->end_date)->endOfDay()
+                Carbon::parse($request->end_date)->endOfDay(),
             ]);
         }
 
@@ -43,7 +43,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $payments
+            'data' => $payments,
         ]);
     }
 
@@ -66,7 +66,7 @@ class PaymentController extends Controller
         if ($request->amount > $remainingAmount) {
             return response()->json([
                 'success' => false,
-                'message' => "Le montant du paiement ({$request->amount}) dépasse le montant restant ({$remainingAmount})"
+                'message' => "Le montant du paiement ({$request->amount}) dépasse le montant restant ({$remainingAmount})",
             ], 422);
         }
 
@@ -82,6 +82,17 @@ class PaymentController extends Controller
                 'created_by' => $user->id,
                 'company_id' => $user->company_id,
             ]);
+
+            // Update invoice payment status
+            $invoice->updatePaymentStatus();
+
+            // Sync hotel reservation advance_payment / balance_due when invoice is linked
+            $hotelReservation = $invoice->hotelReservation;
+            if ($hotelReservation) {
+                $hotelReservation->advance_payment = (float) $invoice->fresh()->total_paid;
+                $hotelReservation->balance_due = $hotelReservation->total_amount - $hotelReservation->advance_payment;
+                $hotelReservation->saveQuietly();
+            }
 
             // Add to cash register if it's a cash payment and there's an open register
             if ($request->payment_method === 'cash') {
@@ -108,15 +119,16 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Paiement enregistré avec succès',
-                'data' => $payment->load(['invoice', 'createdBy'])
+                'data' => $payment->load(['invoice', 'createdBy']),
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'enregistrement du paiement',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -130,7 +142,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $payment
+            'data' => $payment,
         ]);
     }
 
@@ -150,15 +162,16 @@ class PaymentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Paiement supprimé avec succès'
+                'message' => 'Paiement supprimé avec succès',
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la suppression',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -187,8 +200,8 @@ class PaymentController extends Controller
                     'remaining' => $remaining,
                     'payment_status' => $invoice->payment_status,
                 ],
-                'payments' => $payments
-            ]
+                'payments' => $payments,
+            ],
         ]);
     }
 
@@ -196,7 +209,7 @@ class PaymentController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => Payment::PAYMENT_METHODS
+            'data' => Payment::PAYMENT_METHODS,
         ]);
     }
 }

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\HotelConferenceBooking;
-use App\Models\HotelConferenceRoom;
+use App\Models\HotelReceptionBooking;
+use App\Models\HotelReceptionHall;
 use App\Models\InvoiceItem;
 use App\Services\HotelInvoiceService;
 use Illuminate\Http\JsonResponse;
@@ -12,11 +12,11 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
-class HotelConferenceBookingController extends Controller
+class HotelReceptionBookingController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = HotelConferenceBooking::with(['conferenceRoom', 'invoice'])
+        $query = HotelReceptionBooking::with(['receptionHall', 'invoice'])
             ->orderBy('created_at', 'desc');
 
         if ($date = $request->input('date')) {
@@ -47,7 +47,7 @@ class HotelConferenceBookingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'hotel_conference_room_id' => 'required|exists:hotel_conference_rooms,id',
+            'hotel_reception_hall_id' => 'required|exists:hotel_reception_halls,id',
             'guest_name' => 'required|string|max:255',
             'guest_phone' => 'nullable|string|max:30',
             'booking_date' => 'required|date',
@@ -58,24 +58,24 @@ class HotelConferenceBookingController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $booking = HotelConferenceBooking::create($validated);
+        $booking = HotelReceptionBooking::create($validated);
 
-        $room = HotelConferenceRoom::find($validated['hotel_conference_room_id']);
-        if ($room && $room->status === 'available') {
-            $room->update(['status' => 'reserved']);
+        $hall = HotelReceptionHall::find($validated['hotel_reception_hall_id']);
+        if ($hall && $hall->status === 'available') {
+            $hall->update(['status' => 'reserved']);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Réservation créée avec succès',
-            'data' => $booking->load('conferenceRoom'),
+            'data' => $booking->load('receptionHall'),
         ], Response::HTTP_CREATED);
     }
 
-    public function generateInvoice(HotelConferenceBooking $hotelConferenceBooking): JsonResponse
+    public function generateInvoice(HotelReceptionBooking $hotelReceptionBooking): JsonResponse
     {
         try {
-            $invoice = (new HotelInvoiceService)->generateConferenceInvoice($hotelConferenceBooking);
+            $invoice = (new HotelInvoiceService)->generateReceptionInvoice($hotelReceptionBooking);
 
             return response()->json([
                 'success' => true,
@@ -90,47 +90,47 @@ class HotelConferenceBookingController extends Controller
         }
     }
 
-    public function cancel(HotelConferenceBooking $hotelConferenceBooking): JsonResponse
+    public function cancel(HotelReceptionBooking $hotelReceptionBooking): JsonResponse
     {
-        $hotelConferenceBooking->update(['status' => 'cancelled']);
+        $hotelReceptionBooking->update(['status' => 'cancelled']);
 
-        $room = $hotelConferenceBooking->conferenceRoom;
-        if ($room && ! $room->activeBookings()->exists()) {
-            $room->update(['status' => 'available']);
+        $hall = $hotelReceptionBooking->receptionHall;
+        if ($hall && ! $hall->activeBookings()->exists()) {
+            $hall->update(['status' => 'available']);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Réservation annulée',
-            'data' => $hotelConferenceBooking,
+            'data' => $hotelReceptionBooking,
         ]);
     }
 
     /**
-     * Extend a conference booking by extra hours and update the invoice.
+     * Extend a reception booking by extra hours and update the invoice.
      */
-    public function extend(Request $request, HotelConferenceBooking $hotelConferenceBooking): JsonResponse
+    public function extend(Request $request, HotelReceptionBooking $hotelReceptionBooking): JsonResponse
     {
         $validated = $request->validate([
             'extra_hours' => 'required|numeric|min:0.5',
         ]);
 
-        $room = $hotelConferenceBooking->conferenceRoom;
-        $pricePerHour = (float) ($room?->price_per_hour ?? 0);
+        $hall = $hotelReceptionBooking->receptionHall;
+        $pricePerHour = (float) ($hall?->price_per_hour ?? 0);
         $extraAmount = round($validated['extra_hours'] * $pricePerHour, 2);
 
-        DB::transaction(function () use ($hotelConferenceBooking, $validated, $extraAmount, $pricePerHour) {
+        DB::transaction(function () use ($hotelReceptionBooking, $validated, $extraAmount, $pricePerHour) {
             $newEndTime = \Carbon\Carbon::parse(
-                $hotelConferenceBooking->booking_date->format('Y-m-d').' '.$hotelConferenceBooking->end_time
+                $hotelReceptionBooking->booking_date->format('Y-m-d').' '.$hotelReceptionBooking->end_time
             )->addMinutes((int) ($validated['extra_hours'] * 60));
 
-            $hotelConferenceBooking->update([
+            $hotelReceptionBooking->update([
                 'end_time' => $newEndTime->format('H:i:s'),
-                'total_amount' => (float) $hotelConferenceBooking->total_amount + $extraAmount,
+                'total_amount' => (float) $hotelReceptionBooking->total_amount + $extraAmount,
             ]);
 
-            if ($hotelConferenceBooking->invoice_id) {
-                $invoice = $hotelConferenceBooking->invoice;
+            if ($hotelReceptionBooking->invoice_id) {
+                $invoice = $hotelReceptionBooking->invoice;
                 if ($invoice) {
                     $newTotal = (float) $invoice->invoice_total_amount + $extraAmount;
                     $invoice->update([
@@ -162,7 +162,7 @@ class HotelConferenceBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Réservation prolongée de {$validated['extra_hours']}h",
-            'data' => $hotelConferenceBooking->fresh(['conferenceRoom', 'invoice']),
+            'data' => $hotelReceptionBooking->fresh(['receptionHall', 'invoice']),
             'extra_amount' => $extraAmount,
         ]);
     }

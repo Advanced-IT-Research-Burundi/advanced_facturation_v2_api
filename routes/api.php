@@ -373,6 +373,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('reservations/{hotelReservation}/check-in', [App\Http\Controllers\Api\HotelReservationController::class, 'checkIn']);
         Route::post('reservations/{hotelReservation}/check-out', [App\Http\Controllers\Api\HotelReservationController::class, 'checkOut']);
         Route::post('reservations/{hotelReservation}/cancel', [App\Http\Controllers\Api\HotelReservationController::class, 'cancel']);
+        Route::post('reservations/{hotelReservation}/extend', [App\Http\Controllers\Api\HotelReservationController::class, 'extend']);
         Route::post('reservations/{hotelReservation}/invoice', [App\Http\Controllers\Api\HotelInvoiceController::class, 'generate']);
 
         // Hotel invoices
@@ -385,6 +386,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('conference-bookings', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'index']);
         Route::post('conference-bookings', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'store']);
         Route::post('conference-bookings/{hotelConferenceBooking}/cancel', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'cancel']);
+        Route::post('conference-bookings/{hotelConferenceBooking}/invoice', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'generateInvoice']);
+        Route::post('conference-bookings/{hotelConferenceBooking}/extend', [App\Http\Controllers\Api\HotelConferenceBookingController::class, 'extend']);
+
+        // Stock movements (bar + kitchen)
+        Route::get('stock-movements', [App\Http\Controllers\Api\HotelStockMovementController::class, 'index']);
+        Route::post('stock-movements', [App\Http\Controllers\Api\HotelStockMovementController::class, 'store']);
+
+        // Reception Halls
+        Route::apiResource('reception-halls', App\Http\Controllers\Api\HotelReceptionHallController::class)
+            ->parameters(['reception-halls' => 'hotelReceptionHall']);
+        Route::get('reception-bookings', [App\Http\Controllers\Api\HotelReceptionBookingController::class, 'index']);
+        Route::post('reception-bookings', [App\Http\Controllers\Api\HotelReceptionBookingController::class, 'store']);
+        Route::post('reception-bookings/{hotelReceptionBooking}/cancel', [App\Http\Controllers\Api\HotelReceptionBookingController::class, 'cancel']);
+        Route::post('reception-bookings/{hotelReceptionBooking}/invoice', [App\Http\Controllers\Api\HotelReceptionBookingController::class, 'generateInvoice']);
+        Route::post('reception-bookings/{hotelReceptionBooking}/extend', [App\Http\Controllers\Api\HotelReceptionBookingController::class, 'extend']);
 
         // Restaurant-Bar
         Route::apiResource('restaurant-tables', App\Http\Controllers\Api\HotelRestaurantTableController::class)

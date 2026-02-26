@@ -24,6 +24,7 @@ class HotelRestaurantOrder extends Model
         'notes',
         'served_at',
         'paid_at',
+        'invoice_id',
     ];
 
     protected function casts(): array
@@ -43,12 +44,17 @@ class HotelRestaurantOrder extends Model
             return 'Chambre '.($this->room_number ?? '—');
         }
 
-        return 'Table '.($this->table?->number ?? '—');
+        return 'Table '.($this->restaurantTable?->number ?? '—');
     }
 
-    public function table(): BelongsTo
+    public function restaurantTable(): BelongsTo
     {
         return $this->belongsTo(HotelRestaurantTable::class, 'hotel_restaurant_table_id');
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
     }
 
     public function items(): HasMany
