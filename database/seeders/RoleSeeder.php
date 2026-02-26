@@ -205,20 +205,6 @@ class RoleSeeder extends Seeder
                     'journal',
                 ],
             ],
-            [
-                'name' => 'hotel_receptionist',
-                'label' => 'Réceptionniste',
-                'description' => 'Accueil, réservations, check-in et check-out',
-                'domain' => 'hotel',
-                'permissions' => ['dashboard', 'hotel_rooms', 'clients'],
-            ],
-            [
-                'name' => 'hotel_housekeeping',
-                'label' => 'Femme / Valet de chambre',
-                'description' => 'Gestion de l\'état des chambres',
-                'domain' => 'hotel',
-                'permissions' => ['dashboard', 'hotel_rooms'],
-            ],
         ];
 
         foreach ($roles as $role) {
