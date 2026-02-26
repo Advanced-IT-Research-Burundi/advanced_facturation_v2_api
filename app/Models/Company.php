@@ -41,6 +41,7 @@ class Company extends Model
         'default_currency',
         'domain',
         'user_id',
+        'company_logo',
     ];
 
     /**
