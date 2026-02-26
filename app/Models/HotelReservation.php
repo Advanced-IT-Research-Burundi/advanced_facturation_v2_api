@@ -19,6 +19,11 @@ class HotelReservation extends Model
         'guest_name',
         'guest_phone',
         'guest_email',
+        'guest_id_number',
+        'guest_id_type',
+        'guest_address',
+        'guest_birthplace',
+        'guest_birthdate',
         'check_in_date',
         'check_out_date',
         'actual_check_in_at',
@@ -36,6 +41,7 @@ class HotelReservation extends Model
     protected function casts(): array
     {
         return [
+            'guest_birthdate' => 'date',
             'check_in_date' => 'date',
             'check_out_date' => 'date',
             'actual_check_in_at' => 'datetime',
