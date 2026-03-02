@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Depense extends Model
 {
-    use HasFactory, SoftDeletes, HasCompanyId;
+    use HasCompanyId, HasFactory, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -24,6 +24,7 @@ class Depense extends Model
         'company_id',
         'justification_file',
         'user_id',
+        'hotel_section',
     ];
 
     /**

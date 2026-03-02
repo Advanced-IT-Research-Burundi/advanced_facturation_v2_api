@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CashRegister;
 use App\Models\CashMovement;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\CashRegister;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class CashRegisterController extends Controller
 {
@@ -19,6 +18,15 @@ class CashRegisterController extends Controller
         $query = CashRegister::with(['openedBy', 'closedBy', 'warehouse'])
             ->where('company_id', $companyId);
 
+        if ($request->has('hotel_section')) {
+            $hotelSection = $request->hotel_section;
+            if ($hotelSection === 'null' || $hotelSection === '') {
+                $query->whereNull('hotel_section');
+            } else {
+                $query->where('hotel_section', $hotelSection);
+            }
+        }
+
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
@@ -26,7 +34,7 @@ class CashRegisterController extends Controller
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('opened_at', [
                 Carbon::parse($request->start_date)->startOfDay(),
-                Carbon::parse($request->end_date)->endOfDay()
+                Carbon::parse($request->end_date)->endOfDay(),
             ]);
         }
 
@@ -34,24 +42,32 @@ class CashRegisterController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $registers
+            'data' => $registers,
         ]);
     }
 
     public function current(Request $request)
     {
         $user = $request->user();
+        $hotelSection = $request->input('hotel_section');
 
-        $register = CashRegister::with(['openedBy', 'warehouse', 'movements.createdBy'])
+        $query = CashRegister::with(['openedBy', 'warehouse', 'movements.createdBy'])
             ->where('company_id', $user->company_id)
-            ->where('status', 'open')
-            ->first();
+            ->where('status', 'open');
 
-        if (!$register) {
+        if ($hotelSection) {
+            $query->where('hotel_section', $hotelSection);
+        } else {
+            $query->whereNull('hotel_section');
+        }
+
+        $register = $query->first();
+
+        if (! $register) {
             return response()->json([
                 'success' => true,
                 'data' => null,
-                'message' => 'Aucune caisse ouverte'
+                'message' => 'Aucune caisse ouverte',
             ]);
         }
 
@@ -70,8 +86,8 @@ class CashRegisterController extends Controller
                     'total_expense' => $expense,
                     'expected_balance' => $expectedBalance,
                     'transaction_count' => $register->movements()->count(),
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -80,26 +96,32 @@ class CashRegisterController extends Controller
         $request->validate([
             'opening_balance' => 'required|numeric|min:0',
             'warehouse_id' => 'nullable|exists:warehouses,id',
+            'hotel_section' => 'nullable|in:restaurant,bar,rooms,conference,reception',
             'opening_note' => 'nullable|string',
         ]);
 
         $user = $request->user();
 
-        // Check if there's already an open register
+        // Check if there's already an open register for this section
         $existingOpen = CashRegister::where('company_id', $user->company_id)
             ->where('status', 'open')
+            ->where('hotel_section', $request->hotel_section)
+            ->when(is_null($request->hotel_section), fn ($q) => $q->whereNull('hotel_section'))
             ->first();
 
         if ($existingOpen) {
+            $sectionLabel = $request->hotel_section ? ' ('.$request->hotel_section.')' : '';
+
             return response()->json([
                 'success' => false,
-                'message' => 'Une caisse est déjà ouverte. Veuillez la fermer avant d\'en ouvrir une nouvelle.'
+                'message' => 'Une caisse'.$sectionLabel.' est déjà ouverte. Veuillez la fermer avant d\'en ouvrir une nouvelle.',
             ], 422);
         }
 
         $register = CashRegister::create([
             'company_id' => $user->company_id,
             'warehouse_id' => $request->warehouse_id,
+            'hotel_section' => $request->hotel_section,
             'opened_by' => $user->id,
             'opening_balance' => $request->opening_balance,
             'opened_at' => now(),
@@ -110,7 +132,7 @@ class CashRegisterController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Caisse ouverte avec succès',
-            'data' => $register->load('openedBy')
+            'data' => $register->load('openedBy'),
         ], 201);
     }
 
@@ -156,8 +178,8 @@ class CashRegisterController extends Controller
                     'closing_balance' => $request->closing_balance,
                     'difference' => $difference,
                     'difference_status' => $difference == 0 ? 'balanced' : ($difference > 0 ? 'surplus' : 'deficit'),
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -182,8 +204,8 @@ class CashRegisterController extends Controller
                     'expected_balance' => $register->calculateExpectedBalance(),
                     'closing_balance' => $register->closing_balance,
                     'difference' => $register->difference,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -213,7 +235,7 @@ class CashRegisterController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Mouvement enregistré',
-            'data' => $movement->load('createdBy')
+            'data' => $movement->load('createdBy'),
         ], 201);
     }
 
@@ -229,7 +251,7 @@ class CashRegisterController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $movements
+            'data' => $movements,
         ]);
     }
 
@@ -265,8 +287,8 @@ class CashRegisterController extends Controller
                     'total_expense' => $totalExpense,
                     'total_closing' => $totalClosing,
                     'total_difference' => $totalDifference,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 }

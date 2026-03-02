@@ -17,6 +17,12 @@ class DepenseController extends Controller
         $query = Depense::with(['depenseCategory', 'company', 'user'])
             ->where('company_id', auth()->user()->company_id);
 
+        if ($request->filled('hotel_section')) {
+            $query->where('hotel_section', $request->hotel_section);
+        } elseif ($request->has('hotel_section') && $request->hotel_section === '') {
+            $query->whereNull('hotel_section');
+        }
+
         if ($request->filled('category_id')) {
             $query->where('depense_category_id', $request->category_id);
         }
@@ -35,16 +41,21 @@ class DepenseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->latest()->paginate(15)
+            'data' => $query->latest()->paginate(15),
         ], Response::HTTP_OK);
     }
 
     public function store(Request $request)
     {
+        $isHotelSection = $request->filled('hotel_section');
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'montant' => 'required|numeric|min:0',
-            'depense_category_id' => 'required|exists:depense_categories,id',
+            'depense_category_id' => $isHotelSection
+                ? 'nullable|exists:depense_categories,id'
+                : 'required|exists:depense_categories,id',
+            'hotel_section' => 'nullable|in:restaurant,bar,rooms,conference,reception',
             'justification_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
 
@@ -61,7 +72,7 @@ class DepenseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Depense created successfully',
-            'data' => $depense->load(['depenseCategory', 'company', 'user'])
+            'data' => $depense->load(['depenseCategory', 'company', 'user']),
         ], Response::HTTP_CREATED);
     }
 
@@ -70,9 +81,10 @@ class DepenseController extends Controller
         if ($depense->company_id !== auth()->user()->company_id) {
             abort(403);
         }
+
         return response()->json([
             'success' => true,
-            'data' => $depense->load(['depenseCategory', 'company', 'user'])
+            'data' => $depense->load(['depenseCategory', 'company', 'user']),
         ], Response::HTTP_OK);
     }
 
@@ -94,7 +106,7 @@ class DepenseController extends Controller
             if ($depense->justification_file && \Illuminate\Support\Facades\Storage::disk('public')->exists($depense->justification_file)) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($depense->justification_file);
             }
-            
+
             $path = $request->file('justification_file')->store('depenses', 'public');
             $validated['justification_file'] = $path;
         }
@@ -104,7 +116,7 @@ class DepenseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Depense updated successfully',
-            'data' => $depense->load(['depenseCategory', 'company', 'user'])
+            'data' => $depense->load(['depenseCategory', 'company', 'user']),
         ], Response::HTTP_OK);
     }
 
@@ -113,16 +125,16 @@ class DepenseController extends Controller
         if ($depense->company_id !== auth()->user()->company_id) {
             abort(403);
         }
-        
+
         if ($depense->justification_file && \Illuminate\Support\Facades\Storage::disk('public')->exists($depense->justification_file)) {
-             \Illuminate\Support\Facades\Storage::disk('public')->delete($depense->justification_file);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($depense->justification_file);
         }
 
         $depense->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Depense deleted successfully'
+            'message' => 'Depense deleted successfully',
         ], Response::HTTP_OK);
     }
 
@@ -131,13 +143,13 @@ class DepenseController extends Controller
         $depense = Depense::withTrashed()
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
-            
+
         $depense->restore();
 
         return response()->json([
             'success' => true,
             'message' => 'Depense restored successfully',
-            'data' => $depense
+            'data' => $depense,
         ], Response::HTTP_OK);
     }
 
@@ -155,16 +167,16 @@ class DepenseController extends Controller
 
         $depenses = $query->latest()->get();
 
-        $csvFileName = 'depenses_export_' . date('Y-m-d_H-i-s') . '.csv';
+        $csvFileName = 'depenses_export_'.date('Y-m-d_H-i-s').'.csv';
         $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$csvFileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=$csvFileName",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ];
 
-        $callback = function() use($depenses) {
+        $callback = function () use ($depenses) {
             $file = fopen('php://output', 'w');
             fputcsv($file, ['ID', 'Date', 'Libellé', 'Catégorie', 'Montant', 'Créé par']);
 
@@ -175,7 +187,7 @@ class DepenseController extends Controller
                     $row->name,
                     $row->depenseCategory?->name ?? 'N/A',
                     $row->montant,
-                    $row->user?->name ?? 'N/A'
+                    $row->user?->name ?? 'N/A',
                 ]);
             }
             fclose($file);

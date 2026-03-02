@@ -34,6 +34,13 @@ class HotelInvoiceController extends Controller
             $query->where('obr_submission_status', $obrStatus);
         }
 
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', fn ($cq) => $cq->where('customer_name', 'like', "%{$search}%"));
+            });
+        }
+
         $invoices = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 20));
 
         return response()->json([

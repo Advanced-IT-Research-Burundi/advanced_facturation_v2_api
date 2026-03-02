@@ -28,6 +28,7 @@ class HotelKitchenStockController extends Controller
             'quantity' => 'required|numeric|min:0',
             'unit' => 'required|string|max:20',
             'alert_threshold' => 'nullable|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         $stock = HotelKitchenStock::create($validated);
@@ -46,6 +47,7 @@ class HotelKitchenStockController extends Controller
             'quantity' => 'sometimes|numeric|min:0',
             'unit' => 'sometimes|string|max:20',
             'alert_threshold' => 'nullable|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         $hotelKitchenStock->update($validated);

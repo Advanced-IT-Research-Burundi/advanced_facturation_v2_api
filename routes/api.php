@@ -424,6 +424,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('bar-stock', App\Http\Controllers\Api\HotelBarStockController::class)
             ->parameters(['bar-stock' => 'hotelBarStock'])
             ->except(['show', 'create', 'edit']);
+
+        // Hotel Cash Register (reuse existing CashRegisterController with hotel_section filter)
+        Route::get('caisse/current', [App\Http\Controllers\Api\CashRegisterController::class, 'current']);
+        Route::post('caisse/open', [App\Http\Controllers\Api\CashRegisterController::class, 'open']);
+        Route::post('caisse/{id}/close', [App\Http\Controllers\Api\CashRegisterController::class, 'close']);
+        Route::post('caisse/{id}/movements', [App\Http\Controllers\Api\CashRegisterController::class, 'addMovement']);
+        Route::get('caisse/{id}/movements', [App\Http\Controllers\Api\CashRegisterController::class, 'movements']);
+        Route::get('caisse', [App\Http\Controllers\Api\CashRegisterController::class, 'index']);
+
+        // Hotel Depenses
+        Route::get('depenses', [App\Http\Controllers\Api\DepenseController::class, 'index']);
+        Route::post('depenses', [App\Http\Controllers\Api\DepenseController::class, 'store']);
+        Route::delete('depenses/{depense}', [App\Http\Controllers\Api\DepenseController::class, 'destroy']);
+        Route::get('depense-categories', [App\Http\Controllers\Api\DepenseCategoryController::class, 'index']);
     });
 
 });

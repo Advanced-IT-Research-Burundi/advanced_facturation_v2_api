@@ -24,6 +24,7 @@ class HotelBarStockController extends Controller
             'quantity' => 'required|numeric|min:0',
             'unit' => 'required|string|max:50',
             'alert_threshold' => 'required|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         $stock = HotelBarStock::create($validated);
@@ -42,6 +43,7 @@ class HotelBarStockController extends Controller
             'quantity' => 'sometimes|numeric|min:0',
             'unit' => 'sometimes|string|max:50',
             'alert_threshold' => 'sometimes|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
         ]);
 
         $hotelBarStock->update($validated);

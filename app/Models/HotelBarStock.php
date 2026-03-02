@@ -17,6 +17,7 @@ class HotelBarStock extends Model
         'quantity',
         'unit',
         'alert_threshold',
+        'purchase_price',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class HotelBarStock extends Model
         return [
             'quantity' => 'decimal:3',
             'alert_threshold' => 'decimal:3',
+            'purchase_price' => 'decimal:2',
         ];
     }
 

@@ -2,20 +2,20 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Traits\HasCompanyId;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CashRegister extends Model
 {
-    use SoftDeletes, HasCompanyId;
-
+    use HasCompanyId, SoftDeletes;
 
     protected $fillable = [
         'company_id',
         'warehouse_id',
+        'hotel_section',
         'opened_by',
         'closed_by',
         'opening_balance',
