@@ -22,10 +22,12 @@ class ProductImport implements ToCollection, WithHeadingRow
 
     public $previewMode = false;
     public $previewData = [];
+    private static $itemCodeCounter = 0;
 
     public function __construct($previewMode = false)
     {
         $this->previewMode = $previewMode;
+        self::$itemCodeCounter = 0;
     }
 
     /**
@@ -35,6 +37,18 @@ class ProductImport implements ToCollection, WithHeadingRow
     {
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // +2 car Excel commence à 1 et on a les en-têtes
+
+            // Ignorer les lignes complètement vides
+            $hasAnyValue = false;
+            foreach ($row as $value) {
+                if (!is_null($value) && trim((string) $value) !== '') {
+                    $hasAnyValue = true;
+                    break;
+                }
+            }
+            if (!$hasAnyValue) {
+                continue;
+            }
 
             // Normaliser les clés (gérer les accents et espaces)
             $rowData = $this->normalizeRow($row);
@@ -77,10 +91,10 @@ class ProductImport implements ToCollection, WithHeadingRow
             }
 
             // Vérifier si le produit existe déjà
-            $existingProduct = Product::where('item_designation', $rowData['nom_du_produit'])
-                ->orWhere(function ($query) use ($rowData) {
+            $existingProduct = Product::where(function ($query) use ($rowData) {
+                    $query->where('item_designation', $rowData['nom_du_produit']);
                     if (!empty($rowData['code_produit'])) {
-                        $query->where('code_product', $rowData['code_produit']);
+                        $query->orWhere('code_product', $rowData['code_produit']);
                     }
                 })
                 ->first();
@@ -203,10 +217,25 @@ class ProductImport implements ToCollection, WithHeadingRow
             $prefix = 'PRD';
         }
         
-        $timestamp = substr(time(), -6);
-        $random = rand(10, 99);
+        // Utiliser un compteur statique + microtime pour garantir l'unicité lors de l'import en masse
+        self::$itemCodeCounter++;
+        $maxAttempts = 10;
         
-        return $prefix . $timestamp . $random;
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $uniquePart = substr(str_replace('.', '', (string) microtime(true)), -8);
+            $code = $prefix . $uniquePart . str_pad(self::$itemCodeCounter, 4, '0', STR_PAD_LEFT);
+            
+            // Vérifier que le code n'existe pas déjà en base
+            if (!Product::withoutGlobalScopes()->where('item_code', $code)->exists()) {
+                return $code;
+            }
+            
+            // Si collision, attendre un très court instant et réessayer
+            usleep(100);
+        }
+        
+        // Dernier recours: utiliser uniqid
+        return $prefix . strtoupper(uniqid());
     }
 
     /**

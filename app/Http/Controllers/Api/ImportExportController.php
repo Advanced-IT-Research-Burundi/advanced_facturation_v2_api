@@ -39,10 +39,10 @@ class ImportExportController extends Controller
 
             // Vérifier les doublons dans la base
             foreach ($previewData as &$item) {
-                $exists = Product::where('item_designation', $item['name'])
-                    ->orWhere(function ($query) use ($item) {
+                $exists = Product::where(function ($query) use ($item) {
+                        $query->where('item_designation', $item['name']);
                         if (!empty($item['code_product'])) {
-                            $query->where('code_product', $item['code_product']);
+                            $query->orWhere('code_product', $item['code_product']);
                         }
                     })
                     ->exists();
