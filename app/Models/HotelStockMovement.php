@@ -20,6 +20,8 @@ class HotelStockMovement extends Model
         'quantity',
         'quantity_before',
         'quantity_after',
+        'unit_price',
+        'currency',
         'reason',
         'reference',
         'user_id',
@@ -31,6 +33,7 @@ class HotelStockMovement extends Model
             'quantity' => 'decimal:3',
             'quantity_before' => 'decimal:3',
             'quantity_after' => 'decimal:3',
+            'unit_price' => 'decimal:2',
         ];
     }
 

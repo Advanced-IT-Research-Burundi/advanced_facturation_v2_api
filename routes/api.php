@@ -426,6 +426,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ->except(['show', 'create', 'edit']);
 
         // Hotel Cash Register (reuse existing CashRegisterController with hotel_section filter)
+        Route::get('caisse/global-summary', [App\Http\Controllers\Api\CashRegisterController::class, 'hotelGlobalSummary']);
         Route::get('caisse/current', [App\Http\Controllers\Api\CashRegisterController::class, 'current']);
         Route::post('caisse/open', [App\Http\Controllers\Api\CashRegisterController::class, 'open']);
         Route::post('caisse/{id}/close', [App\Http\Controllers\Api\CashRegisterController::class, 'close']);

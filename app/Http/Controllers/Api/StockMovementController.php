@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashMovement;
+use App\Models\CashRegister;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
@@ -184,6 +186,8 @@ class StockMovementController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
+            'unit_price' => 'nullable|numeric|min:0',
+            'currency' => 'nullable|string',
             'invoice_ref' => 'nullable|string',
         ]);
 
@@ -200,14 +204,17 @@ class StockMovementController extends Controller
 
             $product = Product::findOrFail($request->product_id);
 
+            $exitPrice = $request->unit_price ?? $stock->unit_price;
+            $exitCurrency = $request->currency ?? $stock->currency;
+
             $movement = StockMovement::create([
                 'system_or_device_id' => uniqid('SRT-'),
                 'item_code' => $product->item_code,
                 'item_designation' => $product->item_designation,
                 'item_quantity' => $request->quantity,
                 'item_measurement_unit' => $product->item_measurement_unit,
-                'item_purchase_or_sale_price' => $stock->unit_price,
-                'item_purchase_or_sale_currency' => $stock->currency,
+                'item_purchase_or_sale_price' => $exitPrice,
+                'item_purchase_or_sale_currency' => $exitCurrency,
                 'item_movement_type' => $request->movement_type,
                 'item_movement_invoice_ref' => $request->invoice_ref,
                 'item_movement_date' => now(),
@@ -224,11 +231,28 @@ class StockMovementController extends Controller
             $stock->user_id = Auth::id();
             $stock->save();
 
+            $lossTypes = ['SP', 'SD'];
+            if (in_array($request->movement_type, $lossTypes) && $exitPrice > 0) {
+                $lossAmount = $request->quantity * $exitPrice;
+                $this->registerStockLossInCaisse(
+                    Auth::user()->company_id,
+                    Auth::id(),
+                    $lossAmount,
+                    "Perte stock: {$product->item_designation} ({$request->quantity} {$product->item_measurement_unit})",
+                    $request->movement_type === 'SP' ? 'Sortie par Perte' : 'Sortie par Détérioration',
+                );
+            }
+
             DB::commit();
+
+            $message = 'Sortie enregistrée avec succès';
+            if (in_array($request->movement_type, $lossTypes) && $exitPrice > 0) {
+                $message .= ' — Perte enregistrée en caisse';
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Sortie enregistrée avec succès',
+                'message' => $message,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -334,6 +358,8 @@ class StockMovementController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            'items.*.currency' => 'nullable|string',
             'movement_type' => 'required|in:SN,SP,SV,SD,SC,SAJ,SAU',
             'invoice_ref' => 'nullable|string',
             'description' => 'nullable|string',
@@ -362,14 +388,17 @@ class StockMovementController extends Controller
 
                 $product = Product::findOrFail($item['product_id']);
 
+                $exitPrice = $item['unit_price'] ?? $stock->unit_price;
+                $exitCurrency = $item['currency'] ?? $stock->currency;
+
                 $movement = StockMovement::create([
                     'system_or_device_id' => uniqid('BSRT-'),
                     'item_code' => $product->item_code,
                     'item_designation' => $product->item_designation,
                     'item_quantity' => $item['quantity'],
                     'item_measurement_unit' => $product->item_measurement_unit,
-                    'item_purchase_or_sale_price' => $stock->unit_price,
-                    'item_purchase_or_sale_currency' => $stock->currency,
+                    'item_purchase_or_sale_price' => $exitPrice,
+                    'item_purchase_or_sale_currency' => $exitCurrency,
                     'item_movement_type' => $request->movement_type,
                     'item_movement_invoice_ref' => $request->invoice_ref,
                     'item_movement_description' => $request->description,
@@ -386,13 +415,31 @@ class StockMovementController extends Controller
                 $stock->last_stock_movement_id = $movement->id;
                 $stock->user_id = Auth::id();
                 $stock->save();
+
+                $lossTypes = ['SP', 'SD'];
+                if (in_array($request->movement_type, $lossTypes) && $exitPrice > 0) {
+                    $lossAmount = $item['quantity'] * $exitPrice;
+                    $this->registerStockLossInCaisse(
+                        Auth::user()->company_id,
+                        Auth::id(),
+                        $lossAmount,
+                        "Perte stock: {$product->item_designation} ({$item['quantity']} {$product->item_measurement_unit})",
+                        $request->movement_type === 'SP' ? 'Sortie par Perte' : 'Sortie par Détérioration',
+                    );
+                }
             }
 
             DB::commit();
 
+            $message = count($request->items).' produit(s) sorti(s) avec succès';
+            $lossTypes = ['SP', 'SD'];
+            if (in_array($request->movement_type, $lossTypes)) {
+                $message .= ' — Pertes enregistrées en caisse';
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => count($request->items).' produit(s) sorti(s) avec succès',
+                'message' => $message,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -666,6 +713,30 @@ class StockMovementController extends Controller
         return response()->json([
             'success' => true,
             'data' => $warehouses,
+        ]);
+    }
+
+    /**
+     * Register stock loss as an expense in the open cash register (general, no hotel_section).
+     */
+    private function registerStockLossInCaisse(int $companyId, int $userId, float $amount, string $description, ?string $reference = null): void
+    {
+        $register = CashRegister::where('company_id', $companyId)
+            ->where('status', 'open')
+            ->whereNull('hotel_section')
+            ->first();
+
+        if (! $register) {
+            return;
+        }
+
+        CashMovement::create([
+            'cash_register_id' => $register->id,
+            'type' => 'expense',
+            'amount' => $amount,
+            'description' => $description,
+            'reference' => $reference,
+            'created_by' => $userId,
         ]);
     }
 }
