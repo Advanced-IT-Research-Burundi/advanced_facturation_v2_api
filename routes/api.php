@@ -249,6 +249,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reports/credit-invoices', [App\Http\Controllers\Api\ReportController::class, 'creditInvoices']);
     Route::get('reports/proformas', [App\Http\Controllers\Api\ReportController::class, 'proformas']);
     Route::get('reports/invoices-print', [App\Http\Controllers\Api\ReportController::class, 'invoicesForPrint']);
+    Route::get('reports/cash-balance', [App\Http\Controllers\Api\ReportController::class, 'cashBalance']);
 
     // =============================================
     // GESTION FINANCIÈRE

@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashMovement;
+use App\Models\CashRegister;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
-use App\Models\Product;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class ReportController extends Controller
 {
@@ -31,7 +31,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ])
             ->where('invoice_type', 'FN');
 
@@ -40,7 +40,7 @@ class ReportController extends Controller
         }
 
         if ($warehouseId && $warehouseId !== 'all') {
-            $query->whereHas('stockMovements', function($q) use ($warehouseId) {
+            $query->whereHas('stockMovements', function ($q) use ($warehouseId) {
                 $q->where('warehouse_id', $warehouseId);
             });
         }
@@ -60,30 +60,30 @@ class ReportController extends Controller
             ->with('user:id,name')
             ->groupBy('user_id')
             ->get()
-            ->map(function($item) {
+            ->map(function ($item) {
                 return [
                     'name' => $item->user->name ?? 'Inconnu',
-                    'total' => (float)$item->total
+                    'total' => (float) $item->total,
                 ];
             });
 
         $salesByWarehouse = [];
-        if (!$warehouseId || $warehouseId === 'all') {
+        if (! $warehouseId || $warehouseId === 'all') {
             $salesByWarehouse = StockMovement::query()
                 ->where('company_id', $companyId)
                 ->whereBetween('created_at', [
                     Carbon::parse($startDate)->startOfDay(),
-                    Carbon::parse($endDate)->endOfDay()
+                    Carbon::parse($endDate)->endOfDay(),
                 ])
                 ->where('item_movement_type', 'SN')
                 ->select('warehouse_id', DB::raw('SUM(item_quantity * item_purchase_or_sale_price) as total'))
                 ->with('warehouse:id,name')
                 ->groupBy('warehouse_id')
                 ->get()
-                ->map(function($item) {
+                ->map(function ($item) {
                     return [
                         'name' => $item->warehouse->name ?? 'Inconnu',
-                        'total' => (float)$item->total
+                        'total' => (float) $item->total,
                     ];
                 });
         }
@@ -98,8 +98,8 @@ class ReportController extends Controller
                 ],
                 'daily_sales' => $dailySales,
                 'sales_by_user' => $salesByUser,
-                'sales_by_warehouse' => $salesByWarehouse
-            ]
+                'sales_by_warehouse' => $salesByWarehouse,
+            ],
         ]);
     }
 
@@ -118,12 +118,12 @@ class ReportController extends Controller
 
         $query = Invoice::query()
             ->where('company_id', $companyId)
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->where('is_cancelled', false)->orWhereNull('is_cancelled');
             })
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ])
             ->with(['invoiceItems.product', 'customer', 'user']);
 
@@ -175,7 +175,7 @@ class ReportController extends Controller
                     'total_htva' => $totalHTVA,
                 ],
                 'invoices' => $invoices,
-            ]
+            ],
         ]);
     }
 
@@ -225,7 +225,7 @@ class ReportController extends Controller
                     'total_value' => $totalValue,
                 ],
                 'items' => $stockItems,
-            ]
+            ],
         ]);
     }
 
@@ -246,7 +246,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ])
             ->with(['product', 'warehouse', 'user']);
 
@@ -305,7 +305,7 @@ class ReportController extends Controller
                     'total_exits_value' => $totalExitsValue,
                 ],
                 'movements' => $movements,
-            ]
+            ],
         ]);
     }
 
@@ -315,6 +315,7 @@ class ReportController extends Controller
     public function stockEntries(Request $request)
     {
         $request->merge(['movement_type' => 'entry']);
+
         return $this->stockMovements($request);
     }
 
@@ -333,7 +334,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ])
             ->where('invoice_type', 'FC') // Facture à crédit
             ->with(['customer', 'user', 'invoiceItems']);
@@ -365,7 +366,7 @@ class ReportController extends Controller
                     'total_amount' => $totalAmount,
                 ],
                 'invoices' => $invoices,
-            ]
+            ],
         ]);
     }
 
@@ -384,7 +385,7 @@ class ReportController extends Controller
             ->where('company_id', $companyId)
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ])
             ->where('invoice_type', 'FP') // Proforma
             ->with(['customer', 'user', 'invoiceItems']);
@@ -417,7 +418,7 @@ class ReportController extends Controller
                     'total_amount' => $totalAmount,
                 ],
                 'proformas' => $proformas,
-            ]
+            ],
         ]);
     }
 
@@ -434,7 +435,7 @@ class ReportController extends Controller
         if (empty($ids)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Aucune facture sélectionnée'
+                'message' => 'Aucune facture sélectionnée',
             ], 400);
         }
 
@@ -482,6 +483,116 @@ class ReportController extends Controller
     }
 
     /**
+     * Rapport de balance de caisse journalière.
+     *
+     * Retourne pour chaque jour : solde reportée, entrées, sorties (dépenses + pertes), solde actuel.
+     */
+    public function cashBalance(Request $request)
+    {
+        $user = $request->user();
+        $companyId = $user->company_id;
+
+        $startDate = Carbon::parse($request->get('date_from', Carbon::now()->startOfMonth()->toDateString()))->startOfDay();
+        $endDate = Carbon::parse($request->get('date_to', Carbon::now()->toDateString()))->endOfDay();
+        $hotelSection = $request->get('hotel_section');
+
+        $registersQuery = CashRegister::where('company_id', $companyId);
+
+        if ($hotelSection && $hotelSection !== 'all') {
+            if ($hotelSection === 'general') {
+                $registersQuery->whereNull('hotel_section');
+            } else {
+                $registersQuery->where('hotel_section', $hotelSection);
+            }
+        }
+
+        $registerIds = $registersQuery->pluck('id');
+
+        $movementsBeforePeriod = CashMovement::whereIn('cash_register_id', $registerIds)
+            ->where('created_at', '<', $startDate)
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+            ")
+            ->first();
+
+        $initialBalance = ($movementsBeforePeriod->total_income ?? 0) - ($movementsBeforePeriod->total_expense ?? 0);
+
+        $isLoss = fn (string $desc): bool => str_contains(strtolower($desc), 'perte');
+
+        $dailyMovements = CashMovement::whereIn('cash_register_id', $registerIds)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('
+                DATE(created_at) as date,
+                type,
+                amount,
+                description
+            ')
+            ->orderBy('date')
+            ->get();
+
+        $grouped = $dailyMovements->groupBy('date');
+
+        $rows = [];
+        $runningBalance = $initialBalance;
+
+        $currentDate = $startDate->copy();
+        $end = $endDate->copy()->startOfDay();
+
+        $totalIncome = 0;
+        $totalExpenses = 0;
+        $totalLosses = 0;
+
+        while ($currentDate->lte($end)) {
+            $dateKey = $currentDate->toDateString();
+            $dayMovements = $grouped->get($dateKey, collect());
+
+            $dayIncome = $dayMovements->where('type', 'income')->sum('amount');
+            $dayExpenseAll = $dayMovements->where('type', 'expense');
+            $dayLosses = $dayExpenseAll->filter(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
+            $dayExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
+
+            $dayTotalOut = $dayExpenses + $dayLosses;
+            $carriedBalance = $runningBalance;
+            $runningBalance = $carriedBalance + $dayIncome - $dayTotalOut;
+
+            $totalIncome += $dayIncome;
+            $totalExpenses += $dayExpenses;
+            $totalLosses += $dayLosses;
+
+            if ($dayIncome > 0 || $dayTotalOut > 0 || $carriedBalance != 0) {
+                $rows[] = [
+                    'date' => $currentDate->format('d/m/Y'),
+                    'carried_balance' => $carriedBalance,
+                    'income' => $dayIncome,
+                    'expenses' => $dayExpenses,
+                    'losses' => $dayLosses,
+                    'total_out' => $dayTotalOut,
+                    'current_balance' => $runningBalance,
+                ];
+            }
+
+            $currentDate->addDay();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary' => [
+                    'date_from' => $startDate->toDateString(),
+                    'date_to' => $endDate->toDateString(),
+                    'initial_balance' => $initialBalance,
+                    'total_income' => $totalIncome,
+                    'total_expenses' => $totalExpenses,
+                    'total_losses' => $totalLosses,
+                    'final_balance' => $runningBalance,
+                ],
+                'rows' => $rows,
+            ],
+        ]);
+    }
+
+    /**
      * Helper: Label du type de facture
      */
     private function getInvoiceTypeLabel($type)
@@ -493,6 +604,7 @@ class ReportController extends Controller
             'FP' => 'Proforma',
             'RC' => 'Reçu de Caisse',
         ];
+
         return $labels[$type] ?? $type;
     }
 
@@ -512,6 +624,7 @@ class ReportController extends Controller
             'SP' => 'Sortie Perte',
             'ST' => 'Sortie Transfert',
         ];
+
         return $labels[$type] ?? $type;
     }
 
@@ -522,7 +635,7 @@ class ReportController extends Controller
     {
         $data = $this->invoicesHistory($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -550,7 +663,7 @@ class ReportController extends Controller
         // Add summary at the end
         $rows[] = [];
         $rows[] = ['RÉSUMÉ'];
-        $rows[] = ['Période', $summary['date_from'] . ' - ' . $summary['date_to']];
+        $rows[] = ['Période', $summary['date_from'].' - '.$summary['date_to']];
         $rows[] = ['Total Factures', $summary['total_invoices']];
         $rows[] = ['Total HTVA', $summary['total_htva']];
         $rows[] = ['Total TVA', $summary['total_tva']];
@@ -566,7 +679,7 @@ class ReportController extends Controller
     {
         $data = $this->stockSheet($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -605,7 +718,7 @@ class ReportController extends Controller
     {
         $data = $this->stockMovements($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -633,7 +746,7 @@ class ReportController extends Controller
 
         $rows[] = [];
         $rows[] = ['RÉSUMÉ'];
-        $rows[] = ['Période', $summary['date_from'] . ' - ' . $summary['date_to']];
+        $rows[] = ['Période', $summary['date_from'].' - '.$summary['date_to']];
         $rows[] = ['Total Mouvements', $summary['total_movements']];
         $rows[] = ['Entrées', $summary['total_entries'], 'Valeur', $summary['total_entries_value']];
         $rows[] = ['Sorties', $summary['total_exits'], 'Valeur', $summary['total_exits_value']];
@@ -647,6 +760,7 @@ class ReportController extends Controller
     public function exportStockEntries(Request $request)
     {
         $request->merge(['movement_type' => 'entry']);
+
         return $this->exportStockMovements($request);
     }
 
@@ -657,7 +771,7 @@ class ReportController extends Controller
     {
         $data = $this->creditInvoices($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -684,7 +798,7 @@ class ReportController extends Controller
 
         $rows[] = [];
         $rows[] = ['RÉSUMÉ'];
-        $rows[] = ['Période', $summary['date_from'] . ' - ' . $summary['date_to']];
+        $rows[] = ['Période', $summary['date_from'].' - '.$summary['date_to']];
         $rows[] = ['Total Factures', $summary['total_invoices']];
         $rows[] = ['Montant Total', $summary['total_amount']];
 
@@ -698,7 +812,7 @@ class ReportController extends Controller
     {
         $data = $this->proformas($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -725,7 +839,7 @@ class ReportController extends Controller
 
         $rows[] = [];
         $rows[] = ['RÉSUMÉ'];
-        $rows[] = ['Période', $summary['date_from'] . ' - ' . $summary['date_to']];
+        $rows[] = ['Période', $summary['date_from'].' - '.$summary['date_to']];
         $rows[] = ['Total Proformas', $summary['total_proformas']];
         $rows[] = ['Montant Total', $summary['total_amount']];
 
@@ -739,7 +853,7 @@ class ReportController extends Controller
     {
         $data = $this->sales($request)->getData(true);
 
-        if (!$data['success']) {
+        if (! $data['success']) {
             return response()->json($data, 400);
         }
 
@@ -796,7 +910,7 @@ class ReportController extends Controller
             $file = fopen('php://output', 'w');
 
             // BOM for UTF-8
-            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
             // Headers
             fputcsv($file, $headers, ';');
@@ -822,18 +936,18 @@ class ReportController extends Controller
      */
     private function generateExcel(array $headers, array $rows, string $filename)
     {
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $xml .= '<?mso-application progid="Excel.Sheet"?>' . "\n";
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
+        $xml .= '<?mso-application progid="Excel.Sheet"?>'."\n";
         $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-            xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' . "\n";
-        $xml .= '<Worksheet ss:Name="Rapport"><Table>' . "\n";
+            xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'."\n";
+        $xml .= '<Worksheet ss:Name="Rapport"><Table>'."\n";
 
         // Headers
         $xml .= '<Row>';
         foreach ($headers as $header) {
-            $xml .= '<Cell><Data ss:Type="String">' . htmlspecialchars($header) . '</Data></Cell>';
+            $xml .= '<Cell><Data ss:Type="String">'.htmlspecialchars($header).'</Data></Cell>';
         }
-        $xml .= '</Row>' . "\n";
+        $xml .= '</Row>'."\n";
 
         // Data
         foreach ($rows as $row) {
@@ -841,9 +955,9 @@ class ReportController extends Controller
                 $xml .= '<Row>';
                 foreach ($row as $cell) {
                     $type = is_numeric($cell) ? 'Number' : 'String';
-                    $xml .= '<Cell><Data ss:Type="' . $type . '">' . htmlspecialchars($cell ?? '') . '</Data></Cell>';
+                    $xml .= '<Cell><Data ss:Type="'.$type.'">'.htmlspecialchars($cell ?? '').'</Data></Cell>';
                 }
-                $xml .= '</Row>' . "\n";
+                $xml .= '</Row>'."\n";
             }
         }
 
