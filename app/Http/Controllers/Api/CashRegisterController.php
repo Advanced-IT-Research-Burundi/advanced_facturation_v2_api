@@ -301,79 +301,89 @@ class CashRegisterController extends Controller
         $companyId = $user->company_id;
 
         $hotelSections = ['restaurant', 'bar', 'rooms', 'conference', 'reception'];
+        $isLoss = fn ($m) => str_contains(strtolower($m->description ?? ''), 'perte');
 
-        $query = CashRegister::where('company_id', $companyId)
-            ->whereIn('hotel_section', $hotelSections);
+        $registers = CashRegister::where('company_id', $companyId)
+            ->whereIn('hotel_section', $hotelSections)
+            ->get();
 
-        if ($request->has('start_date') && $request->start_date) {
-            $query->where('opened_at', '>=', Carbon::parse($request->start_date)->startOfDay());
-        }
-
-        if ($request->has('end_date') && $request->end_date) {
-            $query->where('opened_at', '<=', Carbon::parse($request->end_date)->endOfDay());
-        }
-
-        $registers = $query->get();
         $registerIds = $registers->pluck('id');
 
-        $movements = CashMovement::whereIn('cash_register_id', $registerIds)->get();
+        $movementsQuery = CashMovement::whereIn('cash_register_id', $registerIds);
 
+        if ($request->filled('start_date')) {
+            $movementsQuery->where('created_at', '>=', Carbon::parse($request->start_date)->startOfDay());
+        }
+
+        if ($request->filled('end_date')) {
+            $movementsQuery->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay());
+        }
+
+        $movements = $movementsQuery->get();
+
+        $allExpenses = $movements->where('type', 'expense');
         $totalIncome = $movements->where('type', 'income')->sum('amount');
-        $totalExpense = $movements->where('type', 'expense')->sum('amount');
-        $totalProfit = $totalIncome - $totalExpense;
-
-        $lossMovements = $movements->where('type', 'expense')
-            ->filter(fn ($m) => str_contains(strtolower($m->description ?? ''), 'perte'));
-        $totalLosses = $lossMovements->sum('amount');
+        $totalLosses = $allExpenses->filter($isLoss)->sum('amount');
+        $totalExpenseOnly = $allExpenses->reject($isLoss)->sum('amount');
+        $totalProfit = $totalIncome - $totalExpenseOnly - $totalLosses;
 
         $sectionSummaries = [];
         foreach ($hotelSections as $section) {
-            $sectionRegisters = $registers->where('hotel_section', $section);
-            $sectionRegisterIds = $sectionRegisters->pluck('id');
+            $sectionRegisterIds = $registers->where('hotel_section', $section)->pluck('id');
             $sectionMovements = $movements->whereIn('cash_register_id', $sectionRegisterIds);
 
             $sectionIncome = $sectionMovements->where('type', 'income')->sum('amount');
-            $sectionExpense = $sectionMovements->where('type', 'expense')->sum('amount');
-
-            $sectionLosses = $sectionMovements->where('type', 'expense')
-                ->filter(fn ($m) => str_contains(strtolower($m->description ?? ''), 'perte'))
-                ->sum('amount');
+            $sectionExpenses = $sectionMovements->where('type', 'expense');
+            $sectionLosses = $sectionExpenses->filter($isLoss)->sum('amount');
+            $sectionExpenseOnly = $sectionExpenses->reject($isLoss)->sum('amount');
 
             $sectionSummaries[] = [
                 'section' => $section,
                 'total_income' => $sectionIncome,
-                'total_expense' => $sectionExpense,
+                'total_expense' => $sectionExpenseOnly,
                 'total_losses' => $sectionLosses,
-                'profit' => $sectionIncome - $sectionExpense,
-                'registers_count' => $sectionRegisters->count(),
+                'profit' => $sectionIncome - $sectionExpenseOnly - $sectionLosses,
+                'registers_count' => $registers->where('hotel_section', $section)->count(),
             ];
         }
 
-        $recentMovements = CashMovement::with('createdBy')
-            ->whereIn('cash_register_id', $registerIds)
-            ->orderBy('created_at', 'desc')
-            ->limit(50)
-            ->get()
-            ->map(function ($m) use ($registers) {
-                $register = $registers->firstWhere('id', $m->cash_register_id);
-                $m->hotel_section = $register?->hotel_section;
+        $perPage = (int) $request->get('per_page', 20);
+        $page = (int) $request->get('page', 1);
 
-                return $m;
-            });
+        $paginatedQuery = CashMovement::with('createdBy')
+            ->whereIn('cash_register_id', $registerIds)
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('start_date')) {
+            $paginatedQuery->where('created_at', '>=', Carbon::parse($request->start_date)->startOfDay());
+        }
+
+        if ($request->filled('end_date')) {
+            $paginatedQuery->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay());
+        }
+
+        $paginatedMovements = $paginatedQuery->paginate($perPage, ['*'], 'page', $page);
+
+        $paginatedMovements->getCollection()->transform(function ($m) use ($registers) {
+            $register = $registers->firstWhere('id', $m->cash_register_id);
+            $m->hotel_section = $register?->hotel_section;
+
+            return $m;
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
                 'global' => [
                     'total_income' => $totalIncome,
-                    'total_expense' => $totalExpense,
+                    'total_expense' => $totalExpenseOnly,
                     'total_profit' => $totalProfit,
                     'total_losses' => $totalLosses,
                     'registers_count' => $registers->count(),
                     'open_registers' => $registers->where('status', 'open')->count(),
                 ],
                 'sections' => $sectionSummaries,
-                'recent_movements' => $recentMovements,
+                'movements' => $paginatedMovements,
             ],
         ]);
     }
