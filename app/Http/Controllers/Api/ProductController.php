@@ -17,7 +17,6 @@ class ProductController extends Controller
     /**
      * Display a listing of products.
      */
-
     public function posProducts(Request $request)
     {
         $stock_id = $request->stock_id ?? auth()->user()->warehouses?->first()?->id;
@@ -46,7 +45,6 @@ class ProductController extends Controller
         ], Response::HTTP_OK);
     }
 
-
     public function index(Request $request)
     {
         $query = Product::with(['company', 'productUnit', 'categoryProduct', 'user']);
@@ -54,13 +52,13 @@ class ProductController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where('item_code', 'like', "%{$search}%")
-                  ->orWhere('item_designation', 'like', "%{$search}%")
-                  ->orWhere('barcode', 'like', "%{$search}%");
+                ->orWhere('item_designation', 'like', "%{$search}%")
+                ->orWhere('barcode', 'like', "%{$search}%");
         }
 
         return response()->json([
             'success' => true,
-            'data' => $query->latest()->paginate(15),// ProductResource::collection()
+            'data' => $query->latest()->paginate(15), // ProductResource::collection()
         ], Response::HTTP_OK);
     }
 
@@ -75,7 +73,7 @@ class ProductController extends Controller
             'item_measurement_unit' => 'sometimes|max:255',
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'required|numeric|min:0|max:100',
-           // 'company_id' => 'required|exists:companies,id',
+            // 'company_id' => 'required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
             'code_product' => 'nullable|string|max:255',
@@ -93,6 +91,7 @@ class ProductController extends Controller
             'image' => 'nullable|string|max:255',
             'type' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'is_production' => 'nullable|boolean',
         ]);
 
         $validated['user_id'] = auth()->id();
@@ -100,8 +99,8 @@ class ProductController extends Controller
             $product = Product::create(attributes: $validated);
         } catch (\Exception $e) {
             return response()->json([
-                'success'=> false,
-                'message'=> $e->getMessage()
+                'success' => false,
+                'message' => $e->getMessage(),
             ]
             );
 
@@ -110,7 +109,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit créé avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
         ], Response::HTTP_CREATED);
     }
 
@@ -121,7 +120,7 @@ class ProductController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user', 'stockMovements', 'warehouseProducts']))
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user', 'stockMovements', 'warehouseProducts'])),
         ], Response::HTTP_OK);
     }
 
@@ -131,12 +130,12 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $validated = $request->validate([
-            'item_code' => 'sometimes|required|string|unique:products,item_code,' . $product->id . '|max:255',
+            'item_code' => 'sometimes|required|string|unique:products,item_code,'.$product->id.'|max:255',
             'item_designation' => 'sometimes|required|string|max:255',
-            //'item_measurement_unit' => 'sometimes|required|string|max:255',
+            // 'item_measurement_unit' => 'sometimes|required|string|max:255',
             'barcode' => 'nullable|string|max:255',
             'vat_rate' => 'sometimes|required|numeric|min:0|max:100',
-            //'company_id' => 'sometimes|required|exists:companies,id',
+            // 'company_id' => 'sometimes|required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
             'code_product' => 'nullable|string|max:255',
@@ -154,6 +153,7 @@ class ProductController extends Controller
             'image' => 'nullable|string|max:255',
             'type' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'is_production' => 'nullable|boolean',
         ]);
 
         $product->update($validated);
@@ -161,7 +161,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit mis à jour avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
         ], Response::HTTP_OK);
     }
 
@@ -174,7 +174,7 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Produit supprimé avec succès'
+            'message' => 'Produit supprimé avec succès',
         ], Response::HTTP_OK);
     }
 
@@ -189,7 +189,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit restauré avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user']))
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
         ], Response::HTTP_OK);
     }
 
@@ -198,20 +198,25 @@ class ProductController extends Controller
         // Use product barcode or item_code if content is not provided
         $content = $request->get('content', $product->barcode ?? $product->item_code ?? '000000');
         $type = $request->get('type', 'TYPE_CODE_128');
-        
-        $generator = new BarcodeGeneratorSVG();
-        
+
+        $generator = new BarcodeGeneratorSVG;
+
         $barcodeType = $generator::TYPE_CODE_128;
-        if ($type === 'TYPE_EAN_13') $barcodeType = $generator::TYPE_EAN_13;
-        if ($type === 'TYPE_CODE_39') $barcodeType = $generator::TYPE_CODE_39;
-        
+        if ($type === 'TYPE_EAN_13') {
+            $barcodeType = $generator::TYPE_EAN_13;
+        }
+        if ($type === 'TYPE_CODE_39') {
+            $barcodeType = $generator::TYPE_CODE_39;
+        }
+
         try {
             $svg = $generator->getBarcode($content, $barcodeType);
+
             return response($svg)->header('Content-Type', 'image/svg+xml');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate barcode: ' . $e->getMessage()
+                'message' => 'Failed to generate barcode: '.$e->getMessage(),
             ], 400);
         }
     }
@@ -220,18 +225,18 @@ class ProductController extends Controller
     {
         $content = $request->get('content', $product->barcode ?? $product->item_code ?? '000000');
         $size = $request->get('size', 200);
-        
+
         try {
             $qrCode = QrCode::format('svg')
                 ->size($size)
                 ->margin(1)
                 ->generate($content);
-                
+
             return response($qrCode)->header('Content-Type', 'image/svg+xml');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate QR code: ' . $e->getMessage()
+                'message' => 'Failed to generate QR code: '.$e->getMessage(),
             ], 400);
         }
     }
@@ -241,9 +246,9 @@ class ProductController extends Controller
         $productId = $request->get('product_id');
         $count = $request->get('count', 1);
         $type = $request->get('type', 'barcode'); // 'barcode' or 'qrcode'
-        
+
         $product = Product::findOrFail($productId);
-        
+
         return view('labels.print', compact('product', 'count', 'type'));
     }
 }

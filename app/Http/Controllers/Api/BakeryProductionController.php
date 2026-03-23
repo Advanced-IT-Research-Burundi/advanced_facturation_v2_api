@@ -627,6 +627,113 @@ class BakeryProductionController extends Controller
         }
     }
 
+    /**
+     * Rapport de production par période : résumé, par produit, et par jour.
+     */
+    public function productionReport(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+        ]);
+
+        $prodWarehouse = Warehouse::where('is_production', true)
+            ->where('company_id', Auth::user()->company_id)
+            ->first();
+
+        if (! $prodWarehouse) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'summary' => ['total_produced' => 0, 'total_transferred' => 0],
+                    'by_product' => [],
+                    'by_day' => [],
+                ],
+            ]);
+        }
+
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+
+        $produced = StockMovement::where('warehouse_id', $prodWarehouse->id)
+            ->where('is_production', true)
+            ->whereIn('item_movement_type', ['EN', 'ER', 'EI', 'EAJ'])
+            ->whereDate('item_movement_date', '>=', $dateFrom)
+            ->whereDate('item_movement_date', '<=', $dateTo)
+            ->selectRaw('
+                product_id,
+                item_code,
+                item_designation,
+                item_measurement_unit,
+                item_purchase_or_sale_currency as currency,
+                SUM(item_quantity) as total_produced,
+                AVG(item_purchase_or_sale_price) as avg_price
+            ')
+            ->groupBy('product_id', 'item_code', 'item_designation', 'item_measurement_unit', 'currency')
+            ->get();
+
+        $transferred = StockMovement::where('warehouse_id', $prodWarehouse->id)
+            ->where('is_production', true)
+            ->where('item_movement_type', 'ST')
+            ->whereDate('item_movement_date', '>=', $dateFrom)
+            ->whereDate('item_movement_date', '<=', $dateTo)
+            ->selectRaw('product_id, SUM(item_quantity) as total_transferred')
+            ->groupBy('product_id')
+            ->pluck('total_transferred', 'product_id');
+
+        $byProduct = $produced->map(function ($item) use ($transferred) {
+            return [
+                'product_id' => $item->product_id,
+                'item_code' => $item->item_code,
+                'item_designation' => $item->item_designation,
+                'item_measurement_unit' => $item->item_measurement_unit,
+                'currency' => $item->currency ?? 'BIF',
+                'total_produced' => round($item->total_produced, 2),
+                'total_transferred' => round($transferred[$item->product_id] ?? 0, 2),
+                'avg_price' => round($item->avg_price, 2),
+            ];
+        });
+
+        $dailyProduced = StockMovement::where('warehouse_id', $prodWarehouse->id)
+            ->where('is_production', true)
+            ->whereIn('item_movement_type', ['EN', 'ER', 'EI', 'EAJ'])
+            ->whereDate('item_movement_date', '>=', $dateFrom)
+            ->whereDate('item_movement_date', '<=', $dateTo)
+            ->selectRaw('DATE(item_movement_date) as date, SUM(item_quantity) as produced')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->pluck('produced', 'date');
+
+        $dailyTransferred = StockMovement::where('warehouse_id', $prodWarehouse->id)
+            ->where('is_production', true)
+            ->where('item_movement_type', 'ST')
+            ->whereDate('item_movement_date', '>=', $dateFrom)
+            ->whereDate('item_movement_date', '<=', $dateTo)
+            ->selectRaw('DATE(item_movement_date) as date, SUM(item_quantity) as transferred')
+            ->groupBy('date')
+            ->pluck('transferred', 'date');
+
+        $allDates = $dailyProduced->keys()->merge($dailyTransferred->keys())->unique()->sort();
+
+        $byDay = $allDates->map(fn (string $date) => [
+            'date' => $date,
+            'produced' => round($dailyProduced[$date] ?? 0, 2),
+            'transferred' => round($dailyTransferred[$date] ?? 0, 2),
+        ])->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary' => [
+                    'total_produced' => round($byProduct->sum('total_produced'), 2),
+                    'total_transferred' => round($byProduct->sum('total_transferred'), 2),
+                ],
+                'by_product' => $byProduct->values(),
+                'by_day' => $byDay,
+            ],
+        ]);
+    }
+
     public function productionHistory(Request $request)
     {
         $prodWarehouse = Warehouse::where('is_production', true)

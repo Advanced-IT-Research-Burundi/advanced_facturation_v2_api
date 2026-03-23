@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes, AddUserId, HasCompanyId;
+    use AddUserId, HasCompanyId, HasFactory, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -46,6 +46,7 @@ class Product extends Model
             'user_id' => 'integer',
             'date_expiration' => 'date',
             // Casts pharmaceutiques
+            'is_production' => 'boolean',
             'is_pharmaceutical' => 'boolean',
             'requires_prescription' => 'boolean',
             'is_controlled_substance' => 'boolean',
@@ -134,6 +135,7 @@ class Product extends Model
     public function getHasExpiringLotsAttribute(): bool
     {
         $alertDays = $this->delai_alerte_expiration ?? 90;
+
         return $this->activeLots()
             ->where('expiration_date', '<=', now()->addDays($alertDays))
             ->exists();

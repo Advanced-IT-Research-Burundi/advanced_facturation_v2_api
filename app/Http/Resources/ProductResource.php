@@ -36,6 +36,7 @@ class ProductResource extends JsonResource
             'image' => $this->image,
             'type' => $this->type,
             'description' => $this->description,
+            'is_production' => $this->is_production,
             'company' => $this->whenLoaded('company'),
             'product_unit' => $this->whenLoaded('productUnit'),
             'category_product' => $this->whenLoaded('categoryProduct'),
