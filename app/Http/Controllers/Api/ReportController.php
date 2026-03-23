@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\Depense;
 use App\Models\Invoice;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
@@ -516,7 +517,13 @@ class ReportController extends Controller
             ")
             ->first();
 
-        $initialBalance = ($movementsBeforePeriod->total_income ?? 0) - ($movementsBeforePeriod->total_expense ?? 0);
+        $depensesBeforePeriod = $this->getDepensesQuery($companyId, $hotelSection)
+            ->where('created_at', '<', $startDate)
+            ->sum('montant');
+
+        $initialBalance = ($movementsBeforePeriod->total_income ?? 0)
+            - ($movementsBeforePeriod->total_expense ?? 0)
+            - $depensesBeforePeriod;
 
         $isLoss = fn (string $desc): bool => str_contains(strtolower($desc), 'perte');
 
@@ -531,7 +538,14 @@ class ReportController extends Controller
             ->orderBy('date')
             ->get();
 
+        $dailyDepenses = $this->getDepensesQuery($companyId, $hotelSection)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, montant, name, hotel_section')
+            ->orderBy('date')
+            ->get();
+
         $grouped = $dailyMovements->groupBy('date');
+        $groupedDepenses = $dailyDepenses->groupBy('date');
 
         $rows = [];
         $runningBalance = $initialBalance;
@@ -542,23 +556,28 @@ class ReportController extends Controller
         $totalIncome = 0;
         $totalExpenses = 0;
         $totalLosses = 0;
+        $totalDepenses = 0;
 
         while ($currentDate->lte($end)) {
             $dateKey = $currentDate->toDateString();
             $dayMovements = $grouped->get($dateKey, collect());
+            $dayDepenseRecords = $groupedDepenses->get($dateKey, collect());
 
             $dayIncome = $dayMovements->where('type', 'income')->sum('amount');
             $dayExpenseAll = $dayMovements->where('type', 'expense');
             $dayLosses = $dayExpenseAll->filter(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
             $dayExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
 
-            $dayTotalOut = $dayExpenses + $dayLosses;
+            $dayDepenses = $dayDepenseRecords->sum('montant');
+
+            $dayTotalOut = $dayExpenses + $dayLosses + $dayDepenses;
             $carriedBalance = $runningBalance;
             $runningBalance = $carriedBalance + $dayIncome - $dayTotalOut;
 
             $totalIncome += $dayIncome;
             $totalExpenses += $dayExpenses;
             $totalLosses += $dayLosses;
+            $totalDepenses += $dayDepenses;
 
             if ($dayIncome > 0 || $dayTotalOut > 0 || $carriedBalance != 0) {
                 $rows[] = [
@@ -566,6 +585,7 @@ class ReportController extends Controller
                     'carried_balance' => $carriedBalance,
                     'income' => $dayIncome,
                     'expenses' => $dayExpenses,
+                    'depenses' => $dayDepenses,
                     'losses' => $dayLosses,
                     'total_out' => $dayTotalOut,
                     'current_balance' => $runningBalance,
@@ -584,12 +604,31 @@ class ReportController extends Controller
                     'initial_balance' => $initialBalance,
                     'total_income' => $totalIncome,
                     'total_expenses' => $totalExpenses,
+                    'total_depenses' => $totalDepenses,
                     'total_losses' => $totalLosses,
                     'final_balance' => $runningBalance,
                 ],
                 'rows' => $rows,
             ],
         ]);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<Depense>
+     */
+    private function getDepensesQuery(int $companyId, ?string $hotelSection): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = Depense::where('company_id', $companyId);
+
+        if ($hotelSection && $hotelSection !== 'all') {
+            if ($hotelSection === 'general') {
+                $query->whereNull('hotel_section');
+            } else {
+                $query->where('hotel_section', $hotelSection);
+            }
+        }
+
+        return $query;
     }
 
     /**
