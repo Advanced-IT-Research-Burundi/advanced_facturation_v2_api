@@ -556,7 +556,6 @@ class ReportController extends Controller
         $totalIncome = 0;
         $totalExpenses = 0;
         $totalLosses = 0;
-        $totalDepenses = 0;
 
         while ($currentDate->lte($end)) {
             $dateKey = $currentDate->toDateString();
@@ -566,18 +565,17 @@ class ReportController extends Controller
             $dayIncome = $dayMovements->where('type', 'income')->sum('amount');
             $dayExpenseAll = $dayMovements->where('type', 'expense');
             $dayLosses = $dayExpenseAll->filter(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
-            $dayExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
-
+            $dayCashExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
             $dayDepenses = $dayDepenseRecords->sum('montant');
 
-            $dayTotalOut = $dayExpenses + $dayLosses + $dayDepenses;
+            $dayExpenses = $dayCashExpenses + $dayDepenses;
+            $dayTotalOut = $dayExpenses + $dayLosses;
             $carriedBalance = $runningBalance;
             $runningBalance = $carriedBalance + $dayIncome - $dayTotalOut;
 
             $totalIncome += $dayIncome;
             $totalExpenses += $dayExpenses;
             $totalLosses += $dayLosses;
-            $totalDepenses += $dayDepenses;
 
             if ($dayIncome > 0 || $dayTotalOut > 0 || $carriedBalance != 0) {
                 $rows[] = [
@@ -585,7 +583,6 @@ class ReportController extends Controller
                     'carried_balance' => $carriedBalance,
                     'income' => $dayIncome,
                     'expenses' => $dayExpenses,
-                    'depenses' => $dayDepenses,
                     'losses' => $dayLosses,
                     'total_out' => $dayTotalOut,
                     'current_balance' => $runningBalance,
@@ -604,7 +601,6 @@ class ReportController extends Controller
                     'initial_balance' => $initialBalance,
                     'total_income' => $totalIncome,
                     'total_expenses' => $totalExpenses,
-                    'total_depenses' => $totalDepenses,
                     'total_losses' => $totalLosses,
                     'final_balance' => $runningBalance,
                 ],
