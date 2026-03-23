@@ -23,8 +23,17 @@ class Depense extends Model
         'depense_category_id',
         'company_id',
         'justification_file',
+        'justification_data',
+        'justification_mime',
         'user_id',
         'hotel_section',
+    ];
+
+    /**
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'justification_data',
     ];
 
     /**

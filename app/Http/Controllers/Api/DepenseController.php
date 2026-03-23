@@ -63,8 +63,10 @@ class DepenseController extends Controller
         $validated['company_id'] = auth()->user()->company_id;
 
         if ($request->hasFile('justification_file')) {
-            $path = $request->file('justification_file')->store('depenses', 'public');
-            $validated['justification_file'] = $path;
+            $file = $request->file('justification_file');
+            $validated['justification_file'] = $file->getClientOriginalName();
+            $validated['justification_data'] = base64_encode(file_get_contents($file->getRealPath()));
+            $validated['justification_mime'] = $file->getMimeType();
         }
 
         $depense = Depense::create($validated);
@@ -102,13 +104,10 @@ class DepenseController extends Controller
         ]);
 
         if ($request->hasFile('justification_file')) {
-            // Delete old file if exists
-            if ($depense->justification_file && \Illuminate\Support\Facades\Storage::disk('public')->exists($depense->justification_file)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($depense->justification_file);
-            }
-
-            $path = $request->file('justification_file')->store('depenses', 'public');
-            $validated['justification_file'] = $path;
+            $file = $request->file('justification_file');
+            $validated['justification_file'] = $file->getClientOriginalName();
+            $validated['justification_data'] = base64_encode(file_get_contents($file->getRealPath()));
+            $validated['justification_mime'] = $file->getMimeType();
         }
 
         $depense->update($validated);
@@ -120,14 +119,34 @@ class DepenseController extends Controller
         ], Response::HTTP_OK);
     }
 
-    public function destroy(Depense $depense)
+    /**
+     * Serve the justification file from the database.
+     */
+    public function justification(Depense $depense)
     {
         if ($depense->company_id !== auth()->user()->company_id) {
             abort(403);
         }
 
-        if ($depense->justification_file && \Illuminate\Support\Facades\Storage::disk('public')->exists($depense->justification_file)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($depense->justification_file);
+        if (! $depense->justification_data) {
+            abort(404, 'Aucun justificatif trouvé.');
+        }
+
+        $content = base64_decode($depense->justification_data);
+        $mime = $depense->justification_mime ?? 'application/octet-stream';
+        $filename = $depense->justification_file ?? 'justificatif';
+
+        return response($content, 200, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => "inline; filename=\"{$filename}\"",
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    public function destroy(Depense $depense)
+    {
+        if ($depense->company_id !== auth()->user()->company_id) {
+            abort(403);
         }
 
         $depense->delete();

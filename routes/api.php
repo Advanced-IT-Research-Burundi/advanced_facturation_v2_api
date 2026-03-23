@@ -173,6 +173,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Depenses
     Route::apiResource('depenses', DepenseController::class);
+    Route::get('depenses/{depense}/justification', [DepenseController::class, 'justification']);
     Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 
     // Fourinsseurs
@@ -438,6 +439,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Hotel Depenses
         Route::get('depenses', [App\Http\Controllers\Api\DepenseController::class, 'index']);
         Route::post('depenses', [App\Http\Controllers\Api\DepenseController::class, 'store']);
+        Route::get('depenses/{depense}/justification', [App\Http\Controllers\Api\DepenseController::class, 'justification']);
         Route::delete('depenses/{depense}', [App\Http\Controllers\Api\DepenseController::class, 'destroy']);
         Route::get('depense-categories', [App\Http\Controllers\Api\DepenseCategoryController::class, 'index']);
     });
