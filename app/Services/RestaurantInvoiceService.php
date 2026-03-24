@@ -2,21 +2,20 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\RestaurantOrder;
 use App\Models\RestaurantTable;
-use App\Models\Customer;
-use App\Models\WarehouseProduct;
 use App\Models\StockMovement;
-use App\Services\ObrService;
-use App\Services\StockService;
-use Illuminate\Support\Facades\DB;
+use App\Models\WarehouseProduct;
 use Exception;
+use Illuminate\Support\Facades\DB;
 
 class RestaurantInvoiceService
 {
     protected ObrService $obrService;
+
     protected StockService $stockService;
 
     public function __construct(ObrService $obrService, StockService $stockService)
@@ -65,10 +64,9 @@ class RestaurantInvoiceService
 
         return DB::transaction(function () use ($table, $orders, $company, $customer, $warehouseId, $allItems) {
             $totals = $this->calculateTotals($orders);
-            $invoiceNumber = $this->generateInvoiceNumber();
 
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => 'FN',
                 'invoice_identifier' => 'RESTAURANT',
@@ -109,6 +107,9 @@ class RestaurantInvoiceService
                 'is_restaurant' => true,
                 'restaurant_order_ids' => $orders->pluck('id')->toArray(),
             ]);
+
+            $invoice->invoice_number = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->save();
 
             foreach ($orders as $order) {
                 foreach ($order->items as $item) {
@@ -171,8 +172,8 @@ class RestaurantInvoiceService
             }
         }
 
-        if (!empty($errors)) {
-            throw new Exception('Stock insuffisant: ' . implode('; ', $errors));
+        if (! empty($errors)) {
+            throw new Exception('Stock insuffisant: '.implode('; ', $errors));
         }
     }
 
@@ -186,7 +187,7 @@ class RestaurantInvoiceService
 
             // Create stock movement record
             $movement = StockMovement::create([
-                'system_or_device_id' => gethostname() . '-' . request()->ip(),
+                'system_or_device_id' => gethostname().'-'.request()->ip(),
                 'item_code' => $product->item_code ?? $product->id,
                 'item_designation' => $product->item_designation ?? $product->name,
                 'item_quantity' => $item['item_quantity'],
@@ -221,7 +222,7 @@ class RestaurantInvoiceService
     {
         $invoice = Invoice::findOrFail($invoiceId);
 
-        if (!$invoice->is_restaurant) {
+        if (! $invoice->is_restaurant) {
             throw new \Exception('Cette facture n\'est pas une facture restaurant');
         }
 
@@ -288,20 +289,6 @@ class RestaurantInvoiceService
             'tax' => round($tax, 2),
             'total' => round($subtotal + $tax, 2),
         ];
-    }
-
-    private function generateInvoiceNumber(): string
-    {
-        $year = now()->year;
-        $prefix = "FN-RESTO-{$year}";
-
-        $last = Invoice::where('invoice_number', 'LIKE', "{$prefix}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-
-        $number = $last ? ((int)substr($last->invoice_number, -4) + 1) : 1;
-
-        return sprintf('%s-%04d', $prefix, $number);
     }
 
     public function getTableInvoices(int $tableId): \Illuminate\Database\Eloquent\Collection

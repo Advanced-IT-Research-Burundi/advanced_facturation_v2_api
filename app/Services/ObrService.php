@@ -11,17 +11,18 @@ use Illuminate\Support\Facades\Log;
 
 class ObrService
 {
-    public $baseUrl = "";
-    private $systemId = "";
+    public $baseUrl = '';
+
+    private $systemId = '';
 
     public function __construct()
     {
         // URL selon l'environnement (Test ou Production)
-        $this->baseUrl = AppConfig::getConfigKey("OBR_MODE_TEST")
-            ? AppConfig::getConfigKey("OBR_TEST_URL")
-            : AppConfig::getConfigKey("OBR_PROD_URL");
+        $this->baseUrl = AppConfig::getConfigKey('OBR_MODE_TEST')
+            ? AppConfig::getConfigKey('OBR_TEST_URL')
+            : AppConfig::getConfigKey('OBR_PROD_URL');
 
-        $this->systemId = AppConfig::getConfigKey("OBR_SYSTEM_ID") ?? '';
+        $this->systemId = AppConfig::getConfigKey('OBR_SYSTEM_ID') ?? '';
     }
 
     /**
@@ -31,9 +32,9 @@ class ObrService
     public function getToken()
     {
         try {
-            $response = Http::post($this->baseUrl . "/login", [
-                "username" => AppConfig::getConfigKey("OBR_USERNAME"),
-                "password" => AppConfig::getConfigKey("OBR_PASSWORD"),
+            $response = Http::post($this->baseUrl.'/login', [
+                'username' => AppConfig::getConfigKey('OBR_USERNAME'),
+                'password' => AppConfig::getConfigKey('OBR_PASSWORD'),
             ]);
 
             $json = $response->json();
@@ -43,9 +44,11 @@ class ObrService
             }
 
             Log::error('OBR Login Failed', ['response' => $json]);
+
             return null;
         } catch (\Exception $e) {
             Log::error('OBR Login Exception', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -77,7 +80,7 @@ class ObrService
     public function getInvoice($invoiceIdentifier)
     {
         $response = $this->post('getInvoice', [
-            'invoice_identifier' => $invoiceIdentifier
+            'invoice_identifier' => $invoiceIdentifier,
         ]);
 
         $json = $response->json();
@@ -236,7 +239,7 @@ class ObrService
     {
         // Préparer les items de la facture
         $invoiceItems = [];
-        foreach ($invoice->items as $item) {
+        foreach ($invoice->invoiceItems as $item) {
             $priceHtva = $item->item_price * $item->item_quantity + ($item->item_ct ?? 0);
             $vatAmount = $priceHtva * 0.18; // TVA 18%
             $priceTvac = $priceHtva + $vatAmount;
@@ -340,7 +343,7 @@ class ObrService
     {
         $token = $this->getToken();
 
-        if (!$token) {
+        if (! $token) {
             return response()->json([
                 'success' => false,
                 'msg' => 'Impossible d\'obtenir le token d\'authentification OBR',
@@ -350,7 +353,7 @@ class ObrService
         try {
             $response = Http::withToken($token)
                 ->timeout(30)
-                ->post($this->baseUrl . '/' . $url, $data);
+                ->post($this->baseUrl.'/'.$url, $data);
 
             Log::info('OBR API Call', [
                 'url' => $url,
@@ -367,7 +370,7 @@ class ObrService
 
             return response()->json([
                 'success' => false,
-                'msg' => 'Erreur de connexion au serveur OBR: ' . $e->getMessage(),
+                'msg' => 'Erreur de connexion au serveur OBR: '.$e->getMessage(),
             ]);
         }
     }

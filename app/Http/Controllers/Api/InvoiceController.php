@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Services\ObrService;
+use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use App\Models\Customer;
-use App\Models\InvoiceItem;
 use Illuminate\Support\Facades\DB;
-use App\Services\StockService;
-use App\Services\ObrService;
-
 
 class InvoiceController extends Controller
 {
     protected $stockService;
+
     protected $obrService;
 
     public function __construct(StockService $stockService, ObrService $obrService)
@@ -23,6 +23,7 @@ class InvoiceController extends Controller
         $this->stockService = $stockService;
         $this->obrService = $obrService;
     }
+
     /**
      * Display a listing of invoices.
      */
@@ -51,8 +52,8 @@ class InvoiceController extends Controller
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('invoice_number', 'like', "%{$search}%")
-                  ->orWhere('customer_name', 'like', "%{$search}%")
-                  ->orWhere('customer_TIN', 'like', "%{$search}%");
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_TIN', 'like', "%{$search}%");
             });
         }
 
@@ -68,14 +69,14 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate($request->input('per_page', 15))
+            'data' => $query->paginate($request->input('per_page', 15)),
         ], Response::HTTP_OK);
     }
 
     /**
      * Store a newly created invoice.
      */
-        public function store(Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'invoice_type' => 'required|in:FN,FP,FA,FC,RC',
@@ -112,31 +113,27 @@ class InvoiceController extends Controller
                     return response()->json([
                         'success' => false,
                         'message' => 'Stock insuffisant pour certains articles',
-                        'stock_details' => $stockCheck['items']
+                        'stock_details' => $stockCheck['items'],
                     ], Response::HTTP_UNPROCESSABLE_ENTITY);
                 }
             }
 
             $customer = Customer::findOrFail($validated['customer_id']);
             $company = auth()->user()->company;
-            
+
             // Check if company is null and handle it (fallback or error)
-            if (!$company) {
+            if (! $company) {
                 // For POS, we might need a default company or just return error
                 return response()->json([
                     'success' => false,
-                    'message' => 'L\'utilisateur n\'est associé à aucune entreprise configurée.'
+                    'message' => 'L\'utilisateur n\'est associé à aucune entreprise configurée.',
                 ], Response::HTTP_FORBIDDEN);
             }
 
             $totals = $this->calculateTotals($validated['items']);
-            $invoiceNumber = $this->generateInvoiceNumber(
-                $validated['invoice_type'],
-                $validated['invoice_action']
-            );
 
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => $validated['invoice_type'],
                 'invoice_identifier' => $validated['invoice_action'],
@@ -169,7 +166,7 @@ class InvoiceController extends Controller
                 'deposit_reference' => $validated['deposit_reference'] ?? null,
 
                 'obr_submission_status' => 'PENDING',
-                
+
                 // Initialize payment status
                 'payment_status' => 'unpaid',
                 'total_paid' => 0,
@@ -180,6 +177,10 @@ class InvoiceController extends Controller
                 'created_by' => auth()->id(),
                 'created_by_id' => auth()->id(),
             ]);
+
+            $invoiceNumber = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->invoice_number = $invoiceNumber;
+            $invoice->save();
 
             foreach ($validated['items'] as $item) {
                 $itemCalculations = $this->calculateItemAmounts($item);
@@ -197,13 +198,12 @@ class InvoiceController extends Controller
                     'vat' => $item['vat'],
                     'item_price_wvat' => $itemCalculations['price_wvat'],
                     'item_total_amount' => $itemCalculations['total_amount'],
-                    'product_id' => $item['product_id'] ?? null, // Added product_id persistence
+                    'product_id' => $item['product_id'] ?? null,
                     'user_id' => auth()->id(),
                 ]);
             }
 
             $stockMovements = null;
-            // Ne traiter les mouvements de stock que pour les factures réelles (FN) POS
             if ($validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
                 $stockMovements = $this->stockService->processSaleStockMovement(
                     $validated['items'],
@@ -214,7 +214,7 @@ class InvoiceController extends Controller
             }
 
             // Optional: If POS and payment type is cash, we might want to automatically create a payment
-            // However, it's safer to keep it separate or handle it if explicitly requested. 
+            // However, it's safer to keep it separate or handle it if explicitly requested.
             // For now, we'll stick to manual payment creation or separate endpoint call from frontend.
 
             DB::commit();
@@ -224,8 +224,8 @@ class InvoiceController extends Controller
                 'message' => 'Facture créée avec succès',
                 'data' => [
                     'invoice' => $invoice->load(['customer', 'invoiceItems']),
-                    'stock_movements' => $stockMovements
-                ]
+                    'stock_movements' => $stockMovements,
+                ],
             ], Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
@@ -234,7 +234,7 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la création de la facture',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -246,7 +246,7 @@ class InvoiceController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'stockMovements', 'payments'])
+            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'stockMovements', 'payments']),
         ], Response::HTTP_OK);
     }
 
@@ -268,18 +268,18 @@ class InvoiceController extends Controller
             'items.*.vat' => 'required_with:items|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($invoice, $request, $validated) {
+        DB::transaction(function () use ($invoice, $request) {
             // Update Invoice details
             $invoice->update($request->only([
-                'invoice_currency', 
-                'customer_id', 
-                'invoice_type'
+                'invoice_currency',
+                'customer_id',
+                'invoice_type',
                 // Add other fillable fields if needed
             ]));
 
             // Update Items if present
             if ($request->has('items')) {
-                // Simplest approach: Delete all and recreate. 
+                // Simplest approach: Delete all and recreate.
                 // Ensure to handle stock logic if this was a POS sale (but for Proforma FP it's fine).
                 $invoice->invoiceItems()->delete();
 
@@ -324,7 +324,7 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Invoice updated successfully',
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems'])
+            'data' => $invoice->load(['company', 'customer', 'invoiceItems']),
         ], Response::HTTP_OK);
     }
 
@@ -337,7 +337,7 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Invoice deleted successfully'
+            'message' => 'Invoice deleted successfully',
         ], Response::HTTP_OK);
     }
 
@@ -352,7 +352,7 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Invoice restored successfully',
-            'data' => $invoice
+            'data' => $invoice,
         ], Response::HTTP_OK);
     }
 
@@ -400,28 +400,6 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Générer le numéro de facture
-     */
-    private function generateInvoiceNumber(string $type, string $identifier): string
-    {
-        $year = now()->year;
-        $prefix = "{$type}-{$identifier}";
-
-        $lastInvoice = Invoice::where('invoice_number', 'LIKE', "{$prefix}-{$year}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-
-        if ($lastInvoice) {
-            $lastNumber = (int) substr($lastInvoice->invoice_number, -4);
-            $newNumber = $lastNumber + 1;
-        } else {
-            $newNumber = 1;
-        }
-
-        return sprintf('%s-%s-%04d', $prefix, $year, $newNumber);
-    }
-
-    /**
      * Synchroniser les factures en attente vers OBR (appelé par cron job)
      */
     public function syncPendingInvoices()
@@ -437,18 +415,19 @@ class InvoiceController extends Controller
             'total' => $pendingInvoices->count(),
             'success' => 0,
             'failed' => 0,
-            'errors' => []
+            'errors' => [],
         ];
 
         foreach ($pendingInvoices as $invoice) {
             try {
                 $company = $invoice->company;
-                if (!$company) {
+                if (! $company) {
                     $results['failed']++;
                     $results['errors'][] = [
                         'invoice_id' => $invoice->id,
-                        'error' => 'Company not found'
+                        'error' => 'Company not found',
                     ];
+
                     continue;
                 }
 
@@ -475,14 +454,14 @@ class InvoiceController extends Controller
                     $results['errors'][] = [
                         'invoice_id' => $invoice->id,
                         'invoice_number' => $invoice->invoice_number,
-                        'error' => $obrResult['message'] ?? 'Unknown error'
+                        'error' => $obrResult['message'] ?? 'Unknown error',
                     ];
                 }
             } catch (\Exception $e) {
                 $results['failed']++;
                 $results['errors'][] = [
                     'invoice_id' => $invoice->id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ];
             }
         }
@@ -490,7 +469,7 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Synchronisation terminée: {$results['success']} réussies, {$results['failed']} échouées",
-            'data' => $results
+            'data' => $results,
         ], Response::HTTP_OK);
     }
 
@@ -502,15 +481,15 @@ class InvoiceController extends Controller
         if ($invoice->obr_submission_status === 'ACCEPTED') {
             return response()->json([
                 'success' => false,
-                'message' => 'Cette facture a déjà été acceptée par OBR'
+                'message' => 'Cette facture a déjà été acceptée par OBR',
             ], Response::HTTP_BAD_REQUEST);
         }
 
         $company = $invoice->company;
-        if (!$company) {
+        if (! $company) {
             return response()->json([
                 'success' => false,
-                'message' => 'Entreprise non trouvée'
+                'message' => 'Entreprise non trouvée',
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -530,7 +509,7 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Facture envoyée avec succès à OBR',
-                'data' => $invoice->fresh()
+                'data' => $invoice->fresh(),
             ], Response::HTTP_OK);
         }
 
@@ -541,7 +520,7 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => $obrResult['message'] ?? 'Erreur lors de l\'envoi à OBR'
+            'message' => $obrResult['message'] ?? 'Erreur lors de l\'envoi à OBR',
         ], Response::HTTP_BAD_REQUEST);
     }
 
@@ -564,7 +543,7 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $stats
+            'data' => $stats,
         ], Response::HTTP_OK);
     }
 
@@ -582,12 +561,12 @@ class InvoiceController extends Controller
         if ($invoice->is_cancelled) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cette facture est déjà annulée'
+                'message' => 'Cette facture est déjà annulée',
             ], Response::HTTP_BAD_REQUEST);
         }
 
         // Vérifier si c'est une facture OBR
-        $requireObrCancel = in_array($invoice->invoice_type, ['FN', 'FA', 'FC', 'RC']) 
+        $requireObrCancel = in_array($invoice->invoice_type, ['FN', 'FA', 'FC', 'RC'])
             && $invoice->obr_submission_status === 'ACCEPTED';
 
         try {
@@ -595,21 +574,21 @@ class InvoiceController extends Controller
 
             // 1. Annuler sur OBR si nécessaire
             $obrResult = ['success' => true, 'message' => 'Annulation locale'];
-            
+
             if ($requireObrCancel && $invoice->obr_invoice_identifier) {
                 $obrResult = $this->obrService->cancelInvoice(
                     $invoice->obr_invoice_identifier,
                     $validated['motif']
                 );
 
-                if (!$obrResult['success']) {
+                if (! $obrResult['success']) {
                     // Enregistrer le log même si échec
                     \App\Models\ObrLog::logInvoiceCancelled($invoice, $obrResult, $validated['motif']);
 
                     return response()->json([
                         'success' => false,
                         'message' => $obrResult['message'] ?? 'Erreur lors de l\'annulation OBR',
-                        'obr_error' => true
+                        'obr_error' => true,
                     ], Response::HTTP_BAD_REQUEST);
                 }
             }
@@ -617,7 +596,7 @@ class InvoiceController extends Controller
             // 2. Restaurer le stock si demandé et si c'était une vente POS
             $stockRestored = [];
             $shouldRestoreStock = $request->boolean('restore_stock', true);
-            
+
             if ($shouldRestoreStock && $invoice->invoice_identifier === 'POS') {
                 $stockRestored = $this->restoreStockFromInvoice($invoice, $validated['motif']);
             }
@@ -645,7 +624,7 @@ class InvoiceController extends Controller
                     'invoice' => $invoice->fresh(),
                     'stock_restored' => $stockRestored,
                     'obr_cancelled' => $requireObrCancel,
-                ]
+                ],
             ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
@@ -654,7 +633,7 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'annulation',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -667,7 +646,7 @@ class InvoiceController extends Controller
         $stockRestored = [];
 
         foreach ($invoice->invoiceItems as $item) {
-            if (!$item->product_id) {
+            if (! $item->product_id) {
                 continue;
             }
 

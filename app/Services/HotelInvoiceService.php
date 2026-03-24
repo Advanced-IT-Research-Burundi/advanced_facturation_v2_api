@@ -34,7 +34,6 @@ class HotelInvoiceService
         }
 
         return DB::transaction(function () use ($reservation, $customer, $company) {
-            $invoiceNumber = $this->generateInvoiceNumber();
             $room = $reservation->room;
             $roomNumber = $room?->room_number ?? 'N/A';
             $roomType = $room ? $this->getRoomTypeLabel($room->type) : '—';
@@ -52,7 +51,7 @@ class HotelInvoiceService
             $totalTTC = $totalHT;
 
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => 'FN',
                 'invoice_identifier' => 'HOTEL',
@@ -88,6 +87,9 @@ class HotelInvoiceService
                 'created_by' => auth()->id(),
                 'created_by_id' => auth()->id(),
             ]);
+
+            $invoice->invoice_number = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->save();
 
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
@@ -157,10 +159,8 @@ class HotelInvoiceService
                 $booking->purpose ? " ({$booking->purpose})" : ''
             );
 
-            $invoiceNumber = $this->generateConferenceInvoiceNumber();
-
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => 'FN',
                 'invoice_identifier' => 'HOTEL',
@@ -195,6 +195,9 @@ class HotelInvoiceService
                 'created_by' => auth()->id(),
                 'created_by_id' => auth()->id(),
             ]);
+
+            $invoice->invoice_number = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->save();
 
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
@@ -267,10 +270,8 @@ class HotelInvoiceService
                 $booking->purpose ? " ({$booking->purpose})" : ''
             );
 
-            $invoiceNumber = $this->generateReceptionInvoiceNumber();
-
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => 'FN',
                 'invoice_identifier' => 'HOTEL',
@@ -305,6 +306,9 @@ class HotelInvoiceService
                 'created_by' => auth()->id(),
                 'created_by_id' => auth()->id(),
             ]);
+
+            $invoice->invoice_number = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->save();
 
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
@@ -367,20 +371,6 @@ class HotelInvoiceService
         ]);
     }
 
-    private function generateReceptionInvoiceNumber(): string
-    {
-        $year = now()->year;
-        $prefix = "FN-RECEP-{$year}";
-
-        $last = Invoice::where('invoice_number', 'LIKE', "{$prefix}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-
-        $number = $last ? ((int) substr($last->invoice_number, -4) + 1) : 1;
-
-        return sprintf('%s-%04d', $prefix, $number);
-    }
-
     private function createCustomerFromBooking(HotelConferenceBooking $booking, $company): Customer
     {
         $phone = $booking->guest_phone ?? null;
@@ -403,20 +393,6 @@ class HotelInvoiceService
             'company_id' => $company->id,
             'user_id' => auth()->id(),
         ]);
-    }
-
-    private function generateConferenceInvoiceNumber(): string
-    {
-        $year = now()->year;
-        $prefix = "FN-CONF-{$year}";
-
-        $last = Invoice::where('invoice_number', 'LIKE', "{$prefix}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-
-        $number = $last ? ((int) substr($last->invoice_number, -4) + 1) : 1;
-
-        return sprintf('%s-%04d', $prefix, $number);
     }
 
     private function createCustomerFromReservation(HotelReservation $reservation): Customer
@@ -453,20 +429,6 @@ class HotelInvoiceService
         return $customer;
     }
 
-    private function generateInvoiceNumber(): string
-    {
-        $year = now()->year;
-        $prefix = "FN-HOTEL-{$year}";
-
-        $last = Invoice::where('invoice_number', 'LIKE', "{$prefix}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-
-        $number = $last ? ((int) substr($last->invoice_number, -4) + 1) : 1;
-
-        return sprintf('%s-%04d', $prefix, $number);
-    }
-
     public function resolvePaymentStatus(float|string $paid, float|string $total): string
     {
         $paid = (float) $paid;
@@ -501,15 +463,7 @@ class HotelInvoiceService
 
         $total = (float) $order->total;
 
-        $year = now()->format('Y');
-        $prefix = "FN-RESTO-{$year}";
-        $last = Invoice::where('invoice_number', 'LIKE', "{$prefix}-%")
-            ->orderBy('invoice_number', 'desc')
-            ->first();
-        $num = $last ? ((int) substr($last->invoice_number, -4) + 1) : 1;
-        $invoiceNumber = sprintf('%s-%04d', $prefix, $num);
-
-        return DB::transaction(function () use ($order, $company, $clientName, $total, $invoiceNumber) {
+        return DB::transaction(function () use ($order, $company, $clientName, $total) {
             $customer = Customer::where('customer_name', $clientName)
                 ->where('company_id', $company->id)
                 ->first()
@@ -524,7 +478,7 @@ class HotelInvoiceService
                 ]);
 
             $invoice = Invoice::create([
-                'invoice_number' => $invoiceNumber,
+                'invoice_number' => 'TEMP',
                 'invoice_date' => now(),
                 'invoice_type' => 'FN',
                 'invoice_identifier' => 'RESTAURANT',
@@ -561,6 +515,9 @@ class HotelInvoiceService
 
                 'is_restaurant' => true,
             ]);
+
+            $invoice->invoice_number = Invoice::getInvoiceNumber($invoice->id);
+            $invoice->save();
 
             foreach ($order->items as $item) {
                 InvoiceItem::create([

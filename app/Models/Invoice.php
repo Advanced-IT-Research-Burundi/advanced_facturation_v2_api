@@ -167,6 +167,15 @@ class Invoice extends Model
         return $this->hasOne(HotelConferenceBooking::class);
     }
 
+    /**
+     * Générer le numéro de facture à partir de l'ID (format OBR demo).
+     * Compteur global séquentiel, 6 chiffres zero-padded.
+     */
+    public static function getInvoiceNumber(int $invoiceId): string
+    {
+        return str_pad($invoiceId, 6, '0', STR_PAD_LEFT);
+    }
+
     public function updatePaymentStatus()
     {
         $totalPaid = $this->payments()->sum('amount');
