@@ -387,7 +387,7 @@ class HotelReservationController extends Controller
             'extra_nights' => 'required|integer|min:1',
         ]);
 
-        if (! in_array($hotelReservation->status, ['reserved', 'checked_in'])) {
+        if (! in_array($hotelReservation->status, ['confirmed', 'checked_in'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Cette réservation ne peut pas être prolongée',
@@ -402,10 +402,13 @@ class HotelReservationController extends Controller
             $newCheckOut = \Carbon\Carbon::parse($hotelReservation->check_out_date)
                 ->addDays($extraNights);
 
+            $newTotal = (float) $hotelReservation->total_amount + $extraAmount;
+
             $hotelReservation->update([
                 'check_out_date' => $newCheckOut->toDateString(),
                 'nights' => $hotelReservation->nights + $extraNights,
-                'total_amount' => (float) $hotelReservation->total_amount + $extraAmount,
+                'total_amount' => $newTotal,
+                'balance_due' => $newTotal - (float) $hotelReservation->advance_payment,
             ]);
 
             if ($hotelReservation->invoice_id) {

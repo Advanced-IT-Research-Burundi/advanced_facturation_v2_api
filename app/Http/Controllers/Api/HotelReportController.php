@@ -151,11 +151,7 @@ class HotelReportController extends Controller
     private function invoiceStats(int $companyId, ?Carbon $start, ?Carbon $end): array
     {
         $query = Invoice::where('company_id', $companyId)
-            ->where(function ($q) {
-                $q->whereNotNull('hotel_reservation_id')
-                    ->orWhere('invoice_type', 'HOTEL')
-                    ->orWhere('invoice_type', 'RESTAURANT');
-            });
+            ->whereIn('invoice_identifier', ['HOTEL', 'RESTAURANT']);
 
         if ($start && $end) {
             $query->whereBetween('created_at', [$start, $end]);
@@ -163,11 +159,16 @@ class HotelReportController extends Controller
 
         $invoices = $query->get();
 
+        $totalAmount = (float) $invoices->sum('invoice_total_amount');
+        $totalPaid = (float) $invoices->sum('total_paid');
+
         return [
             'total_count' => $invoices->count(),
-            'total_amount' => (float) $invoices->sum('invoice_total_amount'),
-            'total_paid' => (float) $invoices->sum('total_paid'),
-            'total_unpaid' => (float) $invoices->where('payment_status', 'unpaid')->sum('invoice_total_amount'),
+            'total_amount' => $totalAmount,
+            'total_paid' => $totalPaid,
+            'total_outstanding' => $totalAmount - $totalPaid,
+            'total_unpaid' => (float) $invoices->whereIn('payment_status', ['unpaid', 'partial'])
+                ->sum(fn ($inv) => (float) $inv->invoice_total_amount - (float) $inv->total_paid),
             'paid_count' => $invoices->where('payment_status', 'paid')->count(),
             'partial_count' => $invoices->where('payment_status', 'partial')->count(),
             'unpaid_count' => $invoices->where('payment_status', 'unpaid')->count(),
@@ -227,11 +228,11 @@ class HotelReportController extends Controller
 
         $bySection = $expenses->groupBy('hotel_section')->map(fn ($items) => [
             'count' => $items->count(),
-            'total' => (float) $items->sum('amount'),
+            'total' => (float) $items->sum('montant'),
         ])->toArray();
 
         return [
-            'total' => (float) $expenses->sum('amount'),
+            'total' => (float) $expenses->sum('montant'),
             'count' => $expenses->count(),
             'by_section' => $bySection,
         ];
@@ -369,7 +370,28 @@ class HotelReportController extends Controller
             ->pluck('total', 'date')
             ->toArray();
 
-        $allDates = collect(array_merge(array_keys($roomsByDay), array_keys($restByDay)))
+        $confByDay = HotelConferenceBooking::where('company_id', $companyId)
+            ->where('status', 'confirmed')
+            ->whereBetween('created_at', [$effectiveStart, $effectiveEnd])
+            ->selectRaw('DATE(created_at) as date, SUM(total_amount) as total')
+            ->groupBy('date')
+            ->pluck('total', 'date')
+            ->toArray();
+
+        $recByDay = HotelReceptionBooking::where('company_id', $companyId)
+            ->where('status', 'confirmed')
+            ->whereBetween('created_at', [$effectiveStart, $effectiveEnd])
+            ->selectRaw('DATE(created_at) as date, SUM(total_amount) as total')
+            ->groupBy('date')
+            ->pluck('total', 'date')
+            ->toArray();
+
+        $allDates = collect(array_merge(
+            array_keys($roomsByDay),
+            array_keys($restByDay),
+            array_keys($confByDay),
+            array_keys($recByDay),
+        ))
             ->unique()
             ->sort()
             ->values();
@@ -378,7 +400,12 @@ class HotelReportController extends Controller
             'date' => $date,
             'rooms' => (float) ($roomsByDay[$date] ?? 0),
             'restaurant' => (float) ($restByDay[$date] ?? 0),
-            'total' => (float) ($roomsByDay[$date] ?? 0) + (float) ($restByDay[$date] ?? 0),
+            'conference' => (float) ($confByDay[$date] ?? 0),
+            'reception' => (float) ($recByDay[$date] ?? 0),
+            'total' => (float) ($roomsByDay[$date] ?? 0)
+                + (float) ($restByDay[$date] ?? 0)
+                + (float) ($confByDay[$date] ?? 0)
+                + (float) ($recByDay[$date] ?? 0),
         ])->toArray();
     }
 }

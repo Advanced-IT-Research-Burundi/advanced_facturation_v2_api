@@ -41,6 +41,14 @@ class HotelInvoiceController extends Controller
             });
         }
 
+        if ($dateFrom = $request->input('date_from')) {
+            $query->whereDate('invoice_date', '>=', $dateFrom);
+        }
+
+        if ($dateTo = $request->input('date_to')) {
+            $query->whereDate('invoice_date', '<=', $dateTo);
+        }
+
         $invoices = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 20));
 
         return response()->json([
