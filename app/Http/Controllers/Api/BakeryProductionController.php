@@ -124,6 +124,210 @@ class BakeryProductionController extends Controller
         }
     }
 
+    public function markAsFinished(Request $request)
+    {
+        $request->validate([
+            'warehouse_product_id' => 'required|exists:warehouse_products,id',
+            'product_id' => 'required|exists:products,id',
+            'finished_quantity' => 'required|numeric|min:0.01',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Get the production warehouse
+            $prodWarehouse = Warehouse::where('is_production', true)
+                ->where('company_id', Auth::user()->company_id)
+                ->firstOrFail();
+
+            // Get the RAW product stock
+            $rawStock = WarehouseProduct::findOrFail($request->warehouse_product_id);
+
+            // Verify it's in RAW status
+            if ($rawStock->production_status !== 'RAW') {
+                throw new \Exception('Le produit doit être en statut RAW (en production)');
+            }
+
+            // Verify quantity
+            if ($rawStock->quantity < $request->finished_quantity) {
+                throw new \Exception('Quantité insuffisante. Stock disponible: ' . $rawStock->quantity);
+            }
+
+            $product = Product::findOrFail($request->product_id);
+            $movementCode = 'PROD-FIN-' . date('Ymd-His');
+
+            // Create stock movement for the transfer
+            $movement = StockMovement::create([
+                'system_or_device_id' => uniqid('PROD-FIN-'),
+                'item_code' => $product->item_code,
+                'item_designation' => $product->item_designation,
+                'item_quantity' => $request->finished_quantity,
+                'item_measurement_unit' => $product->item_measurement_unit,
+                'item_purchase_or_sale_price' => $rawStock->unit_price,
+                'item_purchase_or_sale_currency' => $rawStock->currency,
+                'item_movement_type' => 'PF',  // Production Finished
+                'is_production' => true,
+                'item_movement_invoice_ref' => $movementCode,
+                'item_movement_description' => 'Transfert de matière première vers produit fini' . ($request->notes ? ' - ' . $request->notes : ''),
+                'item_movement_date' => now(),
+                'obr_submission_status' => 'PENDING',
+                'company_id' => Auth::user()->company_id,
+                'product_id' => $request->product_id,
+                'warehouse_id' => $prodWarehouse->id,
+                'created_by' => Auth::id(),
+                'user_id' => Auth::id(),
+            ]);
+
+            // Deduct from RAW stock
+            $rawStock->quantity -= $request->finished_quantity;
+            $rawStock->last_stock_movement_id = $movement->id;
+            $rawStock->user_id = Auth::id();
+            $rawStock->save();
+
+            // Get or create FINISHED stock for the same product
+            $finishedStock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
+                ->where('product_id', $request->product_id)
+                ->where('production_status', 'FINISHED')
+                ->first();
+
+            if ($finishedStock) {
+                // Add to existing FINISHED stock
+                $finishedStock->quantity += $request->finished_quantity;
+                $finishedStock->last_stock_movement_id = $movement->id;
+                $finishedStock->user_id = Auth::id();
+                $finishedStock->save();
+            } else {
+                // Create new FINISHED stock entry
+                WarehouseProduct::create([
+                    'warehouse_id' => $prodWarehouse->id,
+                    'product_id' => $request->product_id,
+                    'quantity' => $request->finished_quantity,
+                    'unit_price' => $rawStock->unit_price,
+                    'currency' => $rawStock->currency,
+                    'production_status' => 'FINISHED',
+                    'last_stock_movement_id' => $movement->id,
+                    'company_id' => Auth::user()->company_id,
+                    'user_id' => Auth::id(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit marqué comme fini avec succès',
+                'movement_code' => $movementCode,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function markAsRaw(Request $request)
+    {
+        $request->validate([
+            'warehouse_product_id' => 'required|exists:warehouse_products,id',
+            'product_id' => 'required|exists:products,id',
+            'raw_quantity' => 'required|numeric|min:0.01',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Get the production warehouse
+            $prodWarehouse = Warehouse::where('is_production', true)
+                ->where('company_id', Auth::user()->company_id)
+                ->firstOrFail();
+
+            // Get the FINISHED product stock
+            $finishedStock = WarehouseProduct::findOrFail($request->warehouse_product_id);
+
+            // Verify it's in FINISHED status
+            if ($finishedStock->production_status !== 'FINISHED') {
+                throw new \Exception('Le produit doit être en statut FINISHED (produit fini)');
+            }
+
+            // Verify quantity
+            if ($finishedStock->quantity < $request->raw_quantity) {
+                throw new \Exception('Quantité insuffisante. Stock disponible: ' . $finishedStock->quantity);
+            }
+
+            $product = Product::findOrFail($request->product_id);
+            $movementCode = 'PROD-RAW-' . date('Ymd-His');
+
+            // Create stock movement for the return
+            $movement = StockMovement::create([
+                'system_or_device_id' => uniqid('PROD-RAW-'),
+                'item_code' => $product->item_code,
+                'item_designation' => $product->item_designation,
+                'item_quantity' => $request->raw_quantity,
+                'item_measurement_unit' => $product->item_measurement_unit,
+                'item_purchase_or_sale_price' => $finishedStock->unit_price,
+                'item_purchase_or_sale_currency' => $finishedStock->currency,
+                'item_movement_type' => 'PR',  // Production Return to Raw
+                'is_production' => true,
+                'item_movement_invoice_ref' => $movementCode,
+                'item_movement_description' => 'Retour de produit fini vers matière première' . ($request->notes ? ' - ' . $request->notes : ''),
+                'item_movement_date' => now(),
+                'obr_submission_status' => 'PENDING',
+                'company_id' => Auth::user()->company_id,
+                'product_id' => $request->product_id,
+                'warehouse_id' => $prodWarehouse->id,
+                'created_by' => Auth::id(),
+                'user_id' => Auth::id(),
+            ]);
+
+            // Deduct from FINISHED stock
+            $finishedStock->quantity -= $request->raw_quantity;
+            $finishedStock->last_stock_movement_id = $movement->id;
+            $finishedStock->user_id = Auth::id();
+            $finishedStock->save();
+
+            // Get or create RAW stock for the same product
+            $rawStock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
+                ->where('product_id', $request->product_id)
+                ->where('production_status', 'RAW')
+                ->first();
+
+            if ($rawStock) {
+                // Add to existing RAW stock
+                $rawStock->quantity += $request->raw_quantity;
+                $rawStock->last_stock_movement_id = $movement->id;
+                $rawStock->user_id = Auth::id();
+                $rawStock->save();
+            } else {
+                // Create new RAW stock entry
+                WarehouseProduct::create([
+                    'warehouse_id' => $prodWarehouse->id,
+                    'product_id' => $request->product_id,
+                    'quantity' => $request->raw_quantity,
+                    'unit_price' => $finishedStock->unit_price,
+                    'currency' => $finishedStock->currency,
+                    'production_status' => 'RAW',
+                    'last_stock_movement_id' => $movement->id,
+                    'company_id' => Auth::user()->company_id,
+                    'user_id' => Auth::id(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Produit retourné en matière première avec succès',
+                'movement_code' => $movementCode,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function quickEntry(Request $request)
     {
         $request->validate([
@@ -143,6 +347,29 @@ class BakeryProductionController extends Controller
 
             $product = Product::findOrFail($request->product_id);
 
+            // Si c'est une entrée par retour, vérifier la quantité en produits finis
+            if ($request->movement_type === 'ER') {
+                $finishedStock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
+                    ->where('product_id', $request->product_id)
+                    ->where('production_status', 'FINISHED')
+                    ->first();
+
+                if (!$finishedStock || $finishedStock->quantity < $request->quantity) {
+                    throw new \Exception('Quantité insuffisante en produits finis. Stock disponible: ' . ($finishedStock?->quantity ?? 0));
+                }
+
+                // Déduire de la quantité des produits finis
+                $finishedStock->quantity -= $request->quantity;
+                $finishedStock->user_id = Auth::id();
+
+                // Si la quantité devient 0, supprimer l'entrée
+                if ($finishedStock->quantity <= 0) {
+                    $finishedStock->delete();
+                } else {
+                    $finishedStock->save();
+                }
+            }
+
             $movement = StockMovement::create([
                 'system_or_device_id' => uniqid('ENTRY-'),
                 'item_code' => $product->item_code,
@@ -153,7 +380,7 @@ class BakeryProductionController extends Controller
                 'item_purchase_or_sale_currency' => $request->currency,
                 'item_movement_type' => $request->movement_type,
                 'is_production' => true,
-                'item_movement_description' => 'Entrée matière première',
+                'item_movement_description' => $request->movement_type === 'ER' ? 'Entrée par retour des produits finis' : 'Entrée matière première',
                 'item_movement_date' => now(),
                 'obr_submission_status' => 'PENDING',
                 'company_id' => Auth::user()->company_id,
@@ -163,9 +390,11 @@ class BakeryProductionController extends Controller
                 'user_id' => Auth::id(),
             ]);
 
+            // Ajouter au stock RAW
             $stock = WarehouseProduct::firstOrNew([
                 'warehouse_id' => $prodWarehouse->id,
                 'product_id' => $request->product_id,
+                'production_status' => 'RAW',
             ]);
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;

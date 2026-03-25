@@ -20,6 +20,7 @@ class WarehouseProduct extends Model
         'quantity',
         'unit_price',
         'currency',
+        'production_status',
         'last_stock_movement_id',
         'user_id',
     ];
@@ -39,14 +40,14 @@ class WarehouseProduct extends Model
     }
 
     public function product(): BelongsTo {
-        return $this->belongsTo(Product::class, 'product_id'); 
+        return $this->belongsTo(Product::class, 'product_id');
     }
 
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
-    
-    public function lastStockMovement(): BelongsTo 
-    { 
-        return $this->belongsTo(StockMovement::class, 'last_stock_movement_id'); 
+
+    public function lastStockMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class, 'last_stock_movement_id');
     }
 }
