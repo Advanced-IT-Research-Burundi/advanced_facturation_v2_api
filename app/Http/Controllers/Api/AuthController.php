@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashRegister;
 use App\Models\Company;
+use App\Models\HotelRoom;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -140,8 +142,9 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Charger les rôles avec leurs permissions et l'entreprise
         $user->load(['roles', 'company']);
+
+        $this->autoOpenHotelCaisses($user);
 
         $data = [
             'user' => $user,
@@ -155,8 +158,76 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        $this->autoCloseHotelCaisses($request->user());
+
         $request->user()->currentAccessToken()->delete();
 
         return sendResponse(null, 'Déconnexion réussie', 200);
+    }
+
+    /**
+     * Auto-open hotel cash registers for all sections when a hotel user logs in.
+     */
+    private function autoOpenHotelCaisses(User $user): void
+    {
+        $companyId = $user->company_id;
+
+        if (HotelRoom::where('company_id', $companyId)->doesntExist()) {
+            return;
+        }
+
+        $sections = ['restaurant', 'bar', 'rooms', 'conference', 'reception'];
+
+        foreach ($sections as $section) {
+            $alreadyOpen = CashRegister::where('company_id', $companyId)
+                ->where('status', 'open')
+                ->where('hotel_section', $section)
+                ->exists();
+
+            if ($alreadyOpen) {
+                continue;
+            }
+
+            $lastClosed = CashRegister::where('company_id', $companyId)
+                ->where('hotel_section', $section)
+                ->where('status', 'closed')
+                ->latest('closed_at')
+                ->first();
+
+            CashRegister::create([
+                'company_id' => $companyId,
+                'hotel_section' => $section,
+                'opened_by' => $user->id,
+                'opening_balance' => $lastClosed?->closing_balance ?? 0,
+                'opened_at' => now(),
+                'status' => 'open',
+                'opening_note' => 'Ouverture automatique à la connexion',
+            ]);
+        }
+    }
+
+    /**
+     * Auto-close all open hotel cash registers when the user logs out.
+     */
+    private function autoCloseHotelCaisses(User $user): void
+    {
+        $registers = CashRegister::where('company_id', $user->company_id)
+            ->where('status', 'open')
+            ->whereNotNull('hotel_section')
+            ->get();
+
+        foreach ($registers as $register) {
+            $expectedBalance = $register->calculateExpectedBalance();
+
+            $register->update([
+                'closed_by' => $user->id,
+                'closing_balance' => $expectedBalance,
+                'expected_balance' => $expectedBalance,
+                'difference' => 0,
+                'closed_at' => now(),
+                'status' => 'closed',
+                'closing_note' => 'Fermeture automatique à la déconnexion',
+            ]);
+        }
     }
 }

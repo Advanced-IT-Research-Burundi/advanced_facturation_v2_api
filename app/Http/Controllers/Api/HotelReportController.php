@@ -217,8 +217,7 @@ class HotelReportController extends Controller
 
     private function expenseStats(int $companyId, ?Carbon $start, ?Carbon $end): array
     {
-        $query = Depense::where('company_id', $companyId)
-            ->whereNotNull('hotel_section');
+        $query = Depense::where('company_id', $companyId);
 
         if ($start && $end) {
             $query->whereBetween('created_at', [$start, $end]);
@@ -226,10 +225,20 @@ class HotelReportController extends Controller
 
         $expenses = $query->get();
 
-        $bySection = $expenses->groupBy('hotel_section')->map(fn ($items) => [
+        $hotelExpenses = $expenses->whereNotNull('hotel_section');
+        $generalExpenses = $expenses->whereNull('hotel_section');
+
+        $bySection = $hotelExpenses->groupBy('hotel_section')->map(fn ($items) => [
             'count' => $items->count(),
             'total' => (float) $items->sum('montant'),
         ])->toArray();
+
+        if ($generalExpenses->isNotEmpty()) {
+            $bySection['general'] = [
+                'count' => $generalExpenses->count(),
+                'total' => (float) $generalExpenses->sum('montant'),
+            ];
+        }
 
         return [
             'total' => (float) $expenses->sum('montant'),
