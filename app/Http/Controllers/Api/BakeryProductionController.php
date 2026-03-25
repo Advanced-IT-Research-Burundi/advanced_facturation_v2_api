@@ -615,12 +615,34 @@ class BakeryProductionController extends Controller
 
             $salesWarehouse = Warehouse::findOrFail($request->destination_warehouse_id);
 
+            // Récupérer le stock avec verrous pour éviter les conditions de concurrence
             $stock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
                 ->where('product_id', $request->product_id)
+                ->where('production_status', 'FINISHED')  // Doit être en statut FINISHED
+                ->lockForUpdate()
                 ->first();
 
-            if (! $stock || $stock->quantity < $request->quantity) {
-                throw new \Exception('Stock insuffisant');
+            // Vérifier que le stock existe
+            if (!$stock) {
+                $product = Product::findOrFail($request->product_id);
+                throw new \Exception("Produit '{$product->item_designation}' non trouvé en tant que produit fini ou n'existe pas.");
+            }
+
+            // Convertir et vérifier la quantité
+            $quantity = floatval($request->quantity);
+            $stockQuantity = floatval($stock->quantity);
+            
+            if ($stockQuantity <= 0) {
+                throw new \Exception("Le stock du produit '{$stock->product->item_designation}' est vide.");
+            }
+
+            // Vérifier que la quantité demandée ne dépasse pas le stock
+            if ($quantity > $stockQuantity) {
+                throw new \Exception(
+                    "Stock insuffisant pour '{$stock->product->item_designation}'. "
+                    . "Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
+                    . "Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
+                );
             }
 
             $product = Product::findOrFail($request->product_id);
@@ -641,7 +663,7 @@ class BakeryProductionController extends Controller
                 'system_or_device_id' => uniqid('PROD-ST-'),
                 'item_code' => $product->item_code,
                 'item_designation' => $product->item_designation,
-                'item_quantity' => $request->quantity,
+                'item_quantity' => $quantity,
                 'item_measurement_unit' => $product->item_measurement_unit,
                 'item_purchase_or_sale_price' => $stock->unit_price,
                 'item_purchase_or_sale_currency' => $stock->currency,
@@ -662,7 +684,7 @@ class BakeryProductionController extends Controller
                 'system_or_device_id' => uniqid('SALE-ET-'),
                 'item_code' => $product->item_code,
                 'item_designation' => $product->item_designation,
-                'item_quantity' => $request->quantity,
+                'item_quantity' => $quantity,
                 'item_measurement_unit' => $product->item_measurement_unit,
                 'item_purchase_or_sale_price' => $stock->unit_price,
                 'item_purchase_or_sale_currency' => $stock->currency,
@@ -682,14 +704,14 @@ class BakeryProductionController extends Controller
             $res = WarehouseTransferItem::create([
                 'transfer_id' => $transfer->id,
                 'product_id' => $request->product_id,
-                'quantity' => $request->quantity,
+                'quantity' => $quantity,
                 'unit_price' => $stock->unit_price,
                 'currency' => $stock->currency,
                 'stock_movement_out_id' => $movementOut->id,
                 'stock_movement_in_id' => $movementIn->id,
             ]);
             // return $res;
-            $stock->quantity -= $request->quantity;
+            $stock->quantity -= $quantity;
             $stock->last_stock_movement_id = $movementOut->id;
             $stock->user_id = Auth::id();
             $stock->save();
@@ -699,7 +721,7 @@ class BakeryProductionController extends Controller
                 'product_id' => $request->product_id,
             ]);
 
-            $salesStock->quantity = ($salesStock->quantity ?? 0) + $request->quantity;
+            $salesStock->quantity = ($salesStock->quantity ?? 0) + $quantity;
             $salesStock->unit_price = $stock->unit_price;
             $salesStock->currency = $stock->currency;
             $salesStock->production_status = 'RAW';
@@ -741,15 +763,40 @@ class BakeryProductionController extends Controller
 
             $salesWarehouse = Warehouse::findOrFail($request->destination_warehouse_id);
 
+            // Valider tous les stocks avec verrous AVANT de créer le transfert
+            $stocksToTransfer = [];
             foreach ($request->items as $item) {
+                $quantity = floatval($item['quantity']);
+                
                 $stock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
                     ->where('product_id', $item['product_id'])
+                    ->where('production_status', 'FINISHED')  // Vérifier le statut
+                    ->lockForUpdate()
                     ->first();
 
-                if (! $stock || $stock->quantity < $item['quantity']) {
+                if (!$stock) {
                     $product = Product::findOrFail($item['product_id']);
-                    throw new \Exception("Stock insuffisant pour {$product->item_designation}");
+                    throw new \Exception("Produit '{$product->item_designation}' non trouvé en tant que produit fini.");
                 }
+
+                $stockQuantity = floatval($stock->quantity);
+                if ($stockQuantity <= 0) {
+                    throw new \Exception("Le stock du produit '{$stock->product->item_designation}' est vide.");
+                }
+
+                if ($quantity > $stockQuantity) {
+                    throw new \Exception(
+                        "Stock insuffisant pour '{$stock->product->item_designation}'. "
+                        . "Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
+                        . "Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
+                    );
+                }
+
+                $stocksToTransfer[] = [
+                    'stock' => $stock,
+                    'product' => $stock->product,
+                    'quantity' => $quantity,
+                ];
             }
 
             $transferCode = 'TRF-'.date('Ymd-His');
@@ -764,18 +811,17 @@ class BakeryProductionController extends Controller
                 'approved_at' => now(),
             ]);
 
-            foreach ($request->items as $item) {
-                $stock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
-                    ->where('product_id', $item['product_id'])
-                    ->first();
-
-                $product = Product::findOrFail($item['product_id']);
+            // Traiter les transferts avec les stocks déjà validés et verrouillés
+            foreach ($stocksToTransfer as $transferData) {
+                $stock = $transferData['stock'];
+                $product = $transferData['product'];
+                $quantity = $transferData['quantity'];
 
                 $movementOut = StockMovement::create([
                     'system_or_device_id' => uniqid('PROD-ST-'),
                     'item_code' => $product->item_code,
                     'item_designation' => $product->item_designation,
-                    'item_quantity' => $item['quantity'],
+                    'item_quantity' => $quantity,
                     'item_measurement_unit' => $product->item_measurement_unit,
                     'item_purchase_or_sale_price' => $stock->unit_price,
                     'item_purchase_or_sale_currency' => $stock->currency,
@@ -796,7 +842,7 @@ class BakeryProductionController extends Controller
                     'system_or_device_id' => uniqid('SALE-ET-'),
                     'item_code' => $product->item_code,
                     'item_designation' => $product->item_designation,
-                    'item_quantity' => $item['quantity'],
+                    'item_quantity' => $quantity,
                     'item_measurement_unit' => $product->item_measurement_unit,
                     'item_purchase_or_sale_price' => $stock->unit_price,
                     'item_purchase_or_sale_currency' => $stock->currency,
@@ -807,7 +853,7 @@ class BakeryProductionController extends Controller
                     'item_movement_date' => $request->transfer_date,
                     'obr_submission_status' => 'PENDING',
                     'company_id' => Auth::user()->company_id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $product->id,
                     'warehouse_id' => $salesWarehouse->id,
                     'created_by' => Auth::id(),
                     'user_id' => Auth::id(),
@@ -815,25 +861,25 @@ class BakeryProductionController extends Controller
 
                 WarehouseTransferItem::create([
                     'transfer_id' => $transfer->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
+                    'product_id' => $product->id,
+                    'quantity' => $quantity,
                     'unit_price' => $stock->unit_price,
                     'currency' => $stock->currency,
                     'stock_movement_out_id' => $movementOut->id,
                     'stock_movement_in_id' => $movementIn->id,
                 ]);
 
-                $stock->quantity -= $item['quantity'];
+                $stock->quantity -= $quantity;
                 $stock->last_stock_movement_id = $movementOut->id;
                 $stock->user_id = Auth::id();
                 $stock->save();
 
                 $salesStock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $salesWarehouse->id,
-                    'product_id' => $item['product_id'],
+                    'product_id' => $product->id,
                 ]);
 
-                $salesStock->quantity = ($salesStock->quantity ?? 0) + $item['quantity'];
+                $salesStock->quantity = ($salesStock->quantity ?? 0) + $quantity;
                 $salesStock->unit_price = $stock->unit_price;
                 $salesStock->currency = $stock->currency;
                 $salesStock->production_status = 'RAW';
