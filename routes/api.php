@@ -150,6 +150,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('bakery/production')->group(function () {
         Route::get('/dashboard', [BakeryProductionController::class, 'dashboard']);
         Route::post('/change-status', [BakeryProductionController::class, 'changeStatus']);
+        Route::post('/mark-as-finished', [BakeryProductionController::class, 'markAsFinished']);
+        Route::post('/mark-as-raw', [BakeryProductionController::class, 'markAsRaw']);
         Route::post('/quick-entry', [BakeryProductionController::class, 'quickEntry']);
         Route::post('/quick-exit', [BakeryProductionController::class, 'quickExit']);
         Route::post('/quick-transfer', [BakeryProductionController::class, 'quickTransfer']);
