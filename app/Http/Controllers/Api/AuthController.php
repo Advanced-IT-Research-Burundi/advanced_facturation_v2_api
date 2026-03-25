@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
-use DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -90,11 +90,15 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        $authUser = $request->user();
+        if (! $authUser || ! $authUser->company_id) {
+            return sendError('Action non autorisée : aucune entreprise associée.', 403, []);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'company_id' => 'required|exists:companies,id',
         ]);
 
         if ($validator->fails()) {
@@ -105,18 +109,14 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'company_id' => $request->company_id,
+            'company_id' => $authUser->company_id,
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        $data = [
-            'user' => $user->load('company', 'roles'),
-            'token' => $token,
-            'token_type' => 'Bearer',
-        ];
-
-        return sendResponse($data, 'Utilisateur créé avec succès', 201);
+        return sendResponse(
+            $user->load('company', 'roles'),
+            'Utilisateur créé avec succès',
+            201
+        );
     }
 
     public function login(Request $request)

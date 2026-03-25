@@ -39,8 +39,7 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::post('/register-company', [AuthController::class, 'registerCompany']);
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -50,6 +49,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Création d'utilisateur (même entreprise que l'admin connecté uniquement)
+    Route::post('/register', [AuthController::class, 'register']);
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -372,6 +374,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('rooms', App\Http\Controllers\Api\HotelRoomController::class)->parameters(['rooms' => 'hotelRoom']);
 
         // Reservations
+        Route::post('reservations/walk-in', [App\Http\Controllers\Api\HotelReservationController::class, 'walkIn']);
         Route::apiResource('reservations', App\Http\Controllers\Api\HotelReservationController::class)->parameters(['reservations' => 'hotelReservation']);
         Route::post('reservations/{hotelReservation}/check-in', [App\Http\Controllers\Api\HotelReservationController::class, 'checkIn']);
         Route::post('reservations/{hotelReservation}/check-out', [App\Http\Controllers\Api\HotelReservationController::class, 'checkOut']);

@@ -51,9 +51,11 @@ class ProductController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('item_code', 'like', "%{$search}%")
-                ->orWhere('item_designation', 'like', "%{$search}%")
-                ->orWhere('barcode', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('item_code', 'like', "%{$search}%")
+                    ->orWhere('item_designation', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%");
+            });
         }
 
         return response()->json([

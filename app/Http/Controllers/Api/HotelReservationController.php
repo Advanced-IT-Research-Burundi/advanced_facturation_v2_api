@@ -288,6 +288,97 @@ class HotelReservationController extends Controller
     }
 
     /**
+     * Walk-in: create a reservation and immediately check-in the guest(s).
+     * Supports multiple guests in a single request.
+     */
+    public function walkIn(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'guests' => 'required|array|min:1',
+            'guests.*.hotel_room_id' => 'required|exists:hotel_rooms,id',
+            'guests.*.customer_id' => 'nullable|exists:customers,id',
+            'guests.*.guest_name' => 'required|string|max:255',
+            'guests.*.guest_phone' => 'nullable|string|max:30',
+            'guests.*.guest_email' => 'nullable|email|max:255',
+            'guests.*.guest_id_number' => 'nullable|string|max:100',
+            'guests.*.guest_id_type' => 'nullable|in:cni,passport',
+            'guests.*.guest_address' => 'nullable|string|max:500',
+            'guests.*.guest_birthplace' => 'nullable|string|max:255',
+            'guests.*.guest_birthdate' => 'nullable|date',
+            'guests.*.nights' => 'required|integer|min:1',
+            'guests.*.advance_payment' => 'nullable|numeric|min:0',
+            'guests.*.notes' => 'nullable|string',
+        ]);
+
+        $companyId = auth()->user()->company_id;
+        $results = [];
+        $errors = [];
+
+        DB::transaction(function () use ($validated, $companyId, &$results, &$errors) {
+            foreach ($validated['guests'] as $index => $guestData) {
+                $room = HotelRoom::where('company_id', $companyId)
+                    ->findOrFail($guestData['hotel_room_id']);
+
+                if ($room->status !== 'available') {
+                    $errors[] = "Chambre {$room->room_number} n'est pas disponible";
+
+                    continue;
+                }
+
+                $checkIn = now()->toDateString();
+                $nights = $guestData['nights'];
+                $checkOut = now()->addDays($nights)->toDateString();
+                $totalAmount = $room->price_per_night * $nights;
+                $advancePayment = $guestData['advance_payment'] ?? 0;
+
+                $reservation = HotelReservation::create([
+                    'company_id' => $companyId,
+                    'hotel_room_id' => $room->id,
+                    'customer_id' => $guestData['customer_id'] ?? null,
+                    'guest_name' => $guestData['guest_name'],
+                    'guest_phone' => $guestData['guest_phone'] ?? null,
+                    'guest_email' => $guestData['guest_email'] ?? null,
+                    'guest_id_number' => $guestData['guest_id_number'] ?? null,
+                    'guest_id_type' => $guestData['guest_id_type'] ?? 'cni',
+                    'guest_address' => $guestData['guest_address'] ?? null,
+                    'guest_birthplace' => $guestData['guest_birthplace'] ?? null,
+                    'guest_birthdate' => $guestData['guest_birthdate'] ?? null,
+                    'check_in_date' => $checkIn,
+                    'check_out_date' => $checkOut,
+                    'actual_check_in_at' => now(),
+                    'nights' => $nights,
+                    'price_per_night' => $room->price_per_night,
+                    'total_amount' => $totalAmount,
+                    'advance_payment' => $advancePayment,
+                    'balance_due' => $totalAmount - $advancePayment,
+                    'status' => 'checked_in',
+                    'notes' => $guestData['notes'] ?? null,
+                ]);
+
+                $room->update(['status' => 'occupied']);
+
+                $results[] = $reservation->load(['room', 'customer']);
+            }
+        });
+
+        if (count($errors) > 0 && count($results) === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => implode('; ', $errors),
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => count($results) === 1
+                ? 'Walk-in effectué avec succès'
+                : count($results).' walk-ins effectués avec succès',
+            'data' => $results,
+            'errors' => $errors,
+        ], Response::HTTP_CREATED);
+    }
+
+    /**
      * Extend a reservation by adding extra nights and updating the invoice.
      */
     public function extend(Request $request, HotelReservation $hotelReservation): JsonResponse

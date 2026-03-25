@@ -4,16 +4,15 @@ namespace App\Models;
 
 use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, SoftDeletes, HasCompanyId;
-
+    use HasApiTokens, HasCompanyId, HasFactory, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -30,8 +29,8 @@ class User extends Authenticatable
         'server_code',
     ];
 
-
     protected $appends = ['role_names'];
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -39,6 +38,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'remember_token',
     ];
 
     /**
@@ -97,9 +97,10 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'role_users')
-                    ->withTimestamps()
-                    ->withPivot('id');
+            ->withTimestamps()
+            ->withPivot('id');
     }
+
     /**
      * Get role names as array
      */
@@ -116,6 +117,7 @@ class User extends Authenticatable
         if (is_array($role)) {
             return $this->roles->whereIn('name', $role)->isNotEmpty();
         }
+
         return $this->roles->where('name', $role)->isNotEmpty();
     }
 
@@ -146,7 +148,7 @@ class User extends Authenticatable
             $role = Role::where('name', $role)->firstOrFail();
         }
 
-        if (!$this->roles->contains($role->id)) {
+        if (! $this->roles->contains($role->id)) {
             $this->roles()->attach($role->id);
         }
 

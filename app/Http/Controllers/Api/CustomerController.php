@@ -10,37 +10,36 @@ use Illuminate\Http\Response;
 
 class CustomerController extends Controller
 {
+    public function __construct(public ObrService $obr) {}
 
-    public function __construct(public ObrService $obr){
-
-    }
-
-    public function checkTin($tp_TIN){
+    public function checkTin($tp_TIN)
+    {
         return $this->obr->checkTIN($tp_TIN);
     }
+
     /**
      * Display a listing of customers.
      */
     public function index(Request $request)
     {
         $query = Customer::with(['company', 'invoices']);
-        
+
         // Recherche par nom, téléphone ou NIF
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('customer_name', 'like', "%{$search}%")
-                  ->orWhere('customer_phone', 'like', "%{$search}%")
-                  ->orWhere('customer_TIN', 'like', "%{$search}%")
-                  ->orWhere('customer_address', 'like', "%{$search}%");
+                    ->orWhere('customer_phone', 'like', "%{$search}%")
+                    ->orWhere('customer_TIN', 'like', "%{$search}%")
+                    ->orWhere('customer_address', 'like', "%{$search}%");
             });
         }
-        
+
         // Tri par défaut : plus récents d'abord
         $query->orderBy('created_at', 'desc');
-        
+
         return response()->json([
             'success' => true,
-            'data' => $query->paginate($request->input('per_page', 15))
+            'data' => $query->paginate($request->input('per_page', 15)),
         ], Response::HTTP_OK);
     }
 
@@ -58,16 +57,22 @@ class CustomerController extends Controller
         ]);
 
         $validated['user_id'] = auth()->id();
-        $validated['company_id'] = auth()->user()->company_id ?? 1;
-        // check it the tin is valid 
-        if($validated['customer_TIN'] != null){
+        if (! auth()->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aucune entreprise associée à votre compte.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+        $validated['company_id'] = auth()->user()->company_id;
+        // check it the tin is valid
+        if ($validated['customer_TIN'] != null) {
             $response = $this->obr->checkTIN($validated['customer_TIN']);
-            if($response['success'] == false){
+            if ($response['success'] == false) {
                 return response()->json([
                     'success' => false,
-                    'message' => $response['message']
-                ],422);
-            }else{
+                    'message' => $response['message'],
+                ], 422);
+            } else {
                 $validated['customer_name'] = $response['tp_name'];
             }
 
@@ -78,7 +83,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer created successfully',
-            'data' => $customer->load('company')
+            'data' => $customer->load('company'),
         ], Response::HTTP_CREATED);
     }
 
@@ -89,7 +94,7 @@ class CustomerController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $customer->load(['company', 'invoices'])
+            'data' => $customer->load(['company', 'invoices']),
         ], Response::HTTP_OK);
     }
 
@@ -100,11 +105,10 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'customer_name' => 'sometimes|required|string|max:255',
-            'customer_TIN' => 'nullable|string|unique:customers,customer_TIN,' . $customer->id . '|max:255',
-            'customer_phone' => 'nullable|string|unique:customers,customer_phone,' . $customer->id . '|max:255',
+            'customer_TIN' => 'nullable|string|unique:customers,customer_TIN,'.$customer->id.'|max:255',
+            'customer_phone' => 'nullable|string|unique:customers,customer_phone,'.$customer->id.'|max:255',
             'customer_address' => 'nullable|string|max:255',
             'vat_customer_payer' => 'sometimes|required|string|max:255',
-            'company_id' => 'sometimes|required|exists:companies,id',
         ]);
 
         $customer->update($validated);
@@ -112,7 +116,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer updated successfully',
-            'data' => $customer->load('company')
+            'data' => $customer->load('company'),
         ], Response::HTTP_OK);
     }
 
@@ -125,7 +129,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Customer deleted successfully'
+            'message' => 'Customer deleted successfully',
         ], Response::HTTP_OK);
     }
 
@@ -140,7 +144,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer restored successfully',
-            'data' => $customer
+            'data' => $customer,
         ], Response::HTTP_OK);
     }
 
@@ -178,7 +182,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $deposits
+            'data' => $deposits,
         ], Response::HTTP_OK);
     }
 }

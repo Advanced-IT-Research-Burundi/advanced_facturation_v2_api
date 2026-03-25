@@ -17,6 +17,10 @@ class UserController extends Controller
     {
         $query = User::with(['roles', 'company']);
 
+        if ($request->user()->company_id) {
+            $query->where('company_id', $request->user()->company_id);
+        }
+
         // Search functionality
         if ($request->has('search') && $request->search) {
             $search = $request->search;
@@ -39,23 +43,30 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        if (! $request->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aucune entreprise associée à votre compte.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users|max:255',
             'password' => 'required|string|min:8|confirmed',
-            'company_id' => 'required|exists:companies,id',
             'roles' => 'required|array|min:1',
             'roles.*' => 'exists:roles,id',
         ]);
 
         $validated['password'] = bcrypt($validated['password']);
         $validated['user_id'] = auth()->id();
+        $companyId = $request->user()->company_id;
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
-            'company_id' => $validated['company_id'],
+            'company_id' => $companyId,
             'user_id' => $validated['user_id'],
         ]);
 
@@ -72,8 +83,15 @@ class UserController extends Controller
     /**
      * Display the specified user.
      */
-    public function show(User $user)
+    public function show(Request $request, User $user)
     {
+        if ($request->user()->company_id && $user->company_id !== $request->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $user->load(['roles', 'company']),
@@ -85,11 +103,17 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        if ($request->user()->company_id && $user->company_id !== $request->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:users,email,'.$user->id.'|max:255',
             'password' => 'sometimes|nullable|string|min:8|confirmed',
-            'company_id' => 'sometimes|required|exists:companies,id',
             'roles' => 'sometimes|required|array|min:1',
             'roles.*' => 'exists:roles,id',
         ]);
@@ -105,7 +129,6 @@ class UserController extends Controller
             'name' => $validated['name'] ?? $user->name,
             'email' => $validated['email'] ?? $user->email,
             'password' => $validated['password'] ?? null,
-            'company_id' => $validated['company_id'] ?? $user->company_id,
         ]));
 
         // Sync roles if provided
@@ -123,8 +146,15 @@ class UserController extends Controller
     /**
      * Remove the specified user.
      */
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
+        if ($request->user()->company_id && $user->company_id !== $request->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $user->roles()->detach(); // Remove role associations
         $user->delete();
 
@@ -159,9 +189,17 @@ class UserController extends Controller
     /**
      * Restore a soft-deleted user.
      */
-    public function restore($id)
+    public function restore(Request $request, $id)
     {
         $user = User::withTrashed()->findOrFail($id);
+
+        if ($request->user()->company_id && $user->company_id !== $request->user()->company_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $user->restore();
 
         return response()->json([
