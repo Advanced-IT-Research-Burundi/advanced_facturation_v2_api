@@ -372,6 +372,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Dashboard
         Route::get('dashboard', [App\Http\Controllers\Api\HotelDashboardController::class, 'index']);
 
+        // Rapport directeur
+        Route::get('reports/summary', [App\Http\Controllers\Api\HotelReportController::class, 'summary']);
+
         // Rooms
         Route::apiResource('rooms', App\Http\Controllers\Api\HotelRoomController::class)->parameters(['rooms' => 'hotelRoom']);
 
