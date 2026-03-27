@@ -344,10 +344,12 @@ class ObrService
         $token = $this->getToken();
 
         if (! $token) {
-            return response()->json([
-                'success' => false,
-                'msg' => 'Impossible d\'obtenir le token d\'authentification OBR',
-            ]);
+            return new \Illuminate\Http\Client\Response(
+                new \GuzzleHttp\Psr7\Response(200, [], json_encode([
+                    'success' => false,
+                    'msg' => 'Impossible d\'obtenir le token d\'authentification OBR',
+                ]))
+            );
         }
 
         try {
@@ -368,10 +370,12 @@ class ObrService
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'msg' => 'Erreur de connexion au serveur OBR: '.$e->getMessage(),
-            ]);
+            return new \Illuminate\Http\Client\Response(
+                new \GuzzleHttp\Psr7\Response(200, [], json_encode([
+                    'success' => false,
+                    'msg' => 'Erreur de connexion au serveur OBR: '.$e->getMessage(),
+                ]))
+            );
         }
     }
 }
