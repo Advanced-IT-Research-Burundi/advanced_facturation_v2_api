@@ -4,17 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
-use App\Services\ObrService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class CustomerController extends Controller
 {
-    public function __construct(public ObrService $obr) {}
-
     public function checkTin($tp_TIN)
     {
-        return $this->obr->checkTIN($tp_TIN);
+        return response()->json([
+            'success' => true,
+            'message' => 'OBR désactivé. Vérification NIF non disponible.',
+        ]);
     }
 
     /**
@@ -64,19 +64,6 @@ class CustomerController extends Controller
             ], Response::HTTP_FORBIDDEN);
         }
         $validated['company_id'] = auth()->user()->company_id;
-        // check it the tin is valid
-        if ($validated['customer_TIN'] != null) {
-            $response = $this->obr->checkTIN($validated['customer_TIN']);
-            if ($response['success'] == false) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $response['message'],
-                ], 422);
-            } else {
-                $validated['customer_name'] = $response['tp_name'];
-            }
-
-        }
 
         $customer = Customer::create($validated);
 
