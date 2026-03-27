@@ -10,15 +10,34 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StockMovement extends Model
 {
-    use HasFactory, SoftDeletes, HasCompanyId;
-
+    use HasCompanyId, HasFactory, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
      *
      * @var array
      */
-    protected $guarded = [];
+    protected $fillable = [
+        'system_or_device_id',
+        'item_code',
+        'item_designation',
+        'item_quantity',
+        'item_measurement_unit',
+        'item_purchase_or_sale_price',
+        'item_purchase_or_sale_currency',
+        'item_movement_type',
+        'item_movement_description',
+        'item_movement_date',
+        'obr_submission_status',
+        'obr_sent_at',
+        'company_id',
+        'product_id',
+        'warehouse_id',
+        'user_id',
+        'created_by',
+        'created_by_id',
+    ];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -61,11 +80,8 @@ class StockMovement extends Model
         return $this->belongsTo(User::class);
     }
 
-
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
-
 }

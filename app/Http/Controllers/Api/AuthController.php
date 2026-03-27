@@ -219,6 +219,7 @@ class AuthController extends Controller
     {
         $registers = CashRegister::where('company_id', $user->company_id)
             ->where('status', 'open')
+            ->where('opened_by', $user->id)
             ->whereNotNull('hotel_section')
             ->get();
 

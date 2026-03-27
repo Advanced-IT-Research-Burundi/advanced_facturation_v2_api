@@ -13,6 +13,7 @@ use App\Models\WarehouseTransfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StockMovementController extends Controller
 {
@@ -169,10 +170,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -256,10 +258,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -341,10 +344,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -443,10 +447,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -539,10 +544,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -615,10 +621,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }
@@ -692,10 +699,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error($e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], 500);
         }
     }

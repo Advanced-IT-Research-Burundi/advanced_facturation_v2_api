@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Exports\ProductExport;
+use App\Http\Controllers\Controller;
 use App\Imports\ProductImport;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -17,9 +17,9 @@ class ImportExportController extends Controller
      */
     public function downloadProductTemplate()
     {
-        $filename = 'modele_import_produits_' . date('Y_m_d') . '.xlsx';
-        
-        return Excel::download(new ProductExport(), $filename);
+        $filename = 'modele_import_produits_'.date('Y_m_d').'.xlsx';
+
+        return Excel::download(new ProductExport, $filename);
     }
 
     /**
@@ -40,11 +40,11 @@ class ImportExportController extends Controller
             // Vérifier les doublons dans la base
             foreach ($previewData as &$item) {
                 $exists = Product::where(function ($query) use ($item) {
-                        $query->where('item_designation', $item['name']);
-                        if (!empty($item['code_product'])) {
-                            $query->orWhere('code_product', $item['code_product']);
-                        }
-                    })
+                    $query->where('item_designation', $item['name']);
+                    if (! empty($item['code_product'])) {
+                        $query->orWhere('code_product', $item['code_product']);
+                    }
+                })
                     ->exists();
 
                 $item['status'] = $exists ? 'duplicate' : 'new';
@@ -52,19 +52,19 @@ class ImportExportController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => count($previewData) . ' lignes détectées',
+                'message' => count($previewData).' lignes détectées',
                 'data' => [
                     'items' => $previewData,
                     'total' => count($previewData),
                     'new_count' => collect($previewData)->where('status', 'new')->count(),
                     'duplicate_count' => collect($previewData)->where('status', 'duplicate')->count(),
-                ]
+                ],
             ], Response::HTTP_OK);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la lecture du fichier',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], Response::HTTP_BAD_REQUEST);
         }
     }
@@ -101,14 +101,14 @@ class ImportExportController extends Controller
                         'success_count' => $successCount,
                         'error_count' => $errorCount,
                         'duplicate_count' => $duplicateCount,
-                    ]
-                ]
+                    ],
+                ],
             ], Response::HTTP_OK);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'import',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -118,7 +118,7 @@ class ImportExportController extends Controller
      */
     public function exportProducts(Request $request)
     {
-        $filename = 'export_produits_' . date('Y_m_d_His') . '.xlsx';
+        $filename = 'export_produits_'.date('Y_m_d_His').'.xlsx';
 
         // Créer un export avec les données réelles
         return Excel::download(new ProductDataExport($request), $filename);
@@ -128,11 +128,7 @@ class ImportExportController extends Controller
 /**
  * Export des produits avec données réelles
  */
-class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, 
-    \Maatwebsite\Excel\Concerns\WithHeadings,
-    \Maatwebsite\Excel\Concerns\WithMapping,
-    \Maatwebsite\Excel\Concerns\WithStyles,
-    \Maatwebsite\Excel\Concerns\WithColumnWidths
+class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatwebsite\Excel\Concerns\WithColumnWidths, \Maatwebsite\Excel\Concerns\WithHeadings, \Maatwebsite\Excel\Concerns\WithMapping, \Maatwebsite\Excel\Concerns\WithStyles
 {
     protected $request;
 
@@ -154,11 +150,11 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery,
             $search = $this->request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('item_designation', 'like', "%{$search}%")
-                  ->orWhere('code_product', 'like', "%{$search}%");
+                    ->orWhere('code_product', 'like', "%{$search}%");
             });
         }
 
-        return $query->orderBy('name');
+        return $query->orderBy('item_designation');
     }
 
     public function headings(): array

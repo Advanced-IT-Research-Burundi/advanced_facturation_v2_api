@@ -16,7 +16,7 @@ class RoleController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => Role::paginate(15)
+            'data' => Role::paginate(15),
         ], Response::HTTP_OK);
     }
 
@@ -25,6 +25,13 @@ class RoleController extends Controller
      */
     public function store(Request $request)
     {
+        if (! auth()->user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Droits administrateur requis.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|unique:roles|max:255',
             'description' => 'nullable|string',
@@ -37,7 +44,7 @@ class RoleController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Role created successfully',
-            'data' => $role
+            'data' => $role,
         ], Response::HTTP_CREATED);
     }
 
@@ -48,7 +55,7 @@ class RoleController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $role->load('users')
+            'data' => $role->load('users'),
         ], Response::HTTP_OK);
     }
 
@@ -57,8 +64,15 @@ class RoleController extends Controller
      */
     public function update(Request $request, Role $role)
     {
+        if (! auth()->user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Droits administrateur requis.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|unique:roles,name,' . $role->id . '|max:255',
+            'name' => 'sometimes|required|string|unique:roles,name,'.$role->id.'|max:255',
             'description' => 'nullable|string',
         ]);
 
@@ -67,7 +81,7 @@ class RoleController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Role updated successfully',
-            'data' => $role
+            'data' => $role,
         ], Response::HTTP_OK);
     }
 
@@ -76,11 +90,18 @@ class RoleController extends Controller
      */
     public function destroy(Role $role)
     {
+        if (! auth()->user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Droits administrateur requis.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $role->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Role deleted successfully'
+            'message' => 'Role deleted successfully',
         ], Response::HTTP_OK);
     }
 
@@ -89,13 +110,20 @@ class RoleController extends Controller
      */
     public function restore($id)
     {
+        if (! auth()->user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Droits administrateur requis.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $role = Role::withTrashed()->findOrFail($id);
         $role->restore();
 
         return response()->json([
             'success' => true,
             'message' => 'Role restored successfully',
-            'data' => $role
+            'data' => $role,
         ], Response::HTTP_OK);
     }
 }

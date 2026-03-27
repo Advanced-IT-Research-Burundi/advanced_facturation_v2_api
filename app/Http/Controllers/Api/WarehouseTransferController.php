@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\StockMovement;
+use App\Models\WarehouseProduct;
 use App\Models\WarehouseTransfer;
 use App\Models\WarehouseTransferItem;
-use App\Models\WarehouseProduct;
-use App\Models\StockMovement;
-use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +23,8 @@ class WarehouseTransferController extends Controller
             'sourceWarehouse',
             'destinationWarehouse',
             'items.product',
-            'createdByUser',
-            'approvedByUser'
+            'creator',
+            'approver',
         ]);
 
         if ($request->filled('status')) {
@@ -43,7 +43,7 @@ class WarehouseTransferController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $transfers
+            'data' => $transfers,
         ], Response::HTTP_OK);
     }
 
@@ -56,15 +56,15 @@ class WarehouseTransferController extends Controller
             'sourceWarehouse',
             'destinationWarehouse',
             'items.product',
-            'createdByUser'
+            'creator',
         ])
-            ->where('status', 'pending')
+            ->where('status', 'PENDING')
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
         return response()->json([
             'success' => true,
-            'data' => $transfers
+            'data' => $transfers,
         ], Response::HTTP_OK);
     }
 
@@ -90,9 +90,9 @@ class WarehouseTransferController extends Controller
                     ->where('product_id', $item['product_id'])
                     ->first();
 
-                if (!$stock || $stock->quantity < $item['quantity']) {
+                if (! $stock || $stock->quantity < $item['quantity']) {
                     $product = Product::find($item['product_id']);
-                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: " .
+                    throw new \Exception("Stock insuffisant pour {$product->item_designation}. Disponible: ".
                         ($stock->quantity ?? 0));
                 }
             }
@@ -102,7 +102,7 @@ class WarehouseTransferController extends Controller
                 'transfer_code' => WarehouseTransfer::generateCode(),
                 'source_warehouse_id' => $validated['source_warehouse_id'],
                 'destination_warehouse_id' => $validated['destination_warehouse_id'],
-                'status' => 'pending',
+                'status' => 'PENDING',
                 'notes' => $validated['notes'],
                 'created_by' => auth()->id(),
                 'company_id' => auth()->user()->company_id,
@@ -115,7 +115,7 @@ class WarehouseTransferController extends Controller
                     ->first();
 
                 WarehouseTransferItem::create([
-                    'warehouse_transfer_id' => $transfer->id,
+                    'transfer_id' => $transfer->id,
                     'product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $stock->unit_price ?? 0,
@@ -128,14 +128,15 @@ class WarehouseTransferController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Transfert cree avec succes. En attente d\'approbation.',
-                'data' => $transfer->load(['sourceWarehouse', 'destinationWarehouse', 'items.product'])
+                'data' => $transfer->load(['sourceWarehouse', 'destinationWarehouse', 'items.product']),
             ], Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], Response::HTTP_BAD_REQUEST);
         }
     }
@@ -151,9 +152,9 @@ class WarehouseTransferController extends Controller
                 'sourceWarehouse',
                 'destinationWarehouse',
                 'items.product',
-                'createdByUser',
-                'approvedByUser'
-            ])
+                'creator',
+                'approver',
+            ]),
         ], Response::HTTP_OK);
     }
 
@@ -162,10 +163,10 @@ class WarehouseTransferController extends Controller
      */
     public function approve(WarehouseTransfer $warehouseTransfer)
     {
-        if ($warehouseTransfer->status !== 'pending') {
+        if ($warehouseTransfer->status !== 'PENDING') {
             return response()->json([
                 'success' => false,
-                'message' => 'Ce transfert ne peut plus etre approuve.'
+                'message' => 'Ce transfert ne peut plus etre approuve.',
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -177,7 +178,7 @@ class WarehouseTransferController extends Controller
                     ->where('product_id', $item->product_id)
                     ->first();
 
-                if (!$stock || $stock->quantity < $item->quantity) {
+                if (! $stock || $stock->quantity < $item->quantity) {
                     throw new \Exception("Stock insuffisant pour {$item->product->item_designation}");
                 }
             }
@@ -193,7 +194,7 @@ class WarehouseTransferController extends Controller
 
                 // Create exit movement (ST - Sortie Transfert)
                 $exitMovement = StockMovement::create([
-                    'system_or_device_id' => 'WEB-' . auth()->id(),
+                    'system_or_device_id' => 'WEB-'.auth()->id(),
                     'item_code' => $product->item_code,
                     'item_designation' => $product->item_designation,
                     'item_quantity' => $item->quantity,
@@ -223,7 +224,7 @@ class WarehouseTransferController extends Controller
 
                 // Create entry movement (ET - Entree Transfert)
                 $entryMovement = StockMovement::create([
-                    'system_or_device_id' => 'WEB-' . auth()->id(),
+                    'system_or_device_id' => 'WEB-'.auth()->id(),
                     'item_code' => $product->item_code,
                     'item_designation' => $product->item_designation,
                     'item_quantity' => $item->quantity,
@@ -251,7 +252,7 @@ class WarehouseTransferController extends Controller
 
             // Update transfer status
             $warehouseTransfer->update([
-                'status' => 'completed',
+                'status' => 'APPROVED',
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
             ]);
@@ -264,15 +265,16 @@ class WarehouseTransferController extends Controller
                 'data' => $warehouseTransfer->fresh([
                     'sourceWarehouse',
                     'destinationWarehouse',
-                    'items.product'
-                ])
+                    'items.product',
+                ]),
             ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'Une erreur est survenue lors de l\'opération.',
             ], Response::HTTP_BAD_REQUEST);
         }
     }
@@ -282,10 +284,10 @@ class WarehouseTransferController extends Controller
      */
     public function reject(Request $request, WarehouseTransfer $warehouseTransfer)
     {
-        if ($warehouseTransfer->status !== 'pending') {
+        if ($warehouseTransfer->status !== 'PENDING') {
             return response()->json([
                 'success' => false,
-                'message' => 'Ce transfert ne peut plus etre rejete.'
+                'message' => 'Ce transfert ne peut plus etre rejete.',
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -294,7 +296,7 @@ class WarehouseTransferController extends Controller
         ]);
 
         $warehouseTransfer->update([
-            'status' => 'rejected',
+            'status' => 'REJECTED',
             'rejection_reason' => $validated['rejection_reason'],
             'approved_by' => auth()->id(),
             'approved_at' => now(),
@@ -303,7 +305,7 @@ class WarehouseTransferController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Transfert rejete.',
-            'data' => $warehouseTransfer
+            'data' => $warehouseTransfer,
         ], Response::HTTP_OK);
     }
 
@@ -312,10 +314,10 @@ class WarehouseTransferController extends Controller
      */
     public function destroy(WarehouseTransfer $warehouseTransfer)
     {
-        if ($warehouseTransfer->status === 'completed') {
+        if ($warehouseTransfer->status === 'APPROVED') {
             return response()->json([
                 'success' => false,
-                'message' => 'Un transfert complete ne peut pas etre supprime.'
+                'message' => 'Un transfert approuve ne peut pas etre supprime.',
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -323,7 +325,7 @@ class WarehouseTransferController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Transfert supprime avec succes.'
+            'message' => 'Transfert supprime avec succes.',
         ], Response::HTTP_OK);
     }
 }

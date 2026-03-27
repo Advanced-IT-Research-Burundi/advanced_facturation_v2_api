@@ -106,8 +106,11 @@ class CashRegisterController extends Controller
         return DB::transaction(function () use ($request, $user) {
             $existingOpen = CashRegister::where('company_id', $user->company_id)
                 ->where('status', 'open')
-                ->where('hotel_section', $request->hotel_section)
-                ->when(is_null($request->hotel_section), fn ($q) => $q->whereNull('hotel_section'))
+                ->when(
+                    is_null($request->hotel_section),
+                    fn ($q) => $q->whereNull('hotel_section'),
+                    fn ($q) => $q->where('hotel_section', $request->hotel_section)
+                )
                 ->lockForUpdate()
                 ->first();
 

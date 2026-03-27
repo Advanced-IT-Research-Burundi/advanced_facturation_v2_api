@@ -10,7 +10,15 @@ class WarehouseTransferItem extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'transfer_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+        'currency',
+        'stock_movement_out_id',
+        'stock_movement_in_id',
+    ];
 
     protected function casts(): array
     {
@@ -22,7 +30,7 @@ class WarehouseTransferItem extends Model
 
     public function warehouseTransfer(): BelongsTo
     {
-        return $this->belongsTo(WarehouseTransfer::class);
+        return $this->belongsTo(WarehouseTransfer::class, 'transfer_id');
     }
 
     public function product(): BelongsTo

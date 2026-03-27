@@ -11,14 +11,20 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Warehouse extends Model
 {
-    use HasFactory, SoftDeletes , HasCompanyId;
+    use HasCompanyId, HasFactory , SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
      *
      * @var array
      */
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'location',
+        'description',
+        'company_id',
+        'user_id',
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -58,5 +64,4 @@ class Warehouse extends Model
     {
         return $this->belongsToMany(User::class, 'user_warehouse');
     }
-
 }

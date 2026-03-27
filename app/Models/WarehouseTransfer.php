@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasCompanyId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WarehouseTransfer extends Model
 {
-    use SoftDeletes;
+    use HasCompanyId, SoftDeletes;
 
     protected $fillable = [
         'transfer_code',
@@ -18,11 +19,20 @@ class WarehouseTransfer extends Model
         'status',
         'notes',
         'rejection_reason',
-        'approved_at'
+        'approved_at',
+        'company_id',
     ];
 
+    public static function generateCode(): string
+    {
+        $today = now()->format('Ymd');
+        $count = self::whereDate('created_at', now())->count() + 1;
+
+        return 'TRF-'.$today.'-'.str_pad($count, 4, '0', STR_PAD_LEFT);
+    }
+
     protected $casts = [
-        'approved_at' => 'datetime'
+        'approved_at' => 'datetime',
     ];
 
     public function sourceWarehouse()

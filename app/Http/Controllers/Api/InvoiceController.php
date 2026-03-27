@@ -165,7 +165,7 @@ class InvoiceController extends Controller
                 'cn_motif' => $validated['avoir_reason'] ?? $validated['refund_reason'] ?? null,
                 'deposit_reference' => $validated['deposit_reference'] ?? null,
 
-                'obr_submission_status' => 'NOT_SENT',
+                'obr_submission_status' => 'PENDING',
 
                 // Initialize payment status
                 'payment_status' => 'unpaid',
@@ -459,6 +459,8 @@ class InvoiceController extends Controller
         try {
             DB::beginTransaction();
 
+            $requireObrCancel = false;
+
             // 1. Restaurer le stock si demandé et si c'était une vente POS
             $stockRestored = [];
             $shouldRestoreStock = $request->boolean('restore_stock', true);
@@ -531,7 +533,7 @@ class InvoiceController extends Controller
                     'item_movement_invoice_ref' => $invoice->invoice_number,
                     'item_movement_description' => "Retour après annulation - {$motif}",
                     'item_movement_date' => now(),
-                    'obr_submission_status' => 'NOT_SENT',
+                    'obr_submission_status' => 'PENDING',
                     'user_id' => auth()->id(),
                 ]);
 
