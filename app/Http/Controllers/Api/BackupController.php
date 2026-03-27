@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 
 class BackupController extends Controller
@@ -16,21 +15,29 @@ class BackupController extends Controller
      */
     public function database(Request $request)
     {
+        $user = $request->user();
+        if (! $user || ! $user->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès non autorisé. Seuls les administrateurs peuvent effectuer cette action.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         try {
             $dbName = config('database.connections.mysql.database');
             $dbUser = config('database.connections.mysql.username');
             $dbPass = config('database.connections.mysql.password');
             $dbHost = config('database.connections.mysql.host');
 
-            $filename = 'backup_' . $dbName . '_' . date('Y-m-d_His') . '.sql';
+            $filename = 'backup_'.$dbName.'_'.date('Y-m-d_His').'.sql';
             $backupPath = storage_path('app/backups');
 
             // Créer le dossier s'il n'existe pas
-            if (!File::exists($backupPath)) {
+            if (! File::exists($backupPath)) {
                 File::makeDirectory($backupPath, 0755, true);
             }
 
-            $fullPath = $backupPath . '/' . $filename;
+            $fullPath = $backupPath.'/'.$filename;
 
             // Exporter la base de données
             $command = sprintf(
@@ -44,9 +51,9 @@ class BackupController extends Controller
 
             $output = null;
             $returnVar = null;
-            exec($command . ' 2>&1', $output, $returnVar);
+            exec($command.' 2>&1', $output, $returnVar);
 
-            if ($returnVar !== 0 || !File::exists($fullPath)) {
+            if ($returnVar !== 0 || ! File::exists($fullPath)) {
                 // Alternative: Export via PHP
                 return $this->exportViaPHP($dbName, $filename);
             }
@@ -60,7 +67,6 @@ class BackupController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la création du backup',
-                'error' => $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -71,27 +77,27 @@ class BackupController extends Controller
     private function exportViaPHP($dbName, $filename)
     {
         $tables = DB::select('SHOW TABLES');
-        $tableKey = 'Tables_in_' . $dbName;
-        
+        $tableKey = 'Tables_in_'.$dbName;
+
         $sql = "-- Backup de la base de données: {$dbName}\n";
-        $sql .= "-- Généré le: " . date('Y-m-d H:i:s') . "\n";
+        $sql .= '-- Généré le: '.date('Y-m-d H:i:s')."\n";
         $sql .= "-- ------------------------------------------------\n\n";
         $sql .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
 
         foreach ($tables as $table) {
             $tableName = $table->$tableKey;
-            
+
             // Structure de la table
             $createTable = DB::select("SHOW CREATE TABLE `{$tableName}`");
             $sql .= "DROP TABLE IF EXISTS `{$tableName}`;\n";
-            $sql .= $createTable[0]->{'Create Table'} . ";\n\n";
+            $sql .= $createTable[0]->{'Create Table'}.";\n\n";
 
             // Données de la table
             $rows = DB::table($tableName)->get();
-            
+
             if ($rows->count() > 0) {
                 $columns = array_keys((array) $rows->first());
-                $columnList = '`' . implode('`, `', $columns) . '`';
+                $columnList = '`'.implode('`, `', $columns).'`';
 
                 foreach ($rows->chunk(100) as $chunk) {
                     $values = [];
@@ -101,13 +107,13 @@ class BackupController extends Controller
                             if (is_null($value)) {
                                 $rowValues[] = 'NULL';
                             } else {
-                                $rowValues[] = "'" . addslashes($value) . "'";
+                                $rowValues[] = "'".str_replace("'", "''", (string) $value)."'";
                             }
                         }
-                        $values[] = '(' . implode(', ', $rowValues) . ')';
+                        $values[] = '('.implode(', ', $rowValues).')';
                     }
                     $sql .= "INSERT INTO `{$tableName}` ({$columnList}) VALUES\n";
-                    $sql .= implode(",\n", $values) . ";\n\n";
+                    $sql .= implode(",\n", $values).";\n\n";
                 }
             }
         }
@@ -117,15 +123,23 @@ class BackupController extends Controller
         // Retourner le fichier
         return response($sql, 200, [
             'Content-Type' => 'application/sql',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
     /**
      * Lister les backups disponibles
      */
-    public function list()
+    public function list(Request $request)
     {
+        $user = $request->user();
+        if (! $user || ! $user->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès non autorisé. Seuls les administrateurs peuvent effectuer cette action.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         $backupPath = storage_path('app/backups');
         $backups = [];
 
@@ -147,7 +161,7 @@ class BackupController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $backups
+            'data' => $backups,
         ], Response::HTTP_OK);
     }
 
@@ -162,6 +176,7 @@ class BackupController extends Controller
             $bytes /= 1024;
             $i++;
         }
-        return round($bytes, 2) . ' ' . $units[$i];
+
+        return round($bytes, 2).' '.$units[$i];
     }
 }

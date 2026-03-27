@@ -38,8 +38,8 @@ class AuthenticationSecurityTest extends TestCase
         $response = $this->postJson('/api/register', [
             'name' => 'Intruder',
             'email' => 'intruder@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password1',
+            'password_confirmation' => 'Password1',
         ]);
 
         $response->assertUnauthorized();
@@ -48,6 +48,8 @@ class AuthenticationSecurityTest extends TestCase
     public function test_authenticated_admin_can_create_user_in_own_company(): void
     {
         $admin = $this->createCompanyAndAdmin();
+        $admin->assignRole(\App\Models\Role::firstOrCreate(['name' => 'admin']));
+        $admin->load('roles');
         Sanctum::actingAs($admin);
 
         $email = 'newuser-'.uniqid().'@example.com';
@@ -55,8 +57,8 @@ class AuthenticationSecurityTest extends TestCase
         $response = $this->postJson('/api/register', [
             'name' => 'Nouveau',
             'email' => $email,
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password1',
+            'password_confirmation' => 'Password1',
         ]);
 
         $response->assertCreated()
@@ -71,6 +73,8 @@ class AuthenticationSecurityTest extends TestCase
     public function test_users_index_is_scoped_to_authenticated_company(): void
     {
         $adminA = $this->createCompanyAndAdmin();
+        $adminA->assignRole(\App\Models\Role::firstOrCreate(['name' => 'admin']));
+        $adminA->load('roles');
         $adminB = $this->createCompanyAndAdmin();
 
         Sanctum::actingAs($adminA);

@@ -82,10 +82,10 @@ class AuthController extends Controller
             DB::rollBack();
             Log::error('Registration Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
+                'request' => $request->except(['password', 'password_confirmation']),
             ]);
 
-            return sendError('Erreur lors de la création de l\'entreprise', 500, ['error' => $e->getMessage()]);
+            return sendError('Erreur lors de la création de l\'entreprise', 500, []);
         }
 
     }
@@ -95,6 +95,10 @@ class AuthController extends Controller
         $authUser = $request->user();
         if (! $authUser || ! $authUser->company_id) {
             return sendError('Action non autorisée : aucune entreprise associée.', 403, []);
+        }
+
+        if (! $authUser->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return sendError('Seuls les administrateurs peuvent créer des utilisateurs.', 403, []);
         }
 
         $validator = Validator::make($request->all(), [
@@ -139,6 +143,8 @@ class AuthController extends Controller
                 'email' => ['Les identifiants fournis ne correspondent pas à nos enregistrements.'],
             ]);
         }
+
+        $user->tokens()->delete();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

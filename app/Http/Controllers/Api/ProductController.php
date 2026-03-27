@@ -102,10 +102,8 @@ class ProductController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ]
-            );
-
+                'message' => 'Erreur lors de la création du produit',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return response()->json([
@@ -227,6 +225,7 @@ class ProductController extends Controller
     {
         $content = $request->get('content', $product->barcode ?? $product->item_code ?? '000000');
         $size = $request->get('size', 200);
+        $size = min(max((int) $size, 50), 1000);
 
         try {
             $qrCode = QrCode::format('svg')
@@ -246,8 +245,8 @@ class ProductController extends Controller
     public function printLabels(Request $request)
     {
         $productId = $request->get('product_id');
-        $count = $request->get('count', 1);
-        $type = $request->get('type', 'barcode'); // 'barcode' or 'qrcode'
+        $count = min(max((int) $request->get('count', 1), 1), 100);
+        $type = $request->get('type', 'barcode');
 
         $product = Product::findOrFail($productId);
 

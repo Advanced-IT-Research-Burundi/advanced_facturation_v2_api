@@ -93,7 +93,7 @@ class InvoiceController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:products,id',
             'items.*.item_designation' => 'required|string|max:255',
-            'items.*.item_quantity' => 'required|numeric',
+            'items.*.item_quantity' => 'required|numeric|min:0.01',
             'items.*.item_price' => 'required|numeric',
             'items.*.vat' => 'required|numeric|min:0|max:100',
             'items.*.item_ct' => 'nullable|numeric|min:0',
@@ -234,7 +234,6 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la création de la facture',
-                'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -256,7 +255,6 @@ class InvoiceController extends Controller
     public function update(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'invoice_number' => 'sometimes|string',
             'invoice_date' => 'sometimes|date',
             'invoice_type' => 'sometimes|string',
             'invoice_currency' => 'sometimes|string|max:3',
@@ -268,26 +266,21 @@ class InvoiceController extends Controller
             'items.*.vat' => 'required_with:items|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($invoice, $request) {
-            // Update Invoice details
-            $invoice->update($request->only([
+        DB::transaction(function () use ($invoice, $validated) {
+            $invoice->update(collect($validated)->only([
                 'invoice_currency',
                 'customer_id',
                 'invoice_type',
-                // Add other fillable fields if needed
-            ]));
+            ])->toArray());
 
-            // Update Items if present
-            if ($request->has('items')) {
-                // Simplest approach: Delete all and recreate.
-                // Ensure to handle stock logic if this was a POS sale (but for Proforma FP it's fine).
+            if (isset($validated['items'])) {
                 $invoice->invoiceItems()->delete();
 
                 $total_amount_nvat = 0;
                 $total_vat_amount = 0;
                 $total_amount = 0;
 
-                foreach ($request->items as $item) {
+                foreach ($validated['items'] as $item) {
                     $itemCalculations = $this->calculateItemAmounts($item);
 
                     $invoice->invoiceItems()->create([
@@ -633,7 +626,6 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'annulation',
-                'error' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

@@ -22,7 +22,7 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::with(['company', 'invoices']);
+        $query = Customer::with(['company'])->withCount('invoices');
 
         // Recherche par nom, téléphone ou NIF
         if ($search = $request->input('search')) {

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\WarehouseResource;
 use App\Http\Resources\UserWarehouseResource;
+use App\Http\Resources\WarehouseResource;
 use App\Models\Product;
 use App\Models\UserWarehouse;
 use App\Models\Warehouse;
@@ -14,56 +14,60 @@ use Illuminate\Http\Response;
 
 class WarehouseController extends Controller
 {
-    public function mesStock(){
+    public function mesStock()
+    {
         $stoks = UserWarehouse::with(['warehouse'])->where('user_id', auth()->user()->id)->get();
 
         return response()->json([
             'success' => true,
-            'data' => UserWarehouseResource::collection($stoks)
+            'data' => UserWarehouseResource::collection($stoks),
         ], Response::HTTP_OK);
     }
-    public function product_in_stock($stock_id){
 
-        $search = request("search") ?? "";
+    public function product_in_stock($stock_id)
+    {
+
+        $search = request('search') ?? '';
         // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
-        $products = Product::whereHas('warehouseProducts', function($query) use ($stock_id) {
+        $products = Product::whereHas('warehouseProducts', function ($query) use ($stock_id) {
             $query->where('warehouse_id', $stock_id);
         })
-        ->when(!empty($search), function($query) use ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('item_designation', 'like', "%{$search}%")
-                ->orWhere('item_code', 'like', "%{$search}%")
-                ->orWhere('barcode', 'like', "%{$search}%");
-            });
-        })
-        ->get();
+            ->when(! empty($search), function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('item_designation', 'like', "%{$search}%")
+                        ->orWhere('item_code', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%");
+                });
+            })
+            ->get();
 
         return response()->json([
             'success' => true,
             'data' => $products,
-            'count' => $products->count()
+            'count' => $products->count(),
         ]);
     }
 
-    public function product_not_stock($stock_id){
-        $search = request("search") ?? "";
+    public function product_not_stock($stock_id)
+    {
+        $search = request('search') ?? '';
         // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
-        $products = Product::whereDoesntHave('warehouseProducts', function($query) use ($stock_id) {
+        $products = Product::whereDoesntHave('warehouseProducts', function ($query) use ($stock_id) {
             $query->where('warehouse_id', $stock_id);
         })
-        ->when(!empty($search), function($query) use ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('item_designation', 'like', "%{$search}%")
-                ->orWhere('item_code', 'like', "%{$search}%")
-                ->orWhere('barcode', 'like', "%{$search}%");
-            });
-        })
-        ->get();
+            ->when(! empty($search), function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('item_designation', 'like', "%{$search}%")
+                        ->orWhere('item_code', 'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%");
+                });
+            })
+            ->get();
 
         return response()->json([
             'success' => true,
             'data' => $products,
-            'count' => count($products)
+            'count' => count($products),
         ], Response::HTTP_OK);
     }
 
@@ -80,7 +84,7 @@ class WarehouseController extends Controller
         if ($existingEntry) {
             return response()->json([
                 'success' => false,
-                'message' => 'Le produit est déjà dans l\'entrepôt.'
+                'message' => 'Le produit est déjà dans l\'entrepôt.',
             ], Response::HTTP_CONFLICT);
         }
 
@@ -90,14 +94,14 @@ class WarehouseController extends Controller
             'product_id' => $product->id,
             'quantity' => 0,
             'unit_price' => 0,
-            'currency' => 'USD', // Vous pouvez ajuster la devise selon vos besoins
-            'user_id' => auth()->user()?->id ?? 1,
+            'currency' => 'BIF',
+            'user_id' => auth()->id(),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Produit ajouté à l\'entrepôt avec succès.',
-            'data' => $warehouseProduct
+            'data' => $warehouseProduct,
         ], Response::HTTP_CREATED);
     }
 
@@ -111,10 +115,10 @@ class WarehouseController extends Controller
             ->where('product_id', $product->id)
             ->first();
 
-        if (!$warehouseProduct) {
+        if (! $warehouseProduct) {
             return response()->json([
                 'success' => false,
-                'message' => 'Le produit n\'existe pas dans cet entrepôt.'
+                'message' => 'Le produit n\'existe pas dans cet entrepôt.',
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -122,7 +126,7 @@ class WarehouseController extends Controller
         if ($warehouseProduct->quantity > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Impossible de supprimer un produit avec un stock non nul. Stock actuel: ' . $warehouseProduct->quantity
+                'message' => 'Impossible de supprimer un produit avec un stock non nul. Stock actuel: '.$warehouseProduct->quantity,
             ], Response::HTTP_CONFLICT);
         }
 
@@ -131,18 +135,19 @@ class WarehouseController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Produit retiré de l\'entrepôt avec succès.'
+            'message' => 'Produit retiré de l\'entrepôt avec succès.',
         ], Response::HTTP_OK);
     }
 
-    public function index(){
+    public function index()
+    {
         $stocks = Warehouse::with(['company'])
             ->where('company_id', auth()->user()->company_id)
             ->get();
 
         return response()->json([
             'success' => true,
-            'data' =>  WarehouseResource::collection($stocks)
+            'data' => WarehouseResource::collection($stocks),
         ], Response::HTTP_OK);
     }
 
@@ -151,9 +156,10 @@ class WarehouseController extends Controller
         $warehouse = Warehouse::with(['company'])
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
+
         return response()->json([
             'success' => true,
-            'data' => $warehouse->load(['company'])
+            'data' => $warehouse->load(['company']),
         ], Response::HTTP_OK);
     }
 
@@ -165,7 +171,7 @@ class WarehouseController extends Controller
             'is_production' => 'sometimes|boolean',
         ]);
 
-        $validated['user_id'] = auth()->id() ?? 1;
+        $validated['user_id'] = auth()->id();
         // company_id is set by HasCompanyId trait
 
         $warehouse = Warehouse::create($validated);
@@ -173,7 +179,7 @@ class WarehouseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Entrepôt créé',
-            'data' => $warehouse->load('company')
+            'data' => $warehouse->load('company'),
         ], Response::HTTP_CREATED);
     }
 
@@ -192,7 +198,7 @@ class WarehouseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Entrepôt mis à jour',
-            'data' => $warehouse
+            'data' => $warehouse,
         ], Response::HTTP_OK);
     }
 
@@ -201,11 +207,22 @@ class WarehouseController extends Controller
         $warehouse = Warehouse::where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
 
+        $hasStock = WarehouseProduct::where('warehouse_id', $warehouse->id)
+            ->where('quantity', '>', 0)
+            ->exists();
+
+        if ($hasStock) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de supprimer un entrepôt contenant des produits avec du stock.',
+            ], Response::HTTP_CONFLICT);
+        }
+
         $warehouse->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Entrepôt supprimé'
+            'message' => 'Entrepôt supprimé',
         ], Response::HTTP_OK);
     }
 
@@ -217,7 +234,7 @@ class WarehouseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $warehouse->warehouseProducts
+            'data' => $warehouse->warehouseProducts,
         ], Response::HTTP_OK);
     }
 
@@ -234,7 +251,7 @@ class WarehouseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $notAssignedProducts
+            'data' => $notAssignedProducts,
         ], Response::HTTP_OK);
     }
 }

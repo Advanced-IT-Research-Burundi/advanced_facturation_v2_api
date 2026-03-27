@@ -7,6 +7,7 @@ use App\Models\CashMovement;
 use App\Models\CashRegister;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CashRegisterController extends Controller
 {
@@ -102,38 +103,40 @@ class CashRegisterController extends Controller
 
         $user = $request->user();
 
-        // Check if there's already an open register for this section
-        $existingOpen = CashRegister::where('company_id', $user->company_id)
-            ->where('status', 'open')
-            ->where('hotel_section', $request->hotel_section)
-            ->when(is_null($request->hotel_section), fn ($q) => $q->whereNull('hotel_section'))
-            ->first();
+        return DB::transaction(function () use ($request, $user) {
+            $existingOpen = CashRegister::where('company_id', $user->company_id)
+                ->where('status', 'open')
+                ->where('hotel_section', $request->hotel_section)
+                ->when(is_null($request->hotel_section), fn ($q) => $q->whereNull('hotel_section'))
+                ->lockForUpdate()
+                ->first();
 
-        if ($existingOpen) {
-            $sectionLabel = $request->hotel_section ? ' ('.$request->hotel_section.')' : '';
+            if ($existingOpen) {
+                $sectionLabel = $request->hotel_section ? ' ('.$request->hotel_section.')' : '';
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Une caisse'.$sectionLabel.' est déjà ouverte. Veuillez la fermer avant d\'en ouvrir une nouvelle.',
+                ], 422);
+            }
+
+            $register = CashRegister::create([
+                'company_id' => $user->company_id,
+                'warehouse_id' => $request->warehouse_id,
+                'hotel_section' => $request->hotel_section,
+                'opened_by' => $user->id,
+                'opening_balance' => $request->opening_balance,
+                'opened_at' => now(),
+                'status' => 'open',
+                'opening_note' => $request->opening_note,
+            ]);
 
             return response()->json([
-                'success' => false,
-                'message' => 'Une caisse'.$sectionLabel.' est déjà ouverte. Veuillez la fermer avant d\'en ouvrir une nouvelle.',
-            ], 422);
-        }
-
-        $register = CashRegister::create([
-            'company_id' => $user->company_id,
-            'warehouse_id' => $request->warehouse_id,
-            'hotel_section' => $request->hotel_section,
-            'opened_by' => $user->id,
-            'opening_balance' => $request->opening_balance,
-            'opened_at' => now(),
-            'status' => 'open',
-            'opening_note' => $request->opening_note,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Caisse ouverte avec succès',
-            'data' => $register->load('openedBy'),
-        ], 201);
+                'success' => true,
+                'message' => 'Caisse ouverte avec succès',
+                'data' => $register->load('openedBy'),
+            ], 201);
+        });
     }
 
     public function close(Request $request, $id)
@@ -177,7 +180,7 @@ class CashRegisterController extends Controller
                     'expected_balance' => $expectedBalance,
                     'closing_balance' => $request->closing_balance,
                     'difference' => $difference,
-                    'difference_status' => $difference == 0 ? 'balanced' : ($difference > 0 ? 'surplus' : 'deficit'),
+                    'difference_status' => abs($difference) < 0.01 ? 'balanced' : ($difference > 0 ? 'surplus' : 'deficit'),
                 ],
             ],
         ]);

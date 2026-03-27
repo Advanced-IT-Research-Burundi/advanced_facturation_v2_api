@@ -59,19 +59,22 @@ class PaymentController extends Controller
         ]);
 
         $user = $request->user();
-        $invoice = Invoice::where('company_id', $user->company_id)->findOrFail($request->invoice_id);
-
-        // Check remaining amount
-        $remainingAmount = $invoice->invoice_total_amount - $invoice->total_paid;
-        if ($request->amount > $remainingAmount) {
-            return response()->json([
-                'success' => false,
-                'message' => "Le montant du paiement ({$request->amount}) dépasse le montant restant ({$remainingAmount})",
-            ], 422);
-        }
 
         DB::beginTransaction();
         try {
+            $invoice = Invoice::where('company_id', $user->company_id)
+                ->lockForUpdate()
+                ->findOrFail($request->invoice_id);
+
+            $remainingAmount = $invoice->invoice_total_amount - $invoice->total_paid;
+            if ($request->amount > $remainingAmount) {
+                DB::rollBack();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Le montant du paiement ({$request->amount}) dépasse le montant restant ({$remainingAmount})",
+                ], 422);
+            }
             $payment = Payment::create([
                 'invoice_id' => $invoice->id,
                 'amount' => $request->amount,
@@ -128,7 +131,6 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'enregistrement du paiement',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -153,10 +155,14 @@ class PaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            // Remove associated cash movement
-            CashMovement::where('payment_id', $payment->id)->delete();
+            $invoice = $payment->invoice;
 
+            CashMovement::where('payment_id', $payment->id)->delete();
             $payment->delete();
+
+            if ($invoice) {
+                $invoice->updatePaymentStatus();
+            }
 
             DB::commit();
 
@@ -171,7 +177,6 @@ class PaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la suppression',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
