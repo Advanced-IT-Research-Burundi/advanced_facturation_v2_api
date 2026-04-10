@@ -22,6 +22,7 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
         $query = Customer::with(['company'])->withCount('invoices');
 
         // Recherche par nom, téléphone ou NIF
@@ -39,7 +40,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate($request->input('per_page', 15)),
+            'data' => $query->paginate($perPage),
         ], Response::HTTP_OK);
     }
 

@@ -15,19 +15,20 @@ class FourinsseurController extends Controller
      */
     public function index(Request $request)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
         $query = Fourinsseur::with(['company', 'user']);
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where('name', 'like', "%{$search}%")
-                  ->orWhere('phone_number', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('nif', 'like', "%{$search}%");
+                ->orWhere('phone_number', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('nif', 'like', "%{$search}%");
         }
 
         return response()->json([
             'success' => true,
-            'data' => FourinsseurResource::collection($query->paginate(15))
+            'data' => FourinsseurResource::collection($query->paginate($perPage)),
         ], Response::HTTP_OK);
     }
 
@@ -52,7 +53,7 @@ class FourinsseurController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Fournisseur créé avec succès',
-            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user']))
+            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user'])),
         ], Response::HTTP_CREATED);
     }
 
@@ -63,7 +64,7 @@ class FourinsseurController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user']))
+            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user'])),
         ], Response::HTTP_OK);
     }
 
@@ -86,7 +87,7 @@ class FourinsseurController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Fournisseur mis à jour avec succès',
-            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user']))
+            'data' => new FourinsseurResource($fourinsseur->load(['company', 'user'])),
         ], Response::HTTP_OK);
     }
 
@@ -99,7 +100,7 @@ class FourinsseurController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Fournisseur supprimé avec succès'
+            'message' => 'Fournisseur supprimé avec succès',
         ], Response::HTTP_OK);
     }
 }

@@ -13,6 +13,7 @@ class CashRegisterController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 15), 100));
         $user = $request->user();
         $companyId = $user->company_id;
 
@@ -39,7 +40,7 @@ class CashRegisterController extends Controller
             ]);
         }
 
-        $registers = $query->orderBy('opened_at', 'desc')->paginate($request->get('per_page', 15));
+        $registers = $query->orderBy('opened_at', 'desc')->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -249,11 +250,12 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $register = CashRegister::where('company_id', $user->company_id)->findOrFail($id);
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
 
         $movements = CashMovement::with(['createdBy', 'invoice', 'payment'])
             ->where('cash_register_id', $id)
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -275,11 +277,15 @@ class CashRegisterController extends Controller
         $totalClosing = $registers->where('status', 'closed')->sum('closing_balance');
         $totalDifference = $registers->where('status', 'closed')->sum('difference');
 
-        $movements = CashMovement::whereIn('cash_register_id', $registers->pluck('id'))
-            ->get();
+        $movementSummary = CashMovement::whereIn('cash_register_id', $registers->pluck('id'))
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+            ")
+            ->first();
 
-        $totalIncome = $movements->where('type', 'income')->sum('amount');
-        $totalExpense = $movements->where('type', 'expense')->sum('amount');
+        $totalIncome = $movementSummary->total_income ?? 0;
+        $totalExpense = $movementSummary->total_expense ?? 0;
 
         return response()->json([
             'success' => true,
@@ -307,8 +313,6 @@ class CashRegisterController extends Controller
         $companyId = $user->company_id;
 
         $hotelSections = ['restaurant', 'bar', 'rooms', 'conference', 'reception'];
-        $isLoss = fn ($m) => str_contains(strtolower($m->description ?? ''), 'perte');
-
         $registers = CashRegister::where('company_id', $companyId)
             ->whereIn('hotel_section', $hotelSections)
             ->get();
@@ -325,23 +329,41 @@ class CashRegisterController extends Controller
             $movementsQuery->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay());
         }
 
-        $movements = $movementsQuery->get();
+        $summaryRow = (clone $movementsQuery)
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN type = 'expense' AND LOWER(COALESCE(description, '')) LIKE '%perte%' THEN amount ELSE 0 END), 0) as total_losses,
+                COALESCE(SUM(CASE WHEN type = 'expense' AND LOWER(COALESCE(description, '')) NOT LIKE '%perte%' THEN amount ELSE 0 END), 0) as total_expense
+            ")
+            ->first();
 
-        $allExpenses = $movements->where('type', 'expense');
-        $totalIncome = $movements->where('type', 'income')->sum('amount');
-        $totalLosses = $allExpenses->filter($isLoss)->sum('amount');
-        $totalExpenseOnly = $allExpenses->reject($isLoss)->sum('amount');
+        $totalIncome = (float) ($summaryRow->total_income ?? 0);
+        $totalLosses = (float) ($summaryRow->total_losses ?? 0);
+        $totalExpenseOnly = (float) ($summaryRow->total_expense ?? 0);
         $totalProfit = $totalIncome - $totalExpenseOnly - $totalLosses;
 
         $sectionSummaries = [];
         foreach ($hotelSections as $section) {
             $sectionRegisterIds = $registers->where('hotel_section', $section)->pluck('id');
-            $sectionMovements = $movements->whereIn('cash_register_id', $sectionRegisterIds);
+            $sectionSummaryRow = CashMovement::whereIn('cash_register_id', $sectionRegisterIds)
+                ->when(
+                    $request->filled('start_date'),
+                    fn ($q) => $q->where('created_at', '>=', Carbon::parse($request->start_date)->startOfDay())
+                )
+                ->when(
+                    $request->filled('end_date'),
+                    fn ($q) => $q->where('created_at', '<=', Carbon::parse($request->end_date)->endOfDay())
+                )
+                ->selectRaw("
+                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                    COALESCE(SUM(CASE WHEN type = 'expense' AND LOWER(COALESCE(description, '')) LIKE '%perte%' THEN amount ELSE 0 END), 0) as total_losses,
+                    COALESCE(SUM(CASE WHEN type = 'expense' AND LOWER(COALESCE(description, '')) NOT LIKE '%perte%' THEN amount ELSE 0 END), 0) as total_expense
+                ")
+                ->first();
 
-            $sectionIncome = $sectionMovements->where('type', 'income')->sum('amount');
-            $sectionExpenses = $sectionMovements->where('type', 'expense');
-            $sectionLosses = $sectionExpenses->filter($isLoss)->sum('amount');
-            $sectionExpenseOnly = $sectionExpenses->reject($isLoss)->sum('amount');
+            $sectionIncome = (float) ($sectionSummaryRow->total_income ?? 0);
+            $sectionLosses = (float) ($sectionSummaryRow->total_losses ?? 0);
+            $sectionExpenseOnly = (float) ($sectionSummaryRow->total_expense ?? 0);
 
             $sectionSummaries[] = [
                 'section' => $section,
@@ -353,7 +375,7 @@ class CashRegisterController extends Controller
             ];
         }
 
-        $perPage = (int) $request->get('per_page', 20);
+        $perPage = max(1, min((int) $request->get('per_page', 20), 100));
         $page = (int) $request->get('page', 1);
 
         $paginatedQuery = CashMovement::with('createdBy')

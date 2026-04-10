@@ -26,7 +26,7 @@ class WarehouseController extends Controller
 
     public function product_in_stock($stock_id)
     {
-
+        $perPage = max(1, min((int) request('per_page', 20), 100));
         $search = request('search') ?? '';
         // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
         $products = Product::whereHas('warehouseProducts', function ($query) use ($stock_id) {
@@ -39,17 +39,18 @@ class WarehouseController extends Controller
                         ->orWhere('barcode', 'like', "%{$search}%");
                 });
             })
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'success' => true,
             'data' => $products,
-            'count' => $products->count(),
+            'count' => $products->total(),
         ]);
     }
 
     public function product_not_stock($stock_id)
     {
+        $perPage = max(1, min((int) request('per_page', 20), 100));
         $search = request('search') ?? '';
         // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
         $products = Product::whereDoesntHave('warehouseProducts', function ($query) use ($stock_id) {
@@ -62,12 +63,12 @@ class WarehouseController extends Controller
                         ->orWhere('barcode', 'like', "%{$search}%");
                 });
             })
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'success' => true,
             'data' => $products,
-            'count' => count($products),
+            'count' => $products->total(),
         ], Response::HTTP_OK);
     }
 
@@ -228,18 +229,20 @@ class WarehouseController extends Controller
 
     public function warehouseProducts($id)
     {
+        $perPage = max(1, min((int) request('per_page', 20), 100));
         $warehouse = Warehouse::with('warehouseProducts')
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
 
         return response()->json([
             'success' => true,
-            'data' => $warehouse->warehouseProducts,
+            'data' => $warehouse->warehouseProducts()->paginate($perPage),
         ], Response::HTTP_OK);
     }
 
     public function warehouseNotProducts($id)
     {
+        $perPage = max(1, min((int) request('per_page', 20), 100));
         $warehouse = Warehouse::where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
 
@@ -247,7 +250,7 @@ class WarehouseController extends Controller
 
         $notAssignedProducts = Product::where('company_id', auth()->user()->company_id)
             ->whereNotIn('id', $assignedProductIds)
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'success' => true,

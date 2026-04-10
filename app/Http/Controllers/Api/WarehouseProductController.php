@@ -16,6 +16,7 @@ class WarehouseProductController extends Controller
     public function index(Request $request)
     {
         try {
+            $perPage = max(1, min((int) $request->input('per_page', 15), 100));
             // Initialisation avec les relations
             $query = WarehouseProduct::with(['product', 'warehouse', 'user', 'lastStockMovement']);
 
@@ -47,7 +48,7 @@ class WarehouseProductController extends Controller
             }
 
             // Pagination
-            $results = $query->latest()->paginate($request->get('per_page', 15));
+            $results = $query->latest()->paginate($perPage);
 
             return response()->json([
                 'success' => true,

@@ -19,6 +19,7 @@ class ProductController extends Controller
      */
     public function posProducts(Request $request)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 50), 100));
         $stock_id = $request->stock_id ?? auth()->user()->warehouses?->first()?->id;
         $search = $request->search;
 
@@ -37,7 +38,7 @@ class ProductController extends Controller
             });
         }
 
-        $warehouseProducts = $query->paginate(50);
+        $warehouseProducts = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -47,6 +48,7 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
         $query = Product::with(['company', 'productUnit', 'categoryProduct', 'user']);
 
         if ($request->filled('search')) {
@@ -60,7 +62,7 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->latest()->paginate(15), // ProductResource::collection()
+            'data' => $query->latest()->paginate($perPage), // ProductResource::collection()
         ], Response::HTTP_OK);
     }
 

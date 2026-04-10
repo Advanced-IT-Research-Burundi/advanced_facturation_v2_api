@@ -22,6 +22,9 @@ class StockMovementController extends Controller
      */
     public function dashboard($warehouseId)
     {
+        $stocksLimit = max(1, min((int) request('stocks_limit', 200), 500));
+        $productsLimit = max(1, min((int) request('products_limit', 200), 500));
+        $transfersLimit = max(1, min((int) request('transfers_limit', 100), 300));
         $warehouse = Warehouse::select('id', 'name', 'location')->findOrFail($warehouseId);
 
         // Stock actuel avec infos minimales
@@ -32,11 +35,13 @@ class StockMovementController extends Controller
             ->where('warehouse_id', $warehouseId)
             ->where('quantity', '>=', 0)
             ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'currency', 'last_stock_movement_id')
+            ->limit($stocksLimit)
             ->get();
 
         // Produits disponibles pour ajout
         $availableProducts = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit')
             ->orderBy('item_designation')
+            ->limit($productsLimit)
             ->get();
 
         // Transferts en attente pour ce destinataire
@@ -49,6 +54,7 @@ class StockMovementController extends Controller
             ->where('status', 'PENDING')
             ->select('id', 'transfer_code', 'source_warehouse_id', 'destination_warehouse_id', 'status', 'notes', 'created_by', 'created_at')
             ->orderBy('created_at', 'desc')
+            ->limit($transfersLimit)
             ->get();
 
         return response()->json([
@@ -68,6 +74,7 @@ class StockMovementController extends Controller
      */
     public function movements(Request $request, $warehouseId)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 50), 100));
         $query = StockMovement::with('product:id,item_designation,item_code')
             ->where('warehouse_id', $warehouseId)
             ->select('id', 'item_code', 'item_designation', 'item_quantity', 'item_measurement_unit',
@@ -88,7 +95,7 @@ class StockMovementController extends Controller
             $query->where('item_movement_date', '<=', $request->date_to);
         }
 
-        $movements = $query->paginate(50);
+        $movements = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,

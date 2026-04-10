@@ -29,7 +29,10 @@ class InvoiceController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Invoice::with(['company', 'customer', 'invoiceItems'])
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
+
+        $query = Invoice::with(['company', 'customer'])
+            ->withCount('invoiceItems')
             ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
 
@@ -69,7 +72,7 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate($request->input('per_page', 15)),
+            'data' => $query->paginate($perPage),
         ], Response::HTTP_OK);
     }
 

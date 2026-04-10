@@ -55,7 +55,7 @@ class RestaurantInvoiceController extends Controller
         // Verify user has access to warehouse
         $user = auth()->user();
         $hasAccess = $user->warehouses()->where('warehouses.id', $validated['warehouse_id'])->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous n\'avez pas accès à ce dépôt',
@@ -85,7 +85,7 @@ class RestaurantInvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        if (!$invoice->is_restaurant) {
+        if (! $invoice->is_restaurant) {
             return response()->json([
                 'success' => false,
                 'message' => 'Facture non trouvée',
@@ -233,10 +233,12 @@ class RestaurantInvoiceController extends Controller
     public function warehouseProducts(int $warehouseId)
     {
         $user = auth()->user();
+        $perPage = max(1, min((int) request('per_page', 50), 100));
+        $search = request('search');
 
         // Verify user has access to this warehouse
         $hasAccess = $user->warehouses()->where('warehouses.id', $warehouseId)->exists();
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous n\'avez pas accès à ce dépôt',
@@ -246,8 +248,14 @@ class RestaurantInvoiceController extends Controller
         $products = WarehouseProduct::where('warehouse_id', $warehouseId)
             ->where('quantity', '>', 0)
             ->with(['product'])
-            ->get()
-            ->map(function ($wp) {
+            ->when($search, function ($query) use ($search) {
+                $query->whereHas('product', function ($productQuery) use ($search) {
+                    $productQuery->where('item_designation', 'like', "%{$search}%")
+                        ->orWhere('item_code', 'like', "%{$search}%");
+                });
+            })
+            ->paginate($perPage)
+            ->through(function ($wp) {
                 return [
                     'id' => $wp->product->id,
                     'warehouse_product_id' => $wp->id,

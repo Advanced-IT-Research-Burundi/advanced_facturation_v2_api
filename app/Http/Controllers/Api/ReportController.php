@@ -109,6 +109,7 @@ class ReportController extends Controller
      */
     public function invoicesHistory(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
         $user = $request->user();
         $companyId = $user->company_id;
 
@@ -138,31 +139,33 @@ class ReportController extends Controller
         $totalTVA = (clone $query)->sum('invoice_vat_amount');
         $totalHTVA = (clone $query)->sum('invoice_amount_nvat');
 
-        // Liste des factures avec items
-        $invoices = $query->orderBy('created_at', 'desc')->get()->map(function ($invoice) {
-            return [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'date' => $invoice->created_at->format('d/m/Y H:i'),
-                'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
-                'amount_htva' => $invoice->invoice_amount_nvat,
-                'tva' => $invoice->invoice_vat_amount,
-                'amount_tvac' => $invoice->invoice_total_amount,
-                'invoice_type' => $invoice->invoice_type,
-                'invoice_type_label' => $this->getInvoiceTypeLabel($invoice->invoice_type),
-                'payment_mode' => $invoice->payment_type ?? 'cash',
-                'status' => $invoice->obr_submission_status ?? 'pending',
-                'user_name' => $invoice->user?->name ?? 'Inconnu',
-                'items' => $invoice->invoiceItems->map(function ($item) {
-                    return [
-                        'product_name' => $item->product?->name ?? $item->item_designation ?? 'Produit',
-                        'quantity' => $item->item_quantity,
-                        'unit_price' => $item->item_price,
-                        'total' => $item->item_total_amount,
-                    ];
-                }),
-            ];
-        });
+        // Liste paginée des factures avec items
+        $invoices = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->through(function ($invoice) {
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'date' => $invoice->created_at->format('d/m/Y H:i'),
+                    'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
+                    'amount_htva' => $invoice->invoice_amount_nvat,
+                    'tva' => $invoice->invoice_vat_amount,
+                    'amount_tvac' => $invoice->invoice_total_amount,
+                    'invoice_type' => $invoice->invoice_type,
+                    'invoice_type_label' => $this->getInvoiceTypeLabel($invoice->invoice_type),
+                    'payment_mode' => $invoice->payment_type ?? 'cash',
+                    'status' => $invoice->obr_submission_status ?? 'pending',
+                    'user_name' => $invoice->user?->name ?? 'Inconnu',
+                    'items' => $invoice->invoiceItems->map(function ($item) {
+                        return [
+                            'product_name' => $item->product?->name ?? $item->item_designation ?? 'Produit',
+                            'quantity' => $item->item_quantity,
+                            'unit_price' => $item->item_price,
+                            'total' => $item->item_total_amount,
+                        ];
+                    }),
+                ];
+            });
 
         return response()->json([
             'success' => true,
@@ -185,6 +188,7 @@ class ReportController extends Controller
      */
     public function stockSheet(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
         $user = $request->user();
         $companyId = $user->company_id;
         $warehouseId = $request->get('warehouse_id');
@@ -199,7 +203,11 @@ class ReportController extends Controller
             $query->where('warehouse_id', $warehouseId);
         }
 
-        $stockItems = $query->get()->map(function ($item) {
+        $totalItems = (clone $query)->count();
+        $totalQuantity = (float) (clone $query)->sum('quantity');
+        $totalValue = (float) (clone $query)->sum(DB::raw('quantity * unit_price'));
+
+        $stockItems = $query->paginate($perPage)->through(function ($item) {
             return [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
@@ -212,10 +220,6 @@ class ReportController extends Controller
                 'currency' => $item->currency ?? 'FBU',
             ];
         });
-
-        $totalItems = $stockItems->count();
-        $totalQuantity = $stockItems->sum('quantity');
-        $totalValue = $stockItems->sum('total_value');
 
         return response()->json([
             'success' => true,
@@ -235,6 +239,7 @@ class ReportController extends Controller
      */
     public function stockMovements(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
         $user = $request->user();
         $companyId = $user->company_id;
 
@@ -274,24 +279,26 @@ class ReportController extends Controller
         $totalExits = $exitsQuery->count();
         $totalExitsValue = $exitsQuery->sum(DB::raw('item_quantity * item_purchase_or_sale_price'));
 
-        $movements = $query->orderBy('created_at', 'desc')->get()->map(function ($movement) {
-            return [
-                'id' => $movement->id,
-                'date' => $movement->created_at->format('d/m/Y H:i'),
-                'product_name' => $movement->product?->name ?? $movement->item_designation ?? 'Produit',
-                'product_code' => $movement->item_code,
-                'warehouse_name' => $movement->warehouse?->name ?? 'Stock inconnu',
-                'quantity' => $movement->item_quantity,
-                'unit_price' => $movement->item_purchase_or_sale_price,
-                'total' => $movement->item_quantity * $movement->item_purchase_or_sale_price,
-                'movement_type' => $movement->item_movement_type,
-                'movement_type_label' => $this->getMovementTypeLabel($movement->item_movement_type),
-                'is_entry' => in_array($movement->item_movement_type, ['EN', 'EI', 'ER', 'ET']),
-                'description' => $movement->item_movement_description,
-                'invoice_ref' => $movement->item_movement_invoice_ref,
-                'user_name' => $movement->user?->name ?? 'Inconnu',
-            ];
-        });
+        $movements = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->through(function ($movement) {
+                return [
+                    'id' => $movement->id,
+                    'date' => $movement->created_at->format('d/m/Y H:i'),
+                    'product_name' => $movement->product?->name ?? $movement->item_designation ?? 'Produit',
+                    'product_code' => $movement->item_code,
+                    'warehouse_name' => $movement->warehouse?->name ?? 'Stock inconnu',
+                    'quantity' => $movement->item_quantity,
+                    'unit_price' => $movement->item_purchase_or_sale_price,
+                    'total' => $movement->item_quantity * $movement->item_purchase_or_sale_price,
+                    'movement_type' => $movement->item_movement_type,
+                    'movement_type_label' => $this->getMovementTypeLabel($movement->item_movement_type),
+                    'is_entry' => in_array($movement->item_movement_type, ['EN', 'EI', 'ER', 'ET']),
+                    'description' => $movement->item_movement_description,
+                    'invoice_ref' => $movement->item_movement_invoice_ref,
+                    'user_name' => $movement->user?->name ?? 'Inconnu',
+                ];
+            });
 
         return response()->json([
             'success' => true,
@@ -325,6 +332,7 @@ class ReportController extends Controller
      */
     public function creditInvoices(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
         $user = $request->user();
         $companyId = $user->company_id;
 
@@ -343,19 +351,21 @@ class ReportController extends Controller
         $totalInvoices = (clone $query)->count();
         $totalAmount = (clone $query)->sum('invoice_total_amount');
 
-        $invoices = $query->orderBy('created_at', 'desc')->get()->map(function ($invoice) {
-            return [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'date' => $invoice->created_at->format('d/m/Y H:i'),
-                'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
-                'amount_htva' => $invoice->invoice_amount_nvat,
-                'tva' => $invoice->invoice_vat_amount,
-                'amount_tvac' => $invoice->invoice_total_amount,
-                'status' => $invoice->obr_submission_status ?? 'pending',
-                'user_name' => $invoice->user?->name ?? 'Inconnu',
-            ];
-        });
+        $invoices = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->through(function ($invoice) {
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'date' => $invoice->created_at->format('d/m/Y H:i'),
+                    'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
+                    'amount_htva' => $invoice->invoice_amount_nvat,
+                    'tva' => $invoice->invoice_vat_amount,
+                    'amount_tvac' => $invoice->invoice_total_amount,
+                    'status' => $invoice->obr_submission_status ?? 'pending',
+                    'user_name' => $invoice->user?->name ?? 'Inconnu',
+                ];
+            });
 
         return response()->json([
             'success' => true,
@@ -376,6 +386,7 @@ class ReportController extends Controller
      */
     public function proformas(Request $request)
     {
+        $perPage = max(1, min((int) $request->get('per_page', 50), 100));
         $user = $request->user();
         $companyId = $user->company_id;
 
@@ -389,25 +400,28 @@ class ReportController extends Controller
                 Carbon::parse($endDate)->endOfDay(),
             ])
             ->where('invoice_type', 'FP') // Proforma
-            ->with(['customer', 'user', 'invoiceItems']);
+            ->with(['customer', 'user'])
+            ->withCount('invoiceItems');
 
         $totalProformas = (clone $query)->count();
         $totalAmount = (clone $query)->sum('invoice_total_amount');
 
-        $proformas = $query->orderBy('created_at', 'desc')->get()->map(function ($invoice) {
-            return [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'date' => $invoice->created_at->format('d/m/Y H:i'),
-                'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
-                'amount_htva' => $invoice->invoice_amount_nvat,
-                'tva' => $invoice->invoice_vat_amount,
-                'amount_tvac' => $invoice->invoice_total_amount,
-                'status' => $invoice->obr_submission_status ?? 'pending',
-                'user_name' => $invoice->user?->name ?? 'Inconnu',
-                'items_count' => $invoice->invoiceItems->count(),
-            ];
-        });
+        $proformas = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->through(function ($invoice) {
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'date' => $invoice->created_at->format('d/m/Y H:i'),
+                    'customer_name' => $invoice->customer?->customer_name ?? $invoice->customer_name ?? 'Client Anonyme',
+                    'amount_htva' => $invoice->invoice_amount_nvat,
+                    'tva' => $invoice->invoice_vat_amount,
+                    'amount_tvac' => $invoice->invoice_total_amount,
+                    'status' => $invoice->obr_submission_status ?? 'pending',
+                    'user_name' => $invoice->user?->name ?? 'Inconnu',
+                    'items_count' => $invoice->invoice_items_count ?? 0,
+                ];
+            });
 
         return response()->json([
             'success' => true,
@@ -675,7 +689,7 @@ class ReportController extends Controller
         }
 
         $format = $request->get('format', 'csv');
-        $invoices = $data['data']['invoices'];
+        $invoices = $this->extractRows($data['data']['invoices'] ?? []);
         $summary = $data['data']['summary'];
 
         $headers = ['#', 'Date', 'N° Facture', 'Client', 'Montant HTVA', 'TVA', 'Montant TVAC', 'Type', 'Utilisateur'];
@@ -719,7 +733,7 @@ class ReportController extends Controller
         }
 
         $format = $request->get('format', 'csv');
-        $items = $data['data']['items'];
+        $items = $this->extractRows($data['data']['items'] ?? []);
         $summary = $data['data']['summary'];
 
         $headers = ['#', 'Code', 'Produit', 'Stock', 'Quantité', 'Prix Unitaire', 'Valeur Totale'];
@@ -758,7 +772,7 @@ class ReportController extends Controller
         }
 
         $format = $request->get('format', 'csv');
-        $movements = $data['data']['movements'];
+        $movements = $this->extractRows($data['data']['movements'] ?? []);
         $summary = $data['data']['summary'];
 
         $headers = ['#', 'Date', 'Produit', 'Code', 'Stock', 'Type', 'Quantité', 'Prix Unitaire', 'Total', 'Utilisateur'];
@@ -811,7 +825,7 @@ class ReportController extends Controller
         }
 
         $format = $request->get('format', 'csv');
-        $invoices = $data['data']['invoices'];
+        $invoices = $this->extractRows($data['data']['invoices'] ?? []);
         $summary = $data['data']['summary'];
 
         $headers = ['#', 'Date', 'N° Facture', 'Client', 'HTVA', 'TVA', 'TVAC', 'Statut', 'Utilisateur'];
@@ -852,7 +866,7 @@ class ReportController extends Controller
         }
 
         $format = $request->get('format', 'csv');
-        $proformas = $data['data']['proformas'];
+        $proformas = $this->extractRows($data['data']['proformas'] ?? []);
         $summary = $data['data']['summary'];
 
         $headers = ['#', 'Date', 'N° Proforma', 'Client', 'Articles', 'HTVA', 'TVA', 'TVAC', 'Utilisateur'];
@@ -934,6 +948,15 @@ class ReportController extends Controller
         } else {
             return $this->generateExcel($headers, $rows, $fullFilename);
         }
+    }
+
+    /**
+     * @param  array<int, mixed>|array{data?: array<int, mixed>}  $payload
+     * @return array<int, mixed>
+     */
+    private function extractRows(array $payload): array
+    {
+        return $payload['data'] ?? $payload;
     }
 
     /**
