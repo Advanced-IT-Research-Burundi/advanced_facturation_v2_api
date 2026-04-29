@@ -26,6 +26,8 @@ class StockMovement extends Model
         'item_purchase_or_sale_price',
         'item_purchase_or_sale_currency',
         'item_movement_type',
+        'is_production',
+        'item_movement_invoice_ref',
         'item_movement_description',
         'item_movement_date',
         'obr_submission_status',

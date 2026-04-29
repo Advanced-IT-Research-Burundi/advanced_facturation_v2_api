@@ -151,11 +151,11 @@ class BakeryProductionController extends Controller
 
             // Verify quantity
             if ($rawStock->quantity < $request->finished_quantity) {
-                throw new \Exception('Quantité insuffisante. Stock disponible: ' . $rawStock->quantity);
+                throw new \Exception('Quantité insuffisante. Stock disponible: '.$rawStock->quantity);
             }
 
             $product = Product::findOrFail($request->product_id);
-            $movementCode = 'PROD-FIN-' . date('Ymd-His');
+            $movementCode = 'PROD-FIN-'.date('Ymd-His');
 
             // Create stock movement for the transfer
             $movement = StockMovement::create([
@@ -169,7 +169,7 @@ class BakeryProductionController extends Controller
                 'item_movement_type' => 'PF',  // Production Finished
                 'is_production' => true,
                 'item_movement_invoice_ref' => $movementCode,
-                'item_movement_description' => 'Transfert de matière première vers produit fini' . ($request->notes ? ' - ' . $request->notes : ''),
+                'item_movement_description' => 'Transfert de matière première vers produit fini'.($request->notes ? ' - '.$request->notes : ''),
                 'item_movement_date' => now(),
                 'obr_submission_status' => 'PENDING',
                 'company_id' => Auth::user()->company_id,
@@ -253,11 +253,11 @@ class BakeryProductionController extends Controller
 
             // Verify quantity
             if ($finishedStock->quantity < $request->raw_quantity) {
-                throw new \Exception('Quantité insuffisante. Stock disponible: ' . $finishedStock->quantity);
+                throw new \Exception('Quantité insuffisante. Stock disponible: '.$finishedStock->quantity);
             }
 
             $product = Product::findOrFail($request->product_id);
-            $movementCode = 'PROD-RAW-' . date('Ymd-His');
+            $movementCode = 'PROD-RAW-'.date('Ymd-His');
 
             // Create stock movement for the return
             $movement = StockMovement::create([
@@ -271,7 +271,7 @@ class BakeryProductionController extends Controller
                 'item_movement_type' => 'PR',  // Production Return to Raw
                 'is_production' => true,
                 'item_movement_invoice_ref' => $movementCode,
-                'item_movement_description' => 'Retour de produit fini vers matière première' . ($request->notes ? ' - ' . $request->notes : ''),
+                'item_movement_description' => 'Retour de produit fini vers matière première'.($request->notes ? ' - '.$request->notes : ''),
                 'item_movement_date' => now(),
                 'obr_submission_status' => 'PENDING',
                 'company_id' => Auth::user()->company_id,
@@ -354,8 +354,8 @@ class BakeryProductionController extends Controller
                     ->where('production_status', 'FINISHED')
                     ->first();
 
-                if (!$finishedStock || $finishedStock->quantity < $request->quantity) {
-                    throw new \Exception('Quantité insuffisante en produits finis. Stock disponible: ' . ($finishedStock?->quantity ?? 0));
+                if (! $finishedStock || $finishedStock->quantity < $request->quantity) {
+                    throw new \Exception('Quantité insuffisante en produits finis. Stock disponible: '.($finishedStock?->quantity ?? 0));
                 }
 
                 // Déduire de la quantité des produits finis
@@ -432,10 +432,11 @@ class BakeryProductionController extends Controller
 
             $stock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
                 ->where('product_id', $request->product_id)
+                ->where('production_status', 'RAW')
                 ->first();
 
             if (! $stock || $stock->quantity < $request->quantity) {
-                throw new \Exception('Stock insuffisant');
+                throw new \Exception('Stock insuffisant. Disponible: '.($stock->quantity ?? 0));
             }
 
             $product = Product::findOrFail($request->product_id);
@@ -462,7 +463,6 @@ class BakeryProductionController extends Controller
 
             $stock->quantity -= $request->quantity;
             $stock->last_stock_movement_id = $movement->id;
-            $stock->production_status = 'RAW';
             $stock->user_id = Auth::id();
             $stock->save();
 
@@ -623,7 +623,7 @@ class BakeryProductionController extends Controller
                 ->first();
 
             // Vérifier que le stock existe
-            if (!$stock) {
+            if (! $stock) {
                 $product = Product::findOrFail($request->product_id);
                 throw new \Exception("Produit '{$product->item_designation}' non trouvé en tant que produit fini ou n'existe pas.");
             }
@@ -631,7 +631,7 @@ class BakeryProductionController extends Controller
             // Convertir et vérifier la quantité
             $quantity = floatval($request->quantity);
             $stockQuantity = floatval($stock->quantity);
-            
+
             if ($stockQuantity <= 0) {
                 throw new \Exception("Le stock du produit '{$stock->product->item_designation}' est vide.");
             }
@@ -640,8 +640,8 @@ class BakeryProductionController extends Controller
             if ($quantity > $stockQuantity) {
                 throw new \Exception(
                     "Stock insuffisant pour '{$stock->product->item_designation}'. "
-                    . "Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
-                    . "Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
+                    ."Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
+                    ."Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
                 );
             }
 
@@ -767,14 +767,14 @@ class BakeryProductionController extends Controller
             $stocksToTransfer = [];
             foreach ($request->items as $item) {
                 $quantity = floatval($item['quantity']);
-                
+
                 $stock = WarehouseProduct::where('warehouse_id', $prodWarehouse->id)
                     ->where('product_id', $item['product_id'])
                     ->where('production_status', 'FINISHED')  // Vérifier le statut
                     ->lockForUpdate()
                     ->first();
 
-                if (!$stock) {
+                if (! $stock) {
                     $product = Product::findOrFail($item['product_id']);
                     throw new \Exception("Produit '{$product->item_designation}' non trouvé en tant que produit fini.");
                 }
@@ -787,8 +787,8 @@ class BakeryProductionController extends Controller
                 if ($quantity > $stockQuantity) {
                     throw new \Exception(
                         "Stock insuffisant pour '{$stock->product->item_designation}'. "
-                        . "Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
-                        . "Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
+                        ."Demandé: {$quantity} {$stock->product->item_measurement_unit}, "
+                        ."Disponible: {$stockQuantity} {$stock->product->item_measurement_unit}"
                     );
                 }
 
