@@ -36,6 +36,7 @@ class Warehouse extends Model
     {
         return [
             'id' => 'integer',
+            'is_production' => 'boolean',
             'company_id' => 'integer',
             'user_id' => 'integer',
         ];

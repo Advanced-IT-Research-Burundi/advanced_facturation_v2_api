@@ -18,8 +18,10 @@ class WarehouseResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'location' => $this->location,
-            'users_count' =>$this->users()->count(),
-            'company' => $this->whenLoaded('company')->name ?? "",
+            'is_production' => (bool) $this->is_production,
+            'company_id' => $this->company_id,
+            'users_count' => $this->users()->count(),
+            'company' => $this->whenLoaded('company')->name ?? '',
         ];
     }
 }

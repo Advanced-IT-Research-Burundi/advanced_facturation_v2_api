@@ -192,6 +192,7 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'location' => 'nullable|string|max:255',
+            'is_production' => 'sometimes|boolean',
         ]);
 
         $warehouse->update($validated);
