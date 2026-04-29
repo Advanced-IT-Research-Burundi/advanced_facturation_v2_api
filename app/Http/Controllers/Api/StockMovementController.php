@@ -145,17 +145,8 @@ class StockMovementController extends Controller
             $stock = WarehouseProduct::firstOrNew([
                 'warehouse_id' => $warehouseId,
                 'product_id' => $request->product_id,
+                'production_status' => 'RAW',
             ]);
-
-            // Vérifier la disponibilité si c'est un nouveau produit ou une augmentation
-            $quantityToAdd = $request->quantity;
-            if (! $stock->exists || $quantityToAdd > 0) {
-                if ($product->quantite < $quantityToAdd) {
-                    throw new \Exception("Quantité insuffisante dans le stock global. Disponible: {$product->quantite}, Demandée: {$quantityToAdd}");
-                }
-                // Diminuer la quantité du produit global
-                $product->decrement('quantite', $quantityToAdd);
-            }
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
             $stock->unit_price = $request->unit_price;
@@ -177,11 +168,11 @@ class StockMovementController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error($e->getMessage());
+            Log::error('quickEntry error: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -269,7 +260,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -320,16 +311,8 @@ class StockMovementController extends Controller
                 $stock = WarehouseProduct::firstOrNew([
                     'warehouse_id' => $warehouseId,
                     'product_id' => $item['product_id'],
+                    'production_status' => 'RAW',
                 ]);
-
-                // Vérifier la disponibilité et diminuer la quantité du produit global
-                $quantityToAdd = $item['quantity'];
-                if (! $stock->exists || $quantityToAdd > 0) {
-                    if ($product->quantite < $quantityToAdd) {
-                        throw new \Exception("Quantité insuffisante pour {$product->item_designation}. Disponible: {$product->quantite}, Demandée: {$quantityToAdd}");
-                    }
-                    $product->decrement('quantite', $quantityToAdd);
-                }
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
                 $stock->unit_price = $item['unit_price'];
@@ -355,7 +338,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -458,7 +441,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -555,7 +538,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -632,7 +615,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -710,7 +693,7 @@ class StockMovementController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'opération.',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
