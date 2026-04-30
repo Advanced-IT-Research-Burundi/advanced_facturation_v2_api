@@ -52,13 +52,6 @@ class BakeryProductionController extends Controller
             }])
                 ->where('warehouse_id', $prodWarehouse->id)
                 ->where('quantity', '>', 0)
-                ->whereHas('product.categoryProduct', function ($query) {
-                    $query->where(function ($q) {
-                        $q->where('name', 'LIKE', '%boulang%')
-                            ->orWhere('name', 'LIKE', '%bakery%')
-                            ->orWhere('name', 'LIKE', '%Bakery%');
-                    });
-                })
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
@@ -478,14 +471,18 @@ class BakeryProductionController extends Controller
 
     public function finishedProducts()
     {
+        $prodWarehouse = Warehouse::where('is_production', true)
+            ->where('company_id', Auth::user()->company_id)
+            ->first();
+
+        $productIds = $prodWarehouse
+            ? WarehouseProduct::where('warehouse_id', $prodWarehouse->id)->pluck('product_id')
+            : collect();
+
         $products = Product::select('id', 'item_code', 'item_designation', 'item_measurement_unit', 'product_category_id')
-            ->where('is_production', true)
-            ->whereHas('categoryProduct', function ($query) {
-                $query->where(function ($q) {
-                    $q->where('name', 'LIKE', '%boulang%')
-                        ->orWhere('name', 'LIKE', '%bakery%')
-                        ->orWhere('name', 'LIKE', '%Bakery%');
-                });
+            ->where('company_id', Auth::user()->company_id)
+            ->when($productIds->isNotEmpty(), function ($query) use ($productIds) {
+                $query->whereIn('id', $productIds);
             })
             ->orderBy('item_designation')
             ->get();
