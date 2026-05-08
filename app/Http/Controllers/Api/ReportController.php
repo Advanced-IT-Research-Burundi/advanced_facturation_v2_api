@@ -535,24 +535,9 @@ class ReportController extends Controller
             ->where('created_at', '<', $startDate)
             ->sum('montant');
 
-        $priorMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
-            ->where('type', 'income')
-            ->where('created_at', '<', $startDate)
-            ->whereNotNull('reference')
-            ->where('reference', '!=', '')
-            ->pluck('reference')
-            ->toArray();
-
-        $invoicesBeforePeriod = (float) Invoice::where('company_id', $companyId)
-            ->where('invoice_type', 'FN')
-            ->where('invoice_date', '<', $startDate)
-            ->whereNotIn('invoice_number', $priorMovementRefs)
-            ->sum('invoice_total_amount');
-
         $initialBalance = ($movementsBeforePeriod->total_income ?? 0)
             - ($movementsBeforePeriod->total_expense ?? 0)
-            - $depensesBeforePeriod
-            + $invoicesBeforePeriod;
+            - $depensesBeforePeriod;
 
         $isLoss = fn (string $desc): bool => str_contains(strtolower($desc), 'perte');
 
@@ -573,23 +558,28 @@ class ReportController extends Controller
             ->orderBy('date')
             ->get();
 
-        $existingMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
-            ->where('type', 'income')
-            ->whereNotNull('reference')
-            ->where('reference', '!=', '')
-            ->pluck('reference')
-            ->toArray();
+        $includePosInvoices = ! $hotelSection || $hotelSection === 'all' || $hotelSection === 'general';
+        $invoicesByDate = collect();
 
-        $salesInvoices = Invoice::where('company_id', $companyId)
-            ->where('invoice_type', 'FN')
-            ->whereBetween('invoice_date', [$startDate, $endDate])
-            ->whereNotIn('invoice_number', $existingMovementRefs)
-            ->select('invoice_date', 'invoice_total_amount', 'invoice_number')
-            ->get();
+        if ($includePosInvoices) {
+            $existingMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
+                ->where('type', 'income')
+                ->whereNotNull('reference')
+                ->where('reference', '!=', '')
+                ->pluck('reference')
+                ->toArray();
 
-        $invoicesByDate = $salesInvoices
-            ->groupBy(fn ($inv) => Carbon::parse($inv->invoice_date)->toDateString())
-            ->map(fn ($group) => (float) $group->sum('invoice_total_amount'));
+            $salesInvoices = Invoice::where('company_id', $companyId)
+                ->where('invoice_type', 'FN')
+                ->whereBetween('invoice_date', [$startDate, $endDate])
+                ->when(count($existingMovementRefs) > 0, fn ($q) => $q->whereNotIn('invoice_number', $existingMovementRefs))
+                ->select('invoice_date', 'invoice_total_amount', 'invoice_number')
+                ->get();
+
+            $invoicesByDate = $salesInvoices
+                ->groupBy(fn ($inv) => Carbon::parse($inv->invoice_date)->toDateString())
+                ->map(fn ($group) => (float) $group->sum('invoice_total_amount'));
+        }
 
         $grouped = $dailyMovements->groupBy('date');
         $groupedDepenses = $dailyDepenses->groupBy('date');
