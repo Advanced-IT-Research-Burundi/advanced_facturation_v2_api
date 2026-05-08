@@ -19,7 +19,7 @@ class HotelRestaurantOrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = HotelRestaurantOrder::with(['restaurantTable', 'items'])
+        $query = HotelRestaurantOrder::with(['restaurantTable', 'items.menuItem:id,category'])
             ->orderBy('created_at', 'desc');
 
         if ($status = $request->input('status')) {
@@ -41,6 +41,10 @@ class HotelRestaurantOrderController extends Controller
         $orders = $query->get()->map(function ($order) {
             $order->time = $order->created_at->format('H\hi');
             $order->location_label = $order->getLocationLabelAttribute();
+
+            $order->items->each(function ($item) {
+                $item->category = $item->menuItem?->category ?? ($item->item_type === 'dish' ? 'Cuisine' : null);
+            });
 
             return $order;
         });

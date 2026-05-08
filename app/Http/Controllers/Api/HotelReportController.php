@@ -205,6 +205,27 @@ class HotelReportController extends Controller
         $totalLosses = (float) $allExpenses->filter($isLoss)->sum('amount');
         $totalExpenseOnly = (float) $allExpenses->reject($isLoss)->sum('amount');
 
+        $registersBySection = $registers->groupBy('hotel_section');
+        $bySection = [];
+
+        foreach ($hotelSections as $section) {
+            $sectionRegisterIds = ($registersBySection[$section] ?? collect())->pluck('id');
+            $sectionMovements = $movements->whereIn('cash_register_id', $sectionRegisterIds);
+            $sectionExpenses = $sectionMovements->where('type', 'expense');
+            $sectionIncome = (float) $sectionMovements->where('type', 'income')->sum('amount');
+            $sectionLosses = (float) $sectionExpenses->filter($isLoss)->sum('amount');
+            $sectionExpenseOnly = (float) $sectionExpenses->reject($isLoss)->sum('amount');
+
+            if ($sectionIncome > 0 || $sectionExpenseOnly > 0 || $sectionLosses > 0) {
+                $bySection[$section] = [
+                    'income' => $sectionIncome,
+                    'expense' => $sectionExpenseOnly,
+                    'losses' => $sectionLosses,
+                    'profit' => $sectionIncome - $sectionExpenseOnly - $sectionLosses,
+                ];
+            }
+        }
+
         return [
             'total_income' => $totalIncome,
             'total_expense' => $totalExpenseOnly,
@@ -212,6 +233,7 @@ class HotelReportController extends Controller
             'total_profit' => $totalIncome - $totalExpenseOnly - $totalLosses,
             'registers_count' => $registers->count(),
             'open_registers' => $registers->whereNull('closed_at')->count(),
+            'by_section' => $bySection,
         ];
     }
 
