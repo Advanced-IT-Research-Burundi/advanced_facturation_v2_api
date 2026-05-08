@@ -535,9 +535,24 @@ class ReportController extends Controller
             ->where('created_at', '<', $startDate)
             ->sum('montant');
 
+        $priorMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
+            ->where('type', 'income')
+            ->where('created_at', '<', $startDate)
+            ->whereNotNull('reference')
+            ->where('reference', '!=', '')
+            ->pluck('reference')
+            ->toArray();
+
+        $invoicesBeforePeriod = (float) Invoice::where('company_id', $companyId)
+            ->where('invoice_type', 'FN')
+            ->where('invoice_date', '<', $startDate)
+            ->whereNotIn('invoice_number', $priorMovementRefs)
+            ->sum('invoice_total_amount');
+
         $initialBalance = ($movementsBeforePeriod->total_income ?? 0)
             - ($movementsBeforePeriod->total_expense ?? 0)
-            - $depensesBeforePeriod;
+            - $depensesBeforePeriod
+            + $invoicesBeforePeriod;
 
         $isLoss = fn (string $desc): bool => str_contains(strtolower($desc), 'perte');
 
@@ -558,6 +573,24 @@ class ReportController extends Controller
             ->orderBy('date')
             ->get();
 
+        $existingMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
+            ->where('type', 'income')
+            ->whereNotNull('reference')
+            ->where('reference', '!=', '')
+            ->pluck('reference')
+            ->toArray();
+
+        $salesInvoices = Invoice::where('company_id', $companyId)
+            ->where('invoice_type', 'FN')
+            ->whereBetween('invoice_date', [$startDate, $endDate])
+            ->whereNotIn('invoice_number', $existingMovementRefs)
+            ->select('invoice_date', 'invoice_total_amount', 'invoice_number')
+            ->get();
+
+        $invoicesByDate = $salesInvoices
+            ->groupBy(fn ($inv) => Carbon::parse($inv->invoice_date)->toDateString())
+            ->map(fn ($group) => (float) $group->sum('invoice_total_amount'));
+
         $grouped = $dailyMovements->groupBy('date');
         $groupedDepenses = $dailyDepenses->groupBy('date');
 
@@ -576,7 +609,9 @@ class ReportController extends Controller
             $dayMovements = $grouped->get($dateKey, collect());
             $dayDepenseRecords = $groupedDepenses->get($dateKey, collect());
 
-            $dayIncome = $dayMovements->where('type', 'income')->sum('amount');
+            $dayMovementIncome = $dayMovements->where('type', 'income')->sum('amount');
+            $dayInvoiceIncome = $invoicesByDate->get($dateKey, 0);
+            $dayIncome = $dayMovementIncome + $dayInvoiceIncome;
             $dayExpenseAll = $dayMovements->where('type', 'expense');
             $dayLosses = $dayExpenseAll->filter(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
             $dayCashExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
