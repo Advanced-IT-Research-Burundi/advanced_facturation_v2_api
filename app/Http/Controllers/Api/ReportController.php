@@ -609,10 +609,48 @@ class ReportController extends Controller
                     ->select('actual_check_in_at', 'advance_payment')
                     ->get();
 
-                $hotelIncomeByDate = $reservations
-                    ->groupBy(fn ($r) => Carbon::parse($r->actual_check_in_at)->toDateString())
-                    ->map(fn ($group) => (float) $group->sum('advance_payment'));
+                $hotelIncomeByDate = $hotelIncomeByDate->mergeRecursive(
+                    $reservations
+                        ->groupBy(fn ($r) => Carbon::parse($r->actual_check_in_at)->toDateString())
+                        ->map(fn ($group) => (float) $group->sum('advance_payment'))
+                );
             }
+
+            $shouldIncludeConference = ! $hotelSection || in_array($hotelSection, ['all', 'general', 'conference']);
+            if ($shouldIncludeConference) {
+                $conferenceBookings = HotelConferenceBooking::where('company_id', $companyId)
+                    ->whereIn('status', ['confirmed', 'completed'])
+                    ->where('advance_payment', '>', 0)
+                    ->whereNull('invoice_id')
+                    ->whereBetween('booking_date', [$startDate, $endDate])
+                    ->select('booking_date', 'advance_payment')
+                    ->get();
+
+                $hotelIncomeByDate = $hotelIncomeByDate->mergeRecursive(
+                    $conferenceBookings
+                        ->groupBy(fn ($b) => Carbon::parse($b->booking_date)->toDateString())
+                        ->map(fn ($group) => (float) $group->sum('advance_payment'))
+                );
+            }
+
+            $shouldIncludeReception = ! $hotelSection || in_array($hotelSection, ['all', 'general', 'reception']);
+            if ($shouldIncludeReception) {
+                $receptionBookings = HotelReceptionBooking::where('company_id', $companyId)
+                    ->whereIn('status', ['confirmed', 'completed'])
+                    ->where('advance_payment', '>', 0)
+                    ->whereNull('invoice_id')
+                    ->whereBetween('booking_date', [$startDate, $endDate])
+                    ->select('booking_date', 'advance_payment')
+                    ->get();
+
+                $hotelIncomeByDate = $hotelIncomeByDate->mergeRecursive(
+                    $receptionBookings
+                        ->groupBy(fn ($b) => Carbon::parse($b->booking_date)->toDateString())
+                        ->map(fn ($group) => (float) $group->sum('advance_payment'))
+                );
+            }
+
+            $hotelIncomeByDate = $hotelIncomeByDate->map(fn ($v) => is_array($v) ? array_sum($v) : (float) $v);
         }
 
         $grouped = $dailyMovements->groupBy('date');
