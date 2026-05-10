@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\Depense;
+use App\Models\HotelConferenceBooking;
+use App\Models\HotelReceptionBooking;
 use App\Models\HotelReservation;
 use App\Models\Invoice;
 use App\Models\StockMovement;
