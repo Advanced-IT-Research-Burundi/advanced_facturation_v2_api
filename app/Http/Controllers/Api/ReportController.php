@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\Depense;
+use App\Models\HotelReservation;
 use App\Models\Invoice;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
@@ -558,10 +559,11 @@ class ReportController extends Controller
             ->orderBy('date')
             ->get();
 
-        $includePosInvoices = ! $hotelSection || $hotelSection === 'all' || $hotelSection === 'general';
+        $includeDirectIncome = ! $hotelSection || in_array($hotelSection, ['all', 'general', 'rooms', 'conference', 'reception']);
         $invoicesByDate = collect();
+        $hotelIncomeByDate = collect();
 
-        if ($includePosInvoices) {
+        if ($includeDirectIncome) {
             $existingMovementRefs = CashMovement::whereIn('cash_register_id', $registerIds)
                 ->where('type', 'income')
                 ->whereNotNull('reference')
@@ -569,16 +571,48 @@ class ReportController extends Controller
                 ->pluck('reference')
                 ->toArray();
 
-            $salesInvoices = Invoice::where('company_id', $companyId)
+            $invoiceQuery = Invoice::where('company_id', $companyId)
                 ->where('invoice_type', 'FN')
                 ->whereBetween('invoice_date', [$startDate, $endDate])
-                ->when(count($existingMovementRefs) > 0, fn ($q) => $q->whereNotIn('invoice_number', $existingMovementRefs))
-                ->select('invoice_date', 'invoice_total_amount', 'invoice_number')
+                ->when(count($existingMovementRefs) > 0, fn ($q) => $q->whereNotIn('invoice_number', $existingMovementRefs));
+
+            if ($hotelSection && ! in_array($hotelSection, ['all', 'general'])) {
+                $sectionIdentifiers = match ($hotelSection) {
+                    'rooms' => ['HOTEL'],
+                    'conference' => ['HOTEL'],
+                    'reception' => ['HOTEL'],
+                    default => [],
+                };
+                if (count($sectionIdentifiers) > 0) {
+                    $invoiceQuery->whereIn('invoice_identifier', $sectionIdentifiers);
+                }
+            }
+
+            $salesInvoices = $invoiceQuery
+                ->select('invoice_date', 'invoice_total_amount', 'invoice_number', 'invoice_identifier', 'hotel_reservation_id')
                 ->get();
+
+            $invoiceReservationIds = $salesInvoices->pluck('hotel_reservation_id')->filter()->toArray();
 
             $invoicesByDate = $salesInvoices
                 ->groupBy(fn ($inv) => Carbon::parse($inv->invoice_date)->toDateString())
                 ->map(fn ($group) => (float) $group->sum('invoice_total_amount'));
+
+            $shouldIncludeRooms = ! $hotelSection || in_array($hotelSection, ['all', 'general', 'rooms']);
+            if ($shouldIncludeRooms) {
+                $reservations = HotelReservation::where('company_id', $companyId)
+                    ->whereIn('status', ['checked_in', 'checked_out'])
+                    ->where('advance_payment', '>', 0)
+                    ->whereNull('invoice_id')
+                    ->when(count($invoiceReservationIds) > 0, fn ($q) => $q->whereNotIn('id', $invoiceReservationIds))
+                    ->whereBetween('actual_check_in_at', [$startDate, $endDate])
+                    ->select('actual_check_in_at', 'advance_payment')
+                    ->get();
+
+                $hotelIncomeByDate = $reservations
+                    ->groupBy(fn ($r) => Carbon::parse($r->actual_check_in_at)->toDateString())
+                    ->map(fn ($group) => (float) $group->sum('advance_payment'));
+            }
         }
 
         $grouped = $dailyMovements->groupBy('date');
@@ -593,6 +627,8 @@ class ReportController extends Controller
         $totalIncome = 0;
         $totalExpenses = 0;
         $totalLosses = 0;
+        $totalHotelIncome = 0;
+        $totalPosIncome = 0;
 
         while ($currentDate->lte($end)) {
             $dateKey = $currentDate->toDateString();
@@ -601,7 +637,8 @@ class ReportController extends Controller
 
             $dayMovementIncome = $dayMovements->where('type', 'income')->sum('amount');
             $dayInvoiceIncome = $invoicesByDate->get($dateKey, 0);
-            $dayIncome = $dayMovementIncome + $dayInvoiceIncome;
+            $dayHotelIncome = $hotelIncomeByDate->get($dateKey, 0);
+            $dayIncome = $dayMovementIncome + $dayInvoiceIncome + $dayHotelIncome;
             $dayExpenseAll = $dayMovements->where('type', 'expense');
             $dayLosses = $dayExpenseAll->filter(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
             $dayCashExpenses = $dayExpenseAll->reject(fn ($m) => $isLoss($m->description ?? ''))->sum('amount');
@@ -615,12 +652,16 @@ class ReportController extends Controller
             $totalIncome += $dayIncome;
             $totalExpenses += $dayExpenses;
             $totalLosses += $dayLosses;
+            $totalHotelIncome += $dayHotelIncome;
+            $totalPosIncome += $dayInvoiceIncome;
 
             if ($dayIncome > 0 || $dayTotalOut > 0 || $carriedBalance != 0) {
                 $rows[] = [
                     'date' => $currentDate->format('d/m/Y'),
                     'carried_balance' => $carriedBalance,
                     'income' => $dayIncome,
+                    'pos_income' => $dayInvoiceIncome,
+                    'hotel_income' => $dayHotelIncome,
                     'expenses' => $dayExpenses,
                     'losses' => $dayLosses,
                     'total_out' => $dayTotalOut,
@@ -639,6 +680,8 @@ class ReportController extends Controller
                     'date_to' => $endDate->toDateString(),
                     'initial_balance' => $initialBalance,
                     'total_income' => $totalIncome,
+                    'total_pos_income' => $totalPosIncome,
+                    'total_hotel_income' => $totalHotelIncome,
                     'total_expenses' => $totalExpenses,
                     'total_losses' => $totalLosses,
                     'final_balance' => $runningBalance,
