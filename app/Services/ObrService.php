@@ -241,7 +241,8 @@ class ObrService
         $invoiceItems = [];
         foreach ($invoice->invoiceItems as $item) {
             $priceHtva = $item->item_price * $item->item_quantity + ($item->item_ct ?? 0);
-            $vatAmount = $priceHtva * 0.18; // TVA 18%
+            $vatRate = (float) ($item->vat ?? 0);
+            $vatAmount = $priceHtva * ($vatRate / 100);
             $priceTvac = $priceHtva + $vatAmount;
             $totalAmount = $priceTvac + ($item->item_tl ?? 0);
 

@@ -55,7 +55,7 @@ class ProductImport implements ToCollection, WithHeadingRow
 
             // Détecter le format simple (juste nom + quantité)
             $isSimpleFormat = $this->detectSimpleFormat($rowData);
-            
+
             if ($isSimpleFormat) {
                 $rowData = $this->convertSimpleFormat($rowData);
             }
@@ -72,7 +72,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'alert_quantity' => $rowData['quantite_alerte'] ?? 0,
                     'purchase_price' => $rowData['prix_dachat'] ?? 0,
                     'selling_price' => $rowData['prix_de_vente'] ?? 0,
-                    'vat_rate' => $rowData['taux_tva'] ?? 18,
+                    'vat_rate' => $rowData['taux_tva'] ?? 0,
                     'category' => $rowData['categorie'] ?? '',
                     'description' => $rowData['description'] ?? '',
                     'status' => 'pending',
@@ -144,7 +144,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'quantite_alert' => floatval($rowData['quantite_alerte'] ?? 0),
                     'price' => floatval($rowData['prix_dachat'] ?? 0),
                     'price_ttc' => floatval($rowData['prix_de_vente'] ?? 0),
-                    'vat_rate' => floatval($rowData['taux_tva'] ?? 18),
+                    'vat_rate' => floatval($rowData['taux_tva'] ?? 0),
                     'product_category_id' => $categoryId,
                     'product_unit_id' => $unitId,
                     'description' => $rowData['description'] ?? null,
@@ -173,10 +173,10 @@ class ProductImport implements ToCollection, WithHeadingRow
     {
         // Si on a des colonnes numérotées (0, 1, 2...) au lieu de noms
         $hasNumericKeys = isset($rowData[0]) || isset($rowData[1]);
-        
+
         // Ou si on n'a pas les colonnes standard
         $hasStandardColumns = isset($rowData['nom_du_produit']) || isset($rowData['code_produit']);
-        
+
         return $hasNumericKeys && !$hasStandardColumns;
     }
 
@@ -186,11 +186,11 @@ class ProductImport implements ToCollection, WithHeadingRow
     private function convertSimpleFormat($rowData): array
     {
         $converted = [];
-        
+
         // Chercher le nom du produit (généralement en colonne C = index 2)
         $productName = null;
         $quantity = 0;
-        
+
         // Parcourir les colonnes pour trouver le nom et la quantité
         foreach ($rowData as $key => $value) {
             if (is_string($value) && !empty(trim($value)) && !is_numeric($value)) {
@@ -199,10 +199,10 @@ class ProductImport implements ToCollection, WithHeadingRow
                 $quantity = floatval($value);
             }
         }
-        
+
         $converted['nom_du_produit'] = $productName;
         $converted['quantite'] = $quantity;
-        
+
         return $converted;
     }
 
@@ -216,24 +216,24 @@ class ProductImport implements ToCollection, WithHeadingRow
         if (empty($prefix)) {
             $prefix = 'PRD';
         }
-        
+
         // Utiliser un compteur statique + microtime pour garantir l'unicité lors de l'import en masse
         self::$itemCodeCounter++;
         $maxAttempts = 10;
-        
+
         for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
             $uniquePart = substr(str_replace('.', '', (string) microtime(true)), -8);
             $code = $prefix . $uniquePart . str_pad(self::$itemCodeCounter, 4, '0', STR_PAD_LEFT);
-            
+
             // Vérifier que le code n'existe pas déjà en base
             if (!Product::withoutGlobalScopes()->where('item_code', $code)->exists()) {
                 return $code;
             }
-            
+
             // Si collision, attendre un très court instant et réessayer
             usleep(100);
         }
-        
+
         // Dernier recours: utiliser uniqid
         return $prefix . strtoupper(uniqid());
     }

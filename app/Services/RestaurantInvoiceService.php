@@ -117,7 +117,7 @@ class RestaurantInvoiceService
                         continue;
                     }
 
-                    $vatRate = $item->product->vat ?? 18;
+                    $vatRate = $item->product->vat_rate ?? 0;
                     $priceHT = $item->unit_price;
                     $vatAmount = ($priceHT * $vatRate) / 100;
                     $priceTTC = $priceHT + $vatAmount;
@@ -144,7 +144,7 @@ class RestaurantInvoiceService
             }
 
             // Process stock movements - deduct stock and create movement records
-            $this->processStockMovements($allItems, $warehouseId, $invoiceNumber);
+            $this->processStockMovements($allItems, $warehouseId, $invoice->invoice_number);
 
             $table->updateStatus();
 
@@ -273,16 +273,19 @@ class RestaurantInvoiceService
     private function calculateTotals($orders): array
     {
         $subtotal = 0;
+        $tax = 0;
 
         foreach ($orders as $order) {
             foreach ($order->items as $item) {
                 if ($item->status !== 'cancelled') {
-                    $subtotal += $item->total_price;
+                    $lineSubtotal = (float) $item->total_price;
+                    $vatRate = (float) ($item->product->vat_rate ?? 0);
+
+                    $subtotal += $lineSubtotal;
+                    $tax += ($lineSubtotal * $vatRate) / 100;
                 }
             }
         }
-
-        $tax = $subtotal * 0.18;
 
         return [
             'subtotal' => round($subtotal, 2),

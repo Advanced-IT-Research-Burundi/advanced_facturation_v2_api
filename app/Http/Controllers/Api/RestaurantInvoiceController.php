@@ -265,7 +265,8 @@ class RestaurantInvoiceController extends Controller
                     'selling_price' => $wp->unit_price ?? $wp->product->selling_price,
                     'stock_quantity' => $wp->quantity,
                     'item_measurement_unit' => $wp->product->item_measurement_unit,
-                    'vat' => $wp->product->vat ?? 18,
+                    'vat' => $wp->product->vat_rate ?? 0,
+                    'vat_rate' => $wp->product->vat_rate ?? 0,
                 ];
             });
 

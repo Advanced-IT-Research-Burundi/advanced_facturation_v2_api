@@ -173,7 +173,7 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
             $product->quantite_alert ?? 0,
             $product->price ?? 0,
             $product->price_ttc ?? 0,
-            $product->vat_rate ?? 18,
+            $product->vat_rate ?? 0,
             $product->categoryProduct?->name ?? '',
             $product->description ?? '',
         ];
