@@ -9,6 +9,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
 use App\Models\WarehouseTransfer;
 use App\Models\WarehouseTransferItem;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -896,6 +897,339 @@ class BakeryProductionController extends Controller
             DB::rollBack();
 
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function rapportsSummary(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'scope' => 'nullable|in:all,production,non_production',
+            'warehouse_id' => 'nullable',
+            'movement_type' => 'nullable|in:all,EN,ER,EI,EAJ,SC,SP,SD,SAJ',
+        ]);
+
+        try {
+            $companyId = Auth::user()->company_id;
+            $startDate = $request->input('start_date', $request->input('date_from'));
+            $endDate = $request->input('end_date', $request->input('date_to'));
+            $scope = $request->input('scope', 'all');
+            $warehouseId = $request->input('warehouse_id', 'all');
+            $movementType = $request->input('movement_type', 'all');
+
+            $entryTypes = ['EN', 'ER', 'EI', 'EAJ', 'ET', 'EAU'];
+            $exitTypes = ['SN', 'SP', 'SV', 'SD', 'SC', 'SAJ', 'ST', 'SAU'];
+            $movementLabels = [
+                'EN' => 'EN - Entrée Normale',
+                'ER' => 'ER - Entrée par Retour (depuis Produits Finis)',
+                'EI' => 'EI - Entrée par Inventaire',
+                'EAJ' => 'EAJ - Entrée par Ajustement',
+                'ET' => 'Entrée transfert',
+                'EAU' => 'Entrée autre',
+                'SN' => 'Sortie normale',
+                'SP' => 'SP - Sortie par Perte',
+                'SV' => 'Sortie vol',
+                'SD' => 'SD - Sortie par Détérioration',
+                'SC' => 'SC - Sortie par Consommation',
+                'SAJ' => 'SAJ - Sortie par Ajustement',
+                'ST' => 'Sortie transfert',
+                'SAU' => 'Sortie autre',
+                'PF' => 'Passage en produit fini',
+                'PR' => 'Retour en matière première',
+            ];
+
+            $directionFor = function (?string $type) use ($entryTypes, $exitTypes) {
+                if (in_array($type, $entryTypes, true)) {
+                    return 'entry';
+                }
+
+                if (in_array($type, $exitTypes, true)) {
+                    return 'exit';
+                }
+
+                return 'other';
+            };
+
+            $sumRows = function ($items) {
+                return [
+                    'items_count' => $items->count(),
+                    'total_quantity' => round((float) $items->sum('quantity'), 2),
+                    'total_value' => round((float) $items->sum('total_value'), 2),
+                    'alerts_count' => $items->where('is_alert', true)->count(),
+                ];
+            };
+
+            $sumMovements = function ($items) {
+                $entries = $items->where('direction', 'entry');
+                $exits = $items->where('direction', 'exit');
+                $others = $items->where('direction', 'other');
+
+                return [
+                    'total_movements' => $items->count(),
+                    'entries_count' => $entries->count(),
+                    'entries_quantity' => round((float) $entries->sum('quantity'), 2),
+                    'entries_value' => round((float) $entries->sum('total_value'), 2),
+                    'exits_count' => $exits->count(),
+                    'exits_quantity' => round((float) $exits->sum('quantity'), 2),
+                    'exits_value' => round((float) $exits->sum('total_value'), 2),
+                    'others_count' => $others->count(),
+                    'others_quantity' => round((float) $others->sum('quantity'), 2),
+                    'others_value' => round((float) $others->sum('total_value'), 2),
+                    'net_value' => round((float) ($entries->sum('total_value') - $exits->sum('total_value')), 2),
+                ];
+            };
+
+            $warehouses = Warehouse::where('company_id', $companyId)
+                ->select('id', 'name', 'location', 'is_production')
+                ->orderBy('name')
+                ->get();
+
+            $stockQuery = WarehouseProduct::with([
+                'warehouse:id,name,location,is_production',
+                'product:id,item_code,item_designation,item_measurement_unit,product_category_id,quantite_alert',
+                'product.categoryProduct:id,name',
+                'lastStockMovement:id,item_movement_type,item_movement_date',
+            ]);
+
+            if ($scope === 'production') {
+                $stockQuery->whereHas('warehouse', fn ($query) => $query->where('is_production', true));
+            } elseif ($scope === 'non_production') {
+                $stockQuery->whereHas('warehouse', fn ($query) => $query->where('is_production', false));
+            }
+
+            if ($warehouseId && $warehouseId !== 'all') {
+                $stockQuery->where('warehouse_id', $warehouseId);
+            }
+
+            $stockItems = $stockQuery->get()
+                ->map(function ($stock) {
+                    $quantity = (float) $stock->quantity;
+                    $unitPrice = (float) $stock->unit_price;
+                    $alertQuantity = $stock->product?->quantite_alert;
+                    $isProduction = (bool) $stock->warehouse?->is_production;
+
+                    return [
+                        'id' => $stock->id,
+                        'warehouse_id' => $stock->warehouse_id,
+                        'warehouse_name' => $stock->warehouse?->name ?? 'Stock inconnu',
+                        'is_production' => $isProduction,
+                        'scope_label' => $isProduction ? 'En production' : 'Hors production',
+                        'production_status' => $isProduction ? ($stock->production_status ?? 'RAW') : 'OUT_OF_PRODUCTION',
+                        'product_id' => $stock->product_id,
+                        'product_code' => $stock->product?->item_code ?? '—',
+                        'product_name' => $stock->product?->item_designation ?? 'Produit',
+                        'category_name' => $stock->product?->categoryProduct?->name ?? '—',
+                        'unit' => $stock->product?->item_measurement_unit ?? '',
+                        'quantity' => round($quantity, 2),
+                        'unit_price' => round($unitPrice, 2),
+                        'currency' => $stock->currency ?? 'BIF',
+                        'total_value' => round($quantity * $unitPrice, 2),
+                        'alert_quantity' => $alertQuantity,
+                        'is_alert' => $alertQuantity !== null && $quantity <= (float) $alertQuantity,
+                        'last_movement_type' => $stock->lastStockMovement?->item_movement_type,
+                        'last_movement_date' => $stock->lastStockMovement?->item_movement_date?->format('Y-m-d H:i:s'),
+                    ];
+                });
+
+            $productionStock = $stockItems->where('is_production', true)->values();
+            $nonProductionStock = $stockItems->where('is_production', false)->values();
+
+            $movementQuery = StockMovement::with([
+                'warehouse:id,name,is_production',
+                'user:id,name',
+            ])
+                ->where('company_id', $companyId);
+
+            if ($startDate) {
+                $movementQuery->whereDate('item_movement_date', '>=', Carbon::parse($startDate)->toDateString());
+            }
+
+            if ($endDate) {
+                $movementQuery->whereDate('item_movement_date', '<=', Carbon::parse($endDate)->toDateString());
+            }
+
+            if ($warehouseId && $warehouseId !== 'all') {
+                $movementQuery->where('warehouse_id', $warehouseId);
+            }
+
+            if ($movementType && $movementType !== 'all') {
+                $movementQuery->where('item_movement_type', $movementType);
+            }
+
+            $movementItems = $movementQuery->orderBy('item_movement_date', 'desc')
+                ->get()
+                ->map(function ($movement) use ($directionFor, $movementLabels) {
+                    $quantity = (float) $movement->item_quantity;
+                    $unitPrice = (float) $movement->item_purchase_or_sale_price;
+                    $type = $movement->item_movement_type;
+                    $isProduction = (bool) $movement->is_production || (bool) $movement->warehouse?->is_production;
+
+                    return [
+                        'id' => $movement->id,
+                        'date' => $movement->item_movement_date?->format('d/m/Y H:i') ?? '—',
+                        'date_iso' => $movement->item_movement_date?->toDateString(),
+                        'warehouse_id' => $movement->warehouse_id,
+                        'warehouse_name' => $movement->warehouse?->name ?? 'Stock inconnu',
+                        'is_production' => $isProduction,
+                        'scope_label' => $isProduction ? 'En production' : 'Hors production',
+                        'product_key' => $movement->product_id ?: 'code-'.$movement->item_code,
+                        'product_id' => $movement->product_id,
+                        'product_code' => $movement->item_code,
+                        'product_name' => $movement->item_designation,
+                        'unit' => $movement->item_measurement_unit,
+                        'quantity' => round($quantity, 2),
+                        'unit_price' => round($unitPrice, 2),
+                        'currency' => $movement->item_purchase_or_sale_currency ?? 'BIF',
+                        'total_value' => round($quantity * $unitPrice, 2),
+                        'movement_type' => $type,
+                        'movement_type_label' => $movementLabels[$type] ?? $type,
+                        'direction' => $directionFor($type),
+                        'description' => $movement->item_movement_description,
+                        'invoice_ref' => $movement->item_movement_invoice_ref,
+                        'user_name' => $movement->user?->name ?? 'Inconnu',
+                    ];
+                })
+                ->filter(function ($movement) use ($scope) {
+                    if ($scope === 'production') {
+                        return $movement['is_production'];
+                    }
+
+                    if ($scope === 'non_production') {
+                        return ! $movement['is_production'];
+                    }
+
+                    return true;
+                })
+                ->values();
+
+            $stockByWarehouse = $stockItems->groupBy('warehouse_id')
+                ->map(function ($items) use ($sumRows) {
+                    $first = $items->first();
+
+                    return [
+                        'warehouse_id' => $first['warehouse_id'],
+                        'warehouse_name' => $first['warehouse_name'],
+                        'is_production' => $first['is_production'],
+                        ...$sumRows($items),
+                    ];
+                })
+                ->sortByDesc('total_value')
+                ->values();
+
+            $stockByStatus = $productionStock->groupBy('production_status')
+                ->map(function ($items, $status) use ($sumRows) {
+                    return [
+                        'status' => $status,
+                        ...$sumRows($items),
+                    ];
+                })
+                ->values();
+
+            $movementsByType = $movementItems->groupBy('movement_type')
+                ->map(function ($items, $type) use ($movementLabels) {
+                    $first = $items->first();
+
+                    return [
+                        'movement_type' => $type,
+                        'movement_type_label' => $movementLabels[$type] ?? $type,
+                        'direction' => $first['direction'],
+                        'count' => $items->count(),
+                        'quantity' => round((float) $items->sum('quantity'), 2),
+                        'total_value' => round((float) $items->sum('total_value'), 2),
+                    ];
+                })
+                ->sortBy('movement_type')
+                ->values();
+
+            $movementsByDay = $movementItems->groupBy('date_iso')
+                ->map(function ($items, $date) {
+                    $entries = $items->where('direction', 'entry');
+                    $exits = $items->where('direction', 'exit');
+                    $others = $items->where('direction', 'other');
+
+                    return [
+                        'date' => $date,
+                        'entries_value' => round((float) $entries->sum('total_value'), 2),
+                        'exits_value' => round((float) $exits->sum('total_value'), 2),
+                        'others_value' => round((float) $others->sum('total_value'), 2),
+                        'entries_quantity' => round((float) $entries->sum('quantity'), 2),
+                        'exits_quantity' => round((float) $exits->sum('quantity'), 2),
+                        'others_quantity' => round((float) $others->sum('quantity'), 2),
+                    ];
+                })
+                ->sortBy('date')
+                ->values();
+
+            $topMovementProducts = $movementItems->groupBy('product_key')
+                ->map(function ($items) {
+                    $first = $items->first();
+                    $entries = $items->where('direction', 'entry');
+                    $exits = $items->where('direction', 'exit');
+                    $others = $items->where('direction', 'other');
+
+                    return [
+                        'product_id' => $first['product_id'],
+                        'product_code' => $first['product_code'],
+                        'product_name' => $first['product_name'],
+                        'unit' => $first['unit'],
+                        'entries_quantity' => round((float) $entries->sum('quantity'), 2),
+                        'exits_quantity' => round((float) $exits->sum('quantity'), 2),
+                        'others_quantity' => round((float) $others->sum('quantity'), 2),
+                        'total_value' => round((float) $items->sum('total_value'), 2),
+                    ];
+                })
+                ->sortByDesc('total_value')
+                ->take(12)
+                ->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'period' => [
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'scope' => $scope,
+                        'warehouse_id' => $warehouseId,
+                        'movement_type' => $movementType,
+                    ],
+                    'warehouses' => [
+                        'total' => $warehouses->count(),
+                        'production_count' => $warehouses->where('is_production', true)->count(),
+                        'non_production_count' => $warehouses->where('is_production', false)->count(),
+                        'items' => $warehouses->values(),
+                    ],
+                    'stock' => [
+                        'summary' => [
+                            'total' => $sumRows($stockItems),
+                            'production' => $sumRows($productionStock),
+                            'non_production' => $sumRows($nonProductionStock),
+                        ],
+                        'by_status' => $stockByStatus,
+                        'by_warehouse' => $stockByWarehouse,
+                        'items' => $stockItems->sortByDesc('total_value')->values(),
+                    ],
+                    'movements' => [
+                        'summary' => [
+                            'total' => $sumMovements($movementItems),
+                            'production' => $sumMovements($movementItems->where('is_production', true)),
+                            'non_production' => $sumMovements($movementItems->where('is_production', false)),
+                        ],
+                        'by_type' => $movementsByType,
+                        'by_day' => $movementsByDay,
+                        'top_products' => $topMovementProducts,
+                        'recent' => $movementItems->take(80)->values(),
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du chargement du rapport boulangerie',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 

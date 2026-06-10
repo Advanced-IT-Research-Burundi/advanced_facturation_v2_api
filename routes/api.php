@@ -160,6 +160,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/transfer-data', [BakeryProductionController::class, 'transferData']);
         Route::post('/transfer', [BakeryProductionController::class, 'transferToSales']);
         Route::get('/history', [BakeryProductionController::class, 'productionHistory']);
+        Route::get('/rapports', [BakeryProductionController::class, 'rapportsSummary']);
         Route::post('/report', [BakeryProductionController::class, 'productionReport']);
     });
 
