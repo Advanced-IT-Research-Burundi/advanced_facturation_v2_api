@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BankDeposit;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\Invoice;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -136,13 +137,19 @@ class BankDepositController extends Controller
         $user = $request->user();
 
         $query = BankDeposit::where('company_id', $user->company_id);
+        $salesQuery = Invoice::where('company_id', $user->company_id)
+            ->where('invoice_type', 'FN')
+            ->where('invoice_identifier', 'POS')
+            ->where('is_cancelled', false);
 
         if ($request->filled('start_date')) {
             $query->whereDate('deposit_date', '>=', Carbon::parse($request->start_date)->toDateString());
+            $salesQuery->whereDate('invoice_date', '>=', Carbon::parse($request->start_date)->toDateString());
         }
 
         if ($request->filled('end_date')) {
             $query->whereDate('deposit_date', '<=', Carbon::parse($request->end_date)->toDateString());
+            $salesQuery->whereDate('invoice_date', '<=', Carbon::parse($request->end_date)->toDateString());
         }
 
         $todayTotal = BankDeposit::where('company_id', $user->company_id)
@@ -155,6 +162,17 @@ class BankDepositController extends Controller
                 'total_amount' => (float) (clone $query)->sum('amount'),
                 'deposits_count' => (clone $query)->count(),
                 'today_amount' => (float) $todayTotal,
+                'sales_by_payment' => [
+                    'cash' => (float) (clone $salesQuery)
+                        ->where('payment_type', 'cash')
+                        ->sum('invoice_total_amount'),
+                    'bank' => (float) (clone $salesQuery)
+                        ->where('payment_type', 'bank_transfer')
+                        ->sum('invoice_total_amount'),
+                    'credit' => (float) (clone $salesQuery)
+                        ->where('payment_type', 'credit')
+                        ->sum('invoice_total_amount'),
+                ],
                 'latest_deposit' => (clone $query)
                     ->with(['createdBy', 'cashRegister'])
                     ->orderBy('deposit_date', 'desc')

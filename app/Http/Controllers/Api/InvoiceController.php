@@ -3,14 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashMovement;
+use App\Models\CashRegister;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
+use App\Models\StockMovement;
+use App\Models\WarehouseProduct;
 use App\Services\ObrService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
@@ -87,7 +93,7 @@ class InvoiceController extends Controller
             'invoice_currency' => 'required|string|max:3',
             'customer_id' => 'required|exists:customers,id',
             'warehouse_id' => 'nullable|exists:warehouses,id',
-            'payment_type' => 'nullable|string|max:50',
+            'payment_type' => 'required|string|max:50',
             'reference_invoice_id' => 'nullable|exists:invoices,id',
             'reference_invoice_number' => 'nullable|string',
             'avoir_reason' => 'nullable|string',
@@ -102,6 +108,17 @@ class InvoiceController extends Controller
             'items.*.item_ct' => 'nullable|numeric|min:0',
             'items.*.item_tl' => 'nullable|numeric|min:0',
         ]);
+
+        if (
+            $validated['invoice_action'] === 'POS'
+            && $validated['invoice_type'] === 'FN'
+            && ! in_array($validated['payment_type'], ['cash', 'bank_transfer', 'credit'], true)
+        ) {
+            throw ValidationException::withMessages([
+                'payment_type' => 'Le mode de paiement doit être espèces, banque ou crédit.',
+            ]);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -134,6 +151,28 @@ class InvoiceController extends Controller
             }
 
             $totals = $this->calculateTotals($validated['items']);
+            $cashRegister = null;
+
+            if (
+                $validated['invoice_action'] === 'POS'
+                && $validated['invoice_type'] === 'FN'
+                && $validated['payment_type'] === 'cash'
+            ) {
+                $cashRegister = CashRegister::where('company_id', $company->id)
+                    ->where('status', 'open')
+                    ->whereNull('hotel_section')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $cashRegister) {
+                    DB::rollBack();
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Ouvrez la caisse avant de créer une facture payée en espèces.',
+                    ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+            }
 
             $invoice = Invoice::create([
                 'invoice_number' => 'TEMP',
@@ -216,9 +255,35 @@ class InvoiceController extends Controller
                 );
             }
 
-            // Optional: If POS and payment type is cash, we might want to automatically create a payment
-            // However, it's safer to keep it separate or handle it if explicitly requested.
-            // For now, we'll stick to manual payment creation or separate endpoint call from frontend.
+            if (
+                $validated['invoice_action'] === 'POS'
+                && $validated['invoice_type'] === 'FN'
+                && in_array($validated['payment_type'], ['cash', 'bank_transfer'], true)
+            ) {
+                $payment = Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'amount' => $invoice->invoice_total_amount,
+                    'payment_date' => now(),
+                    'payment_method' => $validated['payment_type'],
+                    'reference' => $invoice->invoice_number,
+                    'note' => 'Paiement enregistré lors de la création de la facture POS.',
+                    'created_by' => auth()->id(),
+                    'company_id' => $company->id,
+                ]);
+
+                if ($validated['payment_type'] === 'cash' && $cashRegister) {
+                    CashMovement::create([
+                        'cash_register_id' => $cashRegister->id,
+                        'invoice_id' => $invoice->id,
+                        'payment_id' => $payment->id,
+                        'type' => 'income',
+                        'amount' => $payment->amount,
+                        'description' => "Vente en espèces - facture #{$invoice->invoice_number}",
+                        'reference' => $invoice->invoice_number,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
 
             DB::commit();
 
@@ -515,14 +580,14 @@ class InvoiceController extends Controller
             }
 
             // Trouver le mouvement de stock original
-            $originalMovement = \App\Models\StockMovement::where('invoice_id', $invoice->id)
+            $originalMovement = StockMovement::where('invoice_id', $invoice->id)
                 ->where('product_id', $item->product_id)
                 ->where('item_movement_type', 'SN') // Sortie normale
                 ->first();
 
             if ($originalMovement) {
                 // Créer un mouvement de retour (ER = Entrée Retour)
-                $returnMovement = \App\Models\StockMovement::create([
+                $returnMovement = StockMovement::create([
                     'product_id' => $item->product_id,
                     'warehouse_id' => $originalMovement->warehouse_id,
                     'invoice_id' => $invoice->id,
@@ -541,7 +606,7 @@ class InvoiceController extends Controller
                 ]);
 
                 // Mettre à jour le stock dans l'entrepôt
-                $warehouseProduct = \App\Models\WarehouseProduct::where('warehouse_id', $originalMovement->warehouse_id)
+                $warehouseProduct = WarehouseProduct::where('warehouse_id', $originalMovement->warehouse_id)
                     ->where('product_id', $item->product_id)
                     ->first();
 

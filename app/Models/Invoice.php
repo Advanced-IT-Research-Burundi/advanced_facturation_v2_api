@@ -25,6 +25,7 @@ class Invoice extends Model
         'invoice_type',
         'invoice_identifier',
         'invoice_currency',
+        'payment_type',
         'tp_type',
         'tp_name',
         'tp_TIN',
