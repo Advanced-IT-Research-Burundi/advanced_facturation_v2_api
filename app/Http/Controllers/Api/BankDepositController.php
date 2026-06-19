@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BankDeposit;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\Depense;
 use App\Models\Invoice;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -141,15 +142,19 @@ class BankDepositController extends Controller
             ->where('invoice_type', 'FN')
             ->where('invoice_identifier', 'POS')
             ->where('is_cancelled', false);
+        $expensesQuery = Depense::where('company_id', $user->company_id)
+            ->whereNull('hotel_section');
 
         if ($request->filled('start_date')) {
             $query->whereDate('deposit_date', '>=', Carbon::parse($request->start_date)->toDateString());
             $salesQuery->whereDate('invoice_date', '>=', Carbon::parse($request->start_date)->toDateString());
+            $expensesQuery->whereDate('created_at', '>=', Carbon::parse($request->start_date)->toDateString());
         }
 
         if ($request->filled('end_date')) {
             $query->whereDate('deposit_date', '<=', Carbon::parse($request->end_date)->toDateString());
             $salesQuery->whereDate('invoice_date', '<=', Carbon::parse($request->end_date)->toDateString());
+            $expensesQuery->whereDate('created_at', '<=', Carbon::parse($request->end_date)->toDateString());
         }
 
         $todayTotal = BankDeposit::where('company_id', $user->company_id)
@@ -162,6 +167,7 @@ class BankDepositController extends Controller
                 'total_amount' => (float) (clone $query)->sum('amount'),
                 'deposits_count' => (clone $query)->count(),
                 'today_amount' => (float) $todayTotal,
+                'expenses_total' => (float) $expensesQuery->sum('montant'),
                 'sales_by_payment' => [
                     'cash' => (float) (clone $salesQuery)
                         ->where('payment_type', 'cash')

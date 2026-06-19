@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashMovement;
+use App\Models\CashRegister;
 use App\Models\Depense;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class DepenseController extends Controller
 {
@@ -51,7 +55,7 @@ class DepenseController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'montant' => 'required|numeric|min:0',
+            'montant' => 'required|numeric|min:0.01',
             'depense_category_id' => $isHotelSection
                 ? 'nullable|exists:depense_categories,id'
                 : 'required|exists:depense_categories,id',
@@ -69,13 +73,28 @@ class DepenseController extends Controller
             $validated['justification_mime'] = $file->getMimeType();
         }
 
-        $depense = Depense::create($validated);
+        return DB::transaction(function () use ($validated) {
+            $register = $this->openRegisterForSection($validated['hotel_section'] ?? null);
+            $this->ensureSufficientBalance($register, (float) $validated['montant']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Depense created successfully',
-            'data' => $depense->load(['depenseCategory', 'company', 'user']),
-        ], Response::HTTP_CREATED);
+            $depense = Depense::create($validated);
+
+            CashMovement::create([
+                'cash_register_id' => $register->id,
+                'depense_id' => $depense->id,
+                'type' => 'expense',
+                'amount' => $depense->montant,
+                'description' => $depense->name,
+                'reference' => 'DEP-'.$depense->id,
+                'created_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense enregistrée et retirée de la caisse',
+                'data' => $depense->load(['depenseCategory', 'company', 'user', 'cashMovement']),
+            ], Response::HTTP_CREATED);
+        });
     }
 
     public function show(Depense $depense)
@@ -98,7 +117,7 @@ class DepenseController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'montant' => 'sometimes|required|numeric|min:0',
+            'montant' => 'sometimes|required|numeric|min:0.01',
             'depense_category_id' => 'sometimes|required|exists:depense_categories,id',
             'justification_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ]);
@@ -110,13 +129,44 @@ class DepenseController extends Controller
             $validated['justification_mime'] = $file->getMimeType();
         }
 
-        $depense->update($validated);
+        return DB::transaction(function () use ($depense, $validated) {
+            $movement = CashMovement::where('depense_id', $depense->id)
+                ->lockForUpdate()
+                ->first();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Depense updated successfully',
-            'data' => $depense->load(['depenseCategory', 'company', 'user']),
-        ], Response::HTTP_OK);
+            if ($movement) {
+                $register = CashRegister::whereKey($movement->cash_register_id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $newAmount = (float) ($validated['montant'] ?? $depense->montant);
+                $availableBalance = $register->calculateExpectedBalance() + (float) $movement->amount;
+                $this->ensureSufficientBalance($register, $newAmount, $availableBalance);
+            } else {
+                $register = $this->openRegisterForSection($depense->hotel_section);
+                $newAmount = (float) ($validated['montant'] ?? $depense->montant);
+                $this->ensureSufficientBalance($register, $newAmount);
+            }
+
+            $depense->update($validated);
+
+            CashMovement::updateOrCreate(
+                ['depense_id' => $depense->id],
+                [
+                    'cash_register_id' => $register->id,
+                    'type' => 'expense',
+                    'amount' => $depense->montant,
+                    'description' => $depense->name,
+                    'reference' => 'DEP-'.$depense->id,
+                    'created_by' => auth()->id(),
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense et caisse mises à jour',
+                'data' => $depense->load(['depenseCategory', 'company', 'user', 'cashMovement']),
+            ], Response::HTTP_OK);
+        });
     }
 
     /**
@@ -149,7 +199,10 @@ class DepenseController extends Controller
             abort(403);
         }
 
-        $depense->delete();
+        DB::transaction(function () use ($depense) {
+            CashMovement::where('depense_id', $depense->id)->delete();
+            $depense->delete();
+        });
 
         return response()->json([
             'success' => true,
@@ -163,13 +216,28 @@ class DepenseController extends Controller
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
 
-        $depense->restore();
+        return DB::transaction(function () use ($depense) {
+            $register = $this->openRegisterForSection($depense->hotel_section);
+            $this->ensureSufficientBalance($register, (float) $depense->montant);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Depense restored successfully',
-            'data' => $depense,
-        ], Response::HTTP_OK);
+            $depense->restore();
+
+            CashMovement::create([
+                'cash_register_id' => $register->id,
+                'depense_id' => $depense->id,
+                'type' => 'expense',
+                'amount' => $depense->montant,
+                'description' => $depense->name,
+                'reference' => 'DEP-'.$depense->id,
+                'created_by' => auth()->id(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense restaurée et retirée de la caisse',
+                'data' => $depense->load('cashMovement'),
+            ], Response::HTTP_OK);
+        });
     }
 
     public function export(Request $request)
@@ -213,5 +281,40 @@ class DepenseController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    private function openRegisterForSection(?string $hotelSection): CashRegister
+    {
+        $register = CashRegister::where('company_id', auth()->user()->company_id)
+            ->where('status', 'open')
+            ->when(
+                $hotelSection,
+                fn ($query) => $query->where('hotel_section', $hotelSection),
+                fn ($query) => $query->whereNull('hotel_section')
+            )
+            ->lockForUpdate()
+            ->first();
+
+        if (! $register) {
+            throw ValidationException::withMessages([
+                'cash_register' => 'Ouvrez la caisse avant d’enregistrer une dépense.',
+            ]);
+        }
+
+        return $register;
+    }
+
+    private function ensureSufficientBalance(
+        CashRegister $register,
+        float $amount,
+        ?float $availableBalance = null
+    ): void {
+        $balance = $availableBalance ?? $register->calculateExpectedBalance();
+
+        if ($amount > $balance) {
+            throw ValidationException::withMessages([
+                'montant' => 'Le montant de la dépense dépasse le solde actuel de la caisse.',
+            ]);
+        }
     }
 }

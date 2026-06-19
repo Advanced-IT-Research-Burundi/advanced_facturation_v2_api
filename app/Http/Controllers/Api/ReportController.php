@@ -196,26 +196,38 @@ class ReportController extends Controller
         $companyId = $user->company_id;
         $warehouseId = $request->get('warehouse_id');
 
-        $query = WarehouseProduct::query()
+        $baseQuery = WarehouseProduct::query()
             ->whereHas('warehouse', function ($q) use ($companyId) {
                 $q->where('company_id', $companyId);
-            })
-            ->with(['product', 'warehouse']);
+            });
 
         if ($warehouseId && $warehouseId !== 'all') {
-            $query->where('warehouse_id', $warehouseId);
+            $baseQuery->where('warehouse_id', $warehouseId);
         }
 
+        $query = (clone $baseQuery)->with(['product', 'warehouse']);
         $totalItems = (clone $query)->count();
         $totalQuantity = (float) (clone $query)->sum('quantity');
         $totalValue = (float) (clone $query)->sum(DB::raw('quantity * unit_price'));
+        $valueByWarehouse = (clone $baseQuery)
+            ->select('warehouse_id')
+            ->selectRaw('SUM(quantity * unit_price) as total_value')
+            ->with('warehouse:id,name')
+            ->groupBy('warehouse_id')
+            ->get()
+            ->map(fn ($stock) => [
+                'warehouse_id' => $stock->warehouse_id,
+                'warehouse_name' => $stock->warehouse?->name ?? 'Stock inconnu',
+                'total_value' => (float) $stock->total_value,
+            ])
+            ->values();
 
         $stockItems = $query->paginate($perPage)->through(function ($item) {
             return [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
-                'product_name' => $item->product?->name ?? 'Produit inconnu',
-                'product_code' => $item->product?->code ?? '',
+                'product_name' => $item->product?->item_designation ?? $item->product?->name ?? 'Produit inconnu',
+                'product_code' => $item->product?->item_code ?? $item->product?->code ?? '',
                 'warehouse_name' => $item->warehouse?->name ?? 'Stock inconnu',
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
@@ -231,6 +243,7 @@ class ReportController extends Controller
                     'total_items' => $totalItems,
                     'total_quantity' => $totalQuantity,
                     'total_value' => $totalValue,
+                    'value_by_warehouse' => $valueByWarehouse,
                 ],
                 'items' => $stockItems,
             ],
