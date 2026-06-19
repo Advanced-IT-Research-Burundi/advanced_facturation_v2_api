@@ -12,6 +12,7 @@ class CashMovement extends Model
         'invoice_id',
         'payment_id',
         'depense_id',
+        'bank_deposit_id',
         'type',
         'amount',
         'description',
@@ -47,6 +48,11 @@ class CashMovement extends Model
     public function depense(): BelongsTo
     {
         return $this->belongsTo(Depense::class);
+    }
+
+    public function bankDeposit(): BelongsTo
+    {
+        return $this->belongsTo(BankDeposit::class);
     }
 
     public function createdBy(): BelongsTo

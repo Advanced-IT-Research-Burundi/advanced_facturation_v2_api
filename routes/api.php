@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AppConfigController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BakeryProductionController;
+use App\Http\Controllers\Api\BankDepositController;
 use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\CategoryProductController;
 use App\Http\Controllers\Api\CompanyController;
@@ -275,6 +276,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('cash-registers/{id}/movements', [CashRegisterController::class, 'addMovement']);
     Route::get('cash-registers/{id}/movements', [CashRegisterController::class, 'movements']);
     Route::apiResource('cash-registers', CashRegisterController::class)->only(['index', 'show']);
+
+    // Bank Deposits (Versements sur banque)
+    Route::get('bank-deposits/summary', [BankDepositController::class, 'summary']);
+    Route::apiResource('bank-deposits', BankDepositController::class)->only(['index', 'store', 'show', 'destroy']);
 
     // Customer Reminders (Relances clients)
     Route::get('reminders/unpaid-invoices', [CustomerReminderController::class, 'unpaidInvoices']);
