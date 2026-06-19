@@ -12,6 +12,10 @@ class WarehouseProduct extends Model
 {
     use HasFactory, SoftDeletes, HasCompanyId;
 
+    protected $appends = [
+        'alert_threshold',
+        'is_alert',
+    ];
 
     protected $fillable = [
         'product_id',
@@ -49,5 +53,15 @@ class WarehouseProduct extends Model
     public function lastStockMovement(): BelongsTo
     {
         return $this->belongsTo(StockMovement::class, 'last_stock_movement_id');
+    }
+
+    public function getAlertThresholdAttribute(): float
+    {
+        return (float) ($this->product?->quantite_alert ?? 0);
+    }
+
+    public function getIsAlertAttribute(): bool
+    {
+        return (float) $this->quantity <= $this->alert_threshold;
     }
 }

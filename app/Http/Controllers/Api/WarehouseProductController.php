@@ -18,7 +18,7 @@ class WarehouseProductController extends Controller
         try {
             $perPage = max(1, min((int) $request->input('per_page', 15), 100));
             // Initialisation avec les relations
-            $query = WarehouseProduct::with(['product', 'warehouse', 'user', 'lastStockMovement']);
+            $query = WarehouseProduct::with(['product.categoryProduct', 'warehouse', 'user', 'lastStockMovement']);
 
             // RECHERCHE : Utilisation des colonnes réelles de votre table 'products'
             if ($request->filled('search')) {

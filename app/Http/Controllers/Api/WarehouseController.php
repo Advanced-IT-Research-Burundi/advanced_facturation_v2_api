@@ -28,10 +28,13 @@ class WarehouseController extends Controller
     {
         $perPage = max(1, min((int) request('per_page', 20), 100));
         $search = request('search') ?? '';
-        // Sélectionner tous les produits qui n'existent pas dans le warehouse sélectionné
-        $products = Product::whereHas('warehouseProducts', function ($query) use ($stock_id) {
+        // Sélectionner les produits qui existent dans le warehouse sélectionné
+        $products = Product::with(['warehouseProducts' => function ($query) use ($stock_id) {
             $query->where('warehouse_id', $stock_id);
-        })
+        }])
+            ->whereHas('warehouseProducts', function ($query) use ($stock_id) {
+                $query->where('warehouse_id', $stock_id);
+            })
             ->when(! empty($search), function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('item_designation', 'like', "%{$search}%")
@@ -39,7 +42,23 @@ class WarehouseController extends Controller
                         ->orWhere('barcode', 'like', "%{$search}%");
                 });
             })
-            ->paginate($perPage);
+            ->paginate($perPage)
+            ->through(function ($product) {
+                $stock = $product->warehouseProducts->first();
+                $stockQuantity = (float) ($stock?->quantity ?? 0);
+                $alertThreshold = (float) ($product->quantite_alert ?? 0);
+
+                return [
+                    'id' => $product->id,
+                    'item_code' => $product->item_code,
+                    'item_designation' => $product->item_designation,
+                    'item_measurement_unit' => $product->item_measurement_unit,
+                    'quantite_alert' => $product->quantite_alert,
+                    'stock_quantity' => $stockQuantity,
+                    'alert_threshold' => $alertThreshold,
+                    'is_alert' => $stockQuantity <= $alertThreshold,
+                ];
+            });
 
         return response()->json([
             'success' => true,
