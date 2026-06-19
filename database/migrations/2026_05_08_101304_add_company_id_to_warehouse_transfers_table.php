@@ -13,11 +13,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('warehouse_transfers', function (Blueprint $table) {
-            // $table->foreignId('company_id')
-            //     ->nullable()
-            //     ->after('id')
-            //     ->constrained('companies')
-            //     ->onDelete('cascade');
+            $table->foreignId('company_id')
+                ->nullable()
+                ->after('id')
+                ->constrained('companies')
+                ->onDelete('cascade');
         });
 
         DB::table('warehouse_transfers')
