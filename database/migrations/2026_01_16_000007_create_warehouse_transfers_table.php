@@ -13,6 +13,7 @@ return new class extends Migration
 
         Schema::create('warehouse_transfers', function (Blueprint $table) {
             $table->id();
+             $table->foreignId('company_id')->nullable()->constrained('companies')->onDelete('set null');
             $table->string('transfer_code')->unique();
             $table->foreignId('source_warehouse_id')->constrained('warehouses');
             $table->foreignId('destination_warehouse_id')->constrained('warehouses');
