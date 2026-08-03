@@ -28,6 +28,7 @@ class WarehouseProductResource extends JsonResource
             'is_alert' => $this->is_alert,
             'vat_rate' => $this->product?->vat_rate,
             'item_code' => $this->product?->item_code,
+            'barcode' => $this->product?->barcode,
         ];
     }
 }
