@@ -170,13 +170,13 @@ class BankDepositController extends Controller
                 'expenses_total' => (float) $expensesQuery->sum('montant'),
                 'sales_by_payment' => [
                     'cash' => (float) (clone $salesQuery)
-                        ->where('payment_type', 'cash')
+                        ->whereIn('payment_type', ['cash', '1'])
                         ->sum('invoice_total_amount'),
                     'bank' => (float) (clone $salesQuery)
-                        ->where('payment_type', 'bank_transfer')
+                        ->whereIn('payment_type', ['bank_transfer', '2'])
                         ->sum('invoice_total_amount'),
                     'credit' => (float) (clone $salesQuery)
-                        ->where('payment_type', 'credit')
+                        ->whereIn('payment_type', ['credit', '3'])
                         ->sum('invoice_total_amount'),
                 ],
                 'latest_deposit' => (clone $query)

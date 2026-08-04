@@ -112,10 +112,10 @@ class InvoiceController extends Controller
         if (
             $validated['invoice_action'] === 'POS'
             && $validated['invoice_type'] === 'FN'
-            && ! in_array($validated['payment_type'], ['cash', 'bank_transfer', 'credit'], true)
+            && ! in_array($validated['payment_type'], ['1', '2', '3', '4'], true)
         ) {
             throw ValidationException::withMessages([
-                'payment_type' => 'Le mode de paiement doit être espèces, banque ou crédit.',
+                'payment_type' => 'Le mode de paiement doit être 1 (espèces), 2 (banque), 3 (à crédit) ou 4 (autres).',
             ]);
         }
 
@@ -156,7 +156,7 @@ class InvoiceController extends Controller
             if (
                 $validated['invoice_action'] === 'POS'
                 && $validated['invoice_type'] === 'FN'
-                && $validated['payment_type'] === 'cash'
+                && $validated['payment_type'] === '1'
             ) {
                 $cashRegister = CashRegister::where('company_id', $company->id)
                     ->where('status', 'open')
@@ -180,7 +180,7 @@ class InvoiceController extends Controller
                 'invoice_type' => $validated['invoice_type'],
                 'invoice_identifier' => $validated['invoice_action'],
                 'invoice_currency' => $validated['invoice_currency'],
-                'payment_type' => $validated['payment_type'] ?? 'cash',
+                'payment_type' => $validated['payment_type'] ?? '1',
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
                 'tp_name' => $company->tp_name,
@@ -258,20 +258,25 @@ class InvoiceController extends Controller
             if (
                 $validated['invoice_action'] === 'POS'
                 && $validated['invoice_type'] === 'FN'
-                && in_array($validated['payment_type'], ['cash', 'bank_transfer'], true)
+                && in_array($validated['payment_type'], ['1', '2'], true)
             ) {
+                $paymentMethod = [
+                    '1' => 'cash',
+                    '2' => 'bank_transfer',
+                ][$validated['payment_type']];
+
                 $payment = Payment::create([
                     'invoice_id' => $invoice->id,
                     'amount' => $invoice->invoice_total_amount,
                     'payment_date' => now(),
-                    'payment_method' => $validated['payment_type'],
+                    'payment_method' => $paymentMethod,
                     'reference' => $invoice->invoice_number,
                     'note' => 'Paiement enregistré lors de la création de la facture POS.',
                     'created_by' => auth()->id(),
                     'company_id' => $company->id,
                 ]);
 
-                if ($validated['payment_type'] === 'cash' && $cashRegister) {
+                if ($validated['payment_type'] === '1' && $cashRegister) {
                     CashMovement::create([
                         'cash_register_id' => $cashRegister->id,
                         'invoice_id' => $invoice->id,
