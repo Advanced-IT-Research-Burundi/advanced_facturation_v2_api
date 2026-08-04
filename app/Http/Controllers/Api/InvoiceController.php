@@ -301,7 +301,7 @@ class InvoiceController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la création de la facture',
+                'message' => 'Erreur lors de la création de la facture ' . $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

@@ -217,20 +217,29 @@ class ObrService
      * Générer l'identifiant unique de la facture
      * Format: <NIF>/<system_id>/<YYYYMMDDHHMMSS>/<invoice_number>
      */
-    public function generateInvoiceIdentifier($tin, $invoiceNumber, $invoiceDate)
+    public function generateInvoiceIdentifier(string $tin, string $invoiceNumber, mixed $invoiceDate):string
     {
         $dateFormatted = $invoiceDate instanceof \DateTime
             ? $invoiceDate->format('YmdHis')
             : date('YmdHis', strtotime($invoiceDate));
 
+
         return sprintf(
             '%s/%s/%s/%s',
-            $tin,
-            $this->systemId,
+            AppConfig::getConfigKey('OBR_NIF'),
+            AppConfig::getConfigKey('OBR_USERNAME'),
             $dateFormatted,
             $invoiceNumber
         );
     }
+
+    public function electronique_signature($invoiceID) {
+
+    }
+    
+
+
+
 
     /**
      * Formater les données de la facture selon le format EBMS

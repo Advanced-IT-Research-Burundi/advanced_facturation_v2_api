@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Services\ObrService;
 
 class Invoice extends Model
 {
@@ -101,6 +102,17 @@ class Invoice extends Model
             'is_restaurant' => 'boolean',
             'restaurant_order_ids' => 'array',
         ];
+    }
+
+    public static function booting()
+    {
+        static::created(function ($invoice) {
+            $invoice->invoice_number = self::getInvoiceNumber($invoice->id);
+            $obr = new ObrService();
+            $invoice->electronic_signature = $obr->generateInvoiceIdentifier($invoice->tp_TIN, $invoice->invoice_number, $invoice->invoice_date);
+            $invoice->obr_submission_status = 'PENDING';
+            $invoice->saveQuietly();
+        });
     }
 
     public function company(): BelongsTo
