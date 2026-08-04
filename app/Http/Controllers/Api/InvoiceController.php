@@ -180,7 +180,7 @@ class InvoiceController extends Controller
                 'invoice_type' => $validated['invoice_type'],
                 'invoice_identifier' => $validated['invoice_action'],
                 'invoice_currency' => $validated['invoice_currency'],
-                'payment_type' => $validated['payment_type'] ?? 'cash',
+                'payment_type' => $validated['payment_type'] ?? '1',
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
                 'tp_name' => $company->tp_name,
@@ -196,11 +196,9 @@ class InvoiceController extends Controller
                 'customer_TIN' => $customer->customer_TIN,
                 'customer_address' => $customer->customer_address,
                 'vat_customer_payer' => $customer->vat_customer_payer,
-
                 'invoice_amount_nvat' => $totals['total_ht'],
                 'invoice_vat_amount' => $totals['total_vat'],
                 'invoice_total_amount' => $totals['total_ttc'],
-
                 // Références pour avoir et remboursement
                 'reference_invoice_id' => $validated['reference_invoice_id'] ?? null,
                 'cancelled_invoice_ref' => $validated['reference_invoice_number'] ?? null,

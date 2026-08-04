@@ -44,12 +44,10 @@ class ObrService
             }
 
             Log::error('OBR Login Failed', ['response' => $json]);
-
-            return null;
+            return $response->json();
         } catch (\Exception $e) {
             Log::error('OBR Login Exception', ['error' => $e->getMessage()]);
-
-            return null;
+            return $response->json();
         }
     }
 
@@ -101,17 +99,14 @@ class ObrService
     /**
      * Ajouter une facture avec accusé de réception
      */
-    public function addInvoice(Invoice $invoice, Company $company)
+    public function addInvoice( $invoice)
     {
+    
         // Générer l'identifiant unique de la facture
-        $invoiceIdentifier = $this->generateInvoiceIdentifier(
-            $company->tp_TIN,
-            $invoice->invoice_number,
-            $invoice->invoice_date
-        );
-
         // Préparer les données de la facture selon le format EBMS
-        $invoiceData = $this->formatInvoiceData($invoice, $company, $invoiceIdentifier);
+        $invoiceData = $this->formatInvoiceData($invoice, $invoice->company, $invoice->electronic_signature);
+
+        //dd( $invoiceData);
 
         $response = $this->post('addInvoice_confirm', $invoiceData);
         $json = $response->json();
@@ -120,7 +115,7 @@ class ObrService
             return [
                 'success' => true,
                 'message' => $json['msg'] ?? 'Facture ajoutée avec succès',
-                'invoice_identifier' => $invoiceIdentifier,
+                'invoice_identifier' => $response->json(),
                 'invoice_registered_number' => $json['result']['invoice_registered_number'] ?? null,
                 'invoice_registered_date' => $json['result']['invoice_registered_date'] ?? null,
                 'electronic_signature' => $json['electronic_signature'] ?? null,
@@ -130,7 +125,7 @@ class ObrService
         return [
             'success' => false,
             'message' => $json['msg'] ?? 'Erreur lors de l\'envoi de la facture',
-            'invoice_identifier' => $invoiceIdentifier,
+            'invoice_identifier' => $response->json(),
         ];
     }
 
@@ -217,7 +212,7 @@ class ObrService
      * Générer l'identifiant unique de la facture
      * Format: <NIF>/<system_id>/<YYYYMMDDHHMMSS>/<invoice_number>
      */
-    public function generateInvoiceIdentifier(string $tin, string $invoiceNumber, mixed $invoiceDate):string
+    public function generateInvoiceIdentifier(string $invoiceNumber, mixed $invoiceDate):string
     {
         $dateFormatted = $invoiceDate instanceof \DateTime
             ? $invoiceDate->format('YmdHis')
@@ -237,9 +232,6 @@ class ObrService
 
     }
     
-
-
-
 
     /**
      * Formater les données de la facture selon le format EBMS

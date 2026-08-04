@@ -30,9 +30,13 @@ class ObrSyncCommand extends Command
         // Syncronisa ama  invoinces
 
         $invoices = Invoice::with(['company', 'invoiceItems'])
-        ->where('obr_submission_status', '!=', 'PEDING')
-        ->get();
+        ->where('obr_submission_status', '=', 'PENDING')
+        ->latest()->take(1)->get();
 
-        dd($invoices->toArray());
+        foreach ($invoices as $invoice) {
+            $obrService = new ObrService();
+            $result = $obrService->addInvoice($invoice);
+            dump( $result );
+        }
     }
 }
