@@ -101,6 +101,7 @@ class InvoiceController extends Controller
             'deposit_reference' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.warehouse_product_id' => 'nullable|exists:warehouse_products,id',
             'items.*.item_designation' => 'required|string|max:255',
             'items.*.item_quantity' => 'required|numeric|min:0.01',
             'items.*.item_price' => 'required|numeric',

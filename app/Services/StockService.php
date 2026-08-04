@@ -38,10 +38,11 @@ class StockService
 
                 $product = Product::findOrFail($item['product_id']);
 
-                // Récupérer le stock dans l'entrepôt
-                $warehouseProduct = WarehouseProduct::where('product_id', $product->id)
-                    ->where('warehouse_id', $warehouseId)
-                    ->firstOrFail();
+                // Récupérer la ligne exacte du stock vendue.
+                $warehouseProduct = $this->findWarehouseProductForSale($item, $warehouseId, true);
+                if (! $warehouseProduct) {
+                    throw new Exception("Stock introuvable pour {$product->item_designation}");
+                }
 
                 // Vérifier la disponibilité
                 if ($warehouseProduct->quantity < $item['item_quantity']) {
@@ -170,9 +171,7 @@ class StockService
                 continue;
             }
 
-            $warehouseProduct = WarehouseProduct::where('product_id', $item['product_id'])
-                ->where('warehouse_id', $warehouseId)
-                ->first();
+            $warehouseProduct = $this->findWarehouseProductForSale($item, $warehouseId);
 
             $available = $warehouseProduct ? $warehouseProduct->quantity : 0;
             $requested = $item['item_quantity'];
@@ -194,5 +193,33 @@ class StockService
             'has_error' => $hasError,
             'items' => $availability
         ];
+    }
+
+    private function findWarehouseProductForSale(
+        array $item,
+        ?int $warehouseId = null,
+        bool $lockForUpdate = false
+    ): ?WarehouseProduct {
+        $query = WarehouseProduct::query();
+
+        if (!empty($item['warehouse_product_id'])) {
+            $query->where('id', $item['warehouse_product_id']);
+        } else {
+            $query->where('product_id', $item['product_id']);
+        }
+
+        if (!empty($item['product_id'])) {
+            $query->where('product_id', $item['product_id']);
+        }
+
+        if ($warehouseId) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
     }
 }
