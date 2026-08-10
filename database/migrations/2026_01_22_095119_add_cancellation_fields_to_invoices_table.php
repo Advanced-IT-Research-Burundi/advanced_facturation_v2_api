@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('obr_invoice_identifier')->nullable()->after('obr_submission_status');
             $table->string('obr_invoice_registered_number')->nullable()->after('obr_invoice_identifier');
             $table->timestamp('obr_invoice_registered_date')->nullable()->after('obr_invoice_registered_number');
-            $table->string('obr_electronic_signature')->nullable()->after('obr_invoice_registered_date');
+            $table->text('obr_electronic_signature')->nullable()->after('obr_invoice_registered_date');
             $table->timestamp('obr_sent_at')->nullable()->after('obr_electronic_signature');
             
             // Index

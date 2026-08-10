@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AppConfig;
 use App\Models\Company;
 use App\Models\Invoice;
+use App\Models\ObrLog;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -101,17 +102,21 @@ class ObrService
      */
     public function addInvoice( $invoice)
     {
-    
         // Générer l'identifiant unique de la facture
         // Préparer les données de la facture selon le format EBMS
         $invoiceData = $this->formatInvoiceData($invoice, $invoice->company, $invoice->electronic_signature);
-
         //dd( $invoiceData);
-
         $response = $this->post('addInvoice_confirm', $invoiceData);
         $json = $response->json();
-
         if (isset($json['success']) && $json['success']) {
+            $this->saveLogs("ADD_INVOICE", $json, true,  $invoice->id, null);
+            $invoice->update([
+                'obr_invoice_identifier' => $json['result']['invoice_identifier'] ?? null,
+                'obr_invoice_registered_number' => $json['result']['invoice_registered_number'] ?? null,
+                'obr_invoice_registered_date' => $json['result']['invoice_registered_date'] ?? null,
+                'obr_electronic_signature' => $json['electronic_signature'] ?? null,
+                'obr_submission_status' => 'ACCEPTED',
+            ]);
             return [
                 'success' => true,
                 'message' => $json['msg'] ?? 'Facture ajoutée avec succès',
@@ -121,7 +126,16 @@ class ObrService
                 'electronic_signature' => $json['electronic_signature'] ?? null,
             ];
         }
-
+        if(isset($json['msg']) && $json['msg'] == 'Une facture avec le même numéro existe déjà.'){
+            $invoice->update([
+                'obr_submission_status' => 'SENT',
+            ]);
+        }else{
+             $invoice->update([
+                'obr_submission_status' => 'REJECTED',
+            ]);
+        }
+        $this->saveLogs("ADD_INVOICE", $json, false,  $invoice->id, null);
         return [
             'success' => false,
             'message' => $json['msg'] ?? 'Erreur lors de l\'envoi de la facture',
@@ -228,10 +242,16 @@ class ObrService
         );
     }
 
-    public function electronique_signature($invoiceID) {
-
+    public function saveLogs($logType ,$json, $success, $invoiceId= null, $stockMovementId= null)
+    {
+          ObrLog::create([
+                'log_type' => $logType,
+                'success' => $success,
+                'invoice_id' => $invoiceId,
+                'stock_movement_id' => $stockMovementId,
+                'obr_response' => json_encode($json),
+            ]);
     }
-    
 
     /**
      * Formater les données de la facture selon le format EBMS
