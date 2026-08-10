@@ -37,17 +37,22 @@ class ImportExportController extends Controller
 
             $previewData = $import->getPreviewData();
 
-            // Vérifier les doublons dans la base
+            // Le code fourni dans le fichier est l'identifiant unique du produit.
+            // Il est aussi utilisé pour détecter les doublons dans le fichier.
+            $importedCodes = [];
             foreach ($previewData as &$item) {
-                $exists = Product::where(function ($query) use ($item) {
-                    $query->where('item_designation', $item['name']);
-                    if (! empty($item['code_product'])) {
-                        $query->orWhere('code_product', $item['code_product']);
-                    }
-                })
+                $code = trim((string) ($item['code_product'] ?? ''));
+                $normalizedCode = mb_strtolower($code);
+                $exists = $code !== '' && Product::withoutGlobalScopes()
+                    ->where('item_code', $code)
                     ->exists();
+                $duplicateInFile = $normalizedCode !== '' && isset($importedCodes[$normalizedCode]);
 
-                $item['status'] = $exists ? 'duplicate' : 'new';
+                $item['status'] = ($exists || $duplicateInFile) ? 'duplicate' : 'new';
+
+                if ($normalizedCode !== '') {
+                    $importedCodes[$normalizedCode] = true;
+                }
             }
 
             return response()->json([

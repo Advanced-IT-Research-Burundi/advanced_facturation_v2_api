@@ -25,14 +25,11 @@ class ProductImport implements ToCollection, WithHeadingRow
 
     public $previewMode = false;
     public $previewData = [];
-    private static $itemCodeCounter = 0;
     private ?Warehouse $defaultWarehouse = null;
 
     public function __construct($previewMode = false)
     {
         $this->previewMode = $previewMode;
-        self::$itemCodeCounter = 0;
-
         if (! $previewMode) {
             $this->defaultWarehouse = Warehouse::query()->oldest('id')->first();
         }
@@ -99,12 +96,18 @@ class ProductImport implements ToCollection, WithHeadingRow
             }
 
             // Vérifier si le produit existe déjà
-            $existingProduct = Product::where(function ($query) use ($rowData) {
-                    $query->where('item_designation', $rowData['nom_du_produit']);
-                    if (!empty($rowData['code_produit'])) {
-                        $query->orWhere('code_product', $rowData['code_produit']);
-                    }
-                })
+            $productCode = trim((string) ($rowData['code_produit'] ?? ''));
+            if ($productCode === '') {
+                $this->results['errors'][] = [
+                    'row' => $rowNumber,
+                    'message' => 'Le code du produit est obligatoire',
+                    'data' => $rowData,
+                ];
+                continue;
+            }
+
+            $existingProduct = Product::withoutGlobalScopes()
+                ->where('item_code', $productCode)
                 ->first();
 
             if ($existingProduct) {
@@ -149,14 +152,11 @@ class ProductImport implements ToCollection, WithHeadingRow
                     $unitId = $unit->id;
                 }
 
-                // Générer item_code unique
-                $itemCode = $this->generateItemCode($rowData['nom_du_produit']);
-
                 // Créer le produit
                 $product = Product::create([
-                    'item_code' => $itemCode,
+                    'item_code' => $productCode,
                     'item_designation' => $rowData['nom_du_produit'],
-                    'code_product' => $rowData['code_produit'] ?? $this->generateProductCode(),
+                    'code_product' => $productCode,
                     'marque' => $rowData['marque'] ?? null,
                     'item_measurement_unit' => $rowData['unite_de_mesure'] ?? 'Pièce',
                     'quantite' => floatval($rowData['quantite'] ?? 0),
@@ -238,38 +238,6 @@ class ProductImport implements ToCollection, WithHeadingRow
     }
 
     /**
-     * Génère un item_code unique basé sur le nom
-     */
-    private function generateItemCode($name): string
-    {
-        // Prendre les 3 premières lettres du nom + timestamp
-        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name), 0, 3));
-        if (empty($prefix)) {
-            $prefix = 'PRD';
-        }
-
-        // Utiliser un compteur statique + microtime pour garantir l'unicité lors de l'import en masse
-        self::$itemCodeCounter++;
-        $maxAttempts = 10;
-
-        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
-            $uniquePart = substr(str_replace('.', '', (string) microtime(true)), -8);
-            $code = $prefix . $uniquePart . str_pad(self::$itemCodeCounter, 4, '0', STR_PAD_LEFT);
-
-            // Vérifier que le code n'existe pas déjà en base
-            if (!Product::withoutGlobalScopes()->where('item_code', $code)->exists()) {
-                return $code;
-            }
-
-            // Si collision, attendre un très court instant et réessayer
-            usleep(100);
-        }
-
-        // Dernier recours: utiliser uniqid
-        return $prefix . strtoupper(uniqid());
-    }
-
-    /**
      * Normalise les clés de la ligne (retire accents, espaces)
      */
     private function normalizeRow($row): array
@@ -306,16 +274,6 @@ class ProductImport implements ToCollection, WithHeadingRow
         $search = ['é', 'è', 'ê', 'ë', 'à', 'â', 'ä', 'ô', 'ö', 'ù', 'û', 'ü', 'î', 'ï', 'ç'];
         $replace = ['e', 'e', 'e', 'e', 'a', 'a', 'a', 'o', 'o', 'u', 'u', 'u', 'i', 'i', 'c'];
         return str_replace($search, $replace, $string);
-    }
-
-    /**
-     * Génère un code produit unique
-     */
-    private function generateProductCode(): string
-    {
-        $lastProduct = Product::orderBy('id', 'desc')->first();
-        $nextId = $lastProduct ? $lastProduct->id + 1 : 1;
-        return 'PROD' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
     }
 
     /**
