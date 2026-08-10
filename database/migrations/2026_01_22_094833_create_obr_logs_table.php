@@ -42,12 +42,9 @@ return new class extends Migration
             // Tentatives
             $table->integer('retry_count')->default(0);
             $table->timestamp('last_retry_at')->nullable();
-            
             // Utilisateur
             $table->unsignedBigInteger('user_id')->nullable();
-            
             $table->timestamps();
-            
             // Index
             $table->index(['log_type', 'status']);
             $table->index('invoice_id');
