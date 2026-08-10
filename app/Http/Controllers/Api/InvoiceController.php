@@ -317,7 +317,10 @@ class InvoiceController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'stockMovements', 'payments']),
+            // Les détails de facture sont utilisés par l'impression et les avoirs.
+            // Les mouvements de stock ne sont pas nécessaires ici et certaines
+            // installations historiques ne possèdent pas leur clé invoice_id.
+            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'payments']),
         ], Response::HTTP_OK);
     }
 

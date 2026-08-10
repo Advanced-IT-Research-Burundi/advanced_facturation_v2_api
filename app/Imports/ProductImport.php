@@ -5,11 +5,14 @@ namespace App\Imports;
 use App\Models\Product;
 use App\Models\CategoryProduct;
 use App\Models\ProductUnit;
+use App\Models\Warehouse;
+use App\Models\WarehouseProduct;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProductImport implements ToCollection, WithHeadingRow
@@ -23,11 +26,16 @@ class ProductImport implements ToCollection, WithHeadingRow
     public $previewMode = false;
     public $previewData = [];
     private static $itemCodeCounter = 0;
+    private ?Warehouse $defaultWarehouse = null;
 
     public function __construct($previewMode = false)
     {
         $this->previewMode = $previewMode;
         self::$itemCodeCounter = 0;
+
+        if (! $previewMode) {
+            $this->defaultWarehouse = Warehouse::query()->oldest('id')->first();
+        }
     }
 
     /**
@@ -109,7 +117,18 @@ class ProductImport implements ToCollection, WithHeadingRow
                 continue;
             }
 
+            if (! $this->defaultWarehouse) {
+                $this->results['errors'][] = [
+                    'row' => $rowNumber,
+                    'message' => 'Aucun entrepôt n\'est disponible pour enregistrer le produit importé.',
+                    'data' => $rowData,
+                ];
+                continue;
+            }
+
             try {
+                DB::beginTransaction();
+
                 // Trouver ou créer la catégorie
                 $categoryId = null;
                 if (!empty($rowData['categorie'])) {
@@ -151,12 +170,24 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'user_id' => Auth::id(),
                 ]);
 
+                WarehouseProduct::create([
+                    'warehouse_id' => $this->defaultWarehouse->id,
+                    'product_id' => $product->id,
+                    'quantity' => floatval($rowData['quantite'] ?? 0),
+                    'unit_price' => floatval($rowData['prix_dachat'] ?? 0),
+                    'currency' => 'BIF',
+                    'user_id' => Auth::id(),
+                ]);
+
+                DB::commit();
+
                 $this->results['success'][] = [
                     'row' => $rowNumber,
                     'product_id' => $product->id,
                     'name' => $product->item_designation,
                 ];
             } catch (\Exception $e) {
+                DB::rollBack();
                 $this->results['errors'][] = [
                     'row' => $rowNumber,
                     'message' => $e->getMessage(),
