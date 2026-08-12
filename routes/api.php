@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\RestaurantOrderController;
 use App\Http\Controllers\Api\RestaurantTableController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RoleUserController;
+use App\Http\Controllers\Api\SavedPosCartController;
 use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
@@ -240,6 +241,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get Mes stock
     Route::get('mes_stock', [WarehouseController::class, 'mesStock']);
     Route::get('pos-products', [ProductController::class, 'posProducts']);
+    Route::apiResource('saved-pos-carts', SavedPosCartController::class)->only(['index', 'store', 'destroy']);
 
     // Analytics
     Route::get('analytics/sales-chart', [AnalyticsController::class, 'salesChart']);
