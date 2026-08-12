@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Role;
 use App\Models\RoleUser;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class RoleUserController extends Controller
 {
+    private const PRIVILEGED_ROLE_NAMES = ['super_admin', 'admin'];
+
     /**
      * Display a listing of role users.
      */
@@ -30,19 +34,59 @@ class RoleUserController extends Controller
             'user_id' => 'required|exists:users,id',
         ]);
 
-        // Check for existing assignment
-        $existing = RoleUser::where('role_id', $validated['role_id'])
+        $role = Role::findOrFail($validated['role_id']);
+        $user = User::with('roles')->findOrFail($validated['user_id']);
+
+        if ($this->isPrivilegedRole($role)) {
+            RoleUser::where('user_id', $user->id)
+                ->where('role_id', '!=', $role->id)
+                ->delete();
+
+            $roleUser = RoleUser::withTrashed()
+                ->where('role_id', $role->id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($roleUser) {
+                if ($roleUser->trashed()) {
+                    $roleUser->restore();
+                }
+            } else {
+                $roleUser = RoleUser::create($validated);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role assigned to user successfully',
+                'data' => $roleUser->load(['role', 'user'])
+            ], Response::HTTP_CREATED);
+        }
+
+        if ($user->roles->contains(fn ($assignedRole) => $this->isPrivilegedRole($assignedRole))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Un rôle administrateur contient déjà toutes les permissions.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $existing = RoleUser::withTrashed()
+            ->where('role_id', $validated['role_id'])
             ->where('user_id', $validated['user_id'])
             ->first();
 
-        if ($existing) {
+        if ($existing && ! $existing->trashed()) {
             return response()->json([
                 'success' => false,
                 'message' => 'This role is already assigned to this user'
             ], Response::HTTP_CONFLICT);
         }
 
-        $roleUser = RoleUser::create($validated);
+        if ($existing) {
+            $existing->restore();
+            $roleUser = $existing;
+        } else {
+            $roleUser = RoleUser::create($validated);
+        }
 
         return response()->json([
             'success' => true,
@@ -88,5 +132,10 @@ class RoleUserController extends Controller
             'message' => 'Role user assignment restored successfully',
             'data' => $roleUser
         ], Response::HTTP_OK);
+    }
+
+    private function isPrivilegedRole(Role $role): bool
+    {
+        return in_array(strtolower($role->name), self::PRIVILEGED_ROLE_NAMES);
     }
 }

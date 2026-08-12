@@ -14,6 +14,8 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasCompanyId, HasFactory, SoftDeletes;
 
+    private const PRIVILEGED_ROLE_NAMES = ['super_admin', 'admin'];
+
     /**
      * The attributes that are mass assignable.
      *
@@ -114,11 +116,19 @@ class User extends Authenticatable
      */
     public function hasRole($role)
     {
+        $roles = $this->roles->pluck('name')
+            ->filter()
+            ->map(fn ($name) => strtolower($name));
+
         if (is_array($role)) {
-            return $this->roles->whereIn('name', $role)->isNotEmpty();
+            $roleNames = collect($role)
+                ->filter()
+                ->map(fn ($name) => strtolower($name));
+
+            return $roles->intersect($roleNames)->isNotEmpty();
         }
 
-        return $this->roles->where('name', $role)->isNotEmpty();
+        return $roles->contains(strtolower($role));
     }
 
     /**
@@ -126,7 +136,15 @@ class User extends Authenticatable
      */
     public function hasAnyRole($roles)
     {
-        return $this->roles->whereIn('name', $roles)->isNotEmpty();
+        $roleNames = collect($roles)
+            ->filter()
+            ->map(fn ($name) => strtolower($name));
+
+        return $this->roles->pluck('name')
+            ->filter()
+            ->map(fn ($name) => strtolower($name))
+            ->intersect($roleNames)
+            ->isNotEmpty();
     }
 
     /**
@@ -148,8 +166,21 @@ class User extends Authenticatable
             $role = Role::where('name', $role)->firstOrFail();
         }
 
-        if (! $this->roles->contains($role->id)) {
+        if ($this->isPrivilegedRole($role)) {
+            $this->roles()->detach();
             $this->roles()->attach($role->id);
+            $this->load('roles');
+
+            return $this;
+        }
+
+        if ($this->roles()->whereIn('name', self::PRIVILEGED_ROLE_NAMES)->exists()) {
+            return $this;
+        }
+
+        if (! $this->roles()->whereKey($role->id)->exists()) {
+            $this->roles()->attach($role->id);
+            $this->load('roles');
         }
 
         return $this;
@@ -167,5 +198,10 @@ class User extends Authenticatable
         $this->roles()->detach($role->id);
 
         return $this;
+    }
+
+    private function isPrivilegedRole(Role $role): bool
+    {
+        return in_array(strtolower($role->name), self::PRIVILEGED_ROLE_NAMES);
     }
 }

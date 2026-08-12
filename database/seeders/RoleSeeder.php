@@ -133,13 +133,13 @@ class RoleSeeder extends Seeder
                 'domain' => 'bakery',
                 'permissions' => ['dashboard', 'bakery'],
             ],
-            [
-                'name' => 'bakery_manager',
-                'label' => 'Gérant Boulangerie',
-                'description' => 'Gestion complète de la boulangerie',
-                'domain' => 'bakery',
-                'permissions' => ['dashboard', 'bakery', 'stock', 'sales', 'reports'],
-            ],
+            // [
+            //     'name' => 'bakery_manager',
+            //     'label' => 'Gérant Boulangerie',
+            //     'description' => 'Gestion complète de la boulangerie',
+            //     'domain' => 'bakery',
+            //     'permissions' => ['dashboard', 'bakery', 'stock', 'sales', 'reports'],
+            // ],
 
             // ─── Domaine : Restaurant ──────────────────────────────────────
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,8 +53,16 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $hotelSection = $request->input('hotel_section');
+        $isAdmin = $this->isAdminUser($user);
 
-        $query = CashRegister::with(['openedBy', 'warehouse', 'movements.createdBy'])
+        $query = CashRegister::with([
+                'openedBy',
+                'warehouse',
+                'movements' => function ($query) use ($isAdmin, $user) {
+                    $query->with('createdBy')
+                        ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
+                },
+            ])
             ->where('company_id', $user->company_id)
             ->where('status', 'open');
 
@@ -193,7 +202,17 @@ class CashRegisterController extends Controller
     public function show(Request $request, $id)
     {
         $user = $request->user();
-        $register = CashRegister::with(['openedBy', 'closedBy', 'warehouse', 'movements.createdBy'])
+        $isAdmin = $this->isAdminUser($user);
+
+        $register = CashRegister::with([
+                'openedBy',
+                'closedBy',
+                'warehouse',
+                'movements' => function ($query) use ($isAdmin, $user) {
+                    $query->with('createdBy')
+                        ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
+                },
+            ])
             ->where('company_id', $user->company_id)
             ->findOrFail($id);
 
@@ -250,10 +269,12 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $register = CashRegister::where('company_id', $user->company_id)->findOrFail($id);
+        $isAdmin = $this->isAdminUser($user);
         $perPage = max(1, min((int) $request->get('per_page', 50), 100));
 
         $movements = CashMovement::with(['createdBy', 'invoice', 'payment'])
             ->where('cash_register_id', $id)
+            ->when(! $isAdmin, fn ($query) => $query->where('created_by', $user->id))
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
@@ -267,39 +288,132 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $date = $request->get('date', Carbon::today()->format('Y-m-d'));
+        $dayStart = Carbon::parse($date)->startOfDay();
+        $dayEnd = Carbon::parse($date)->endOfDay();
+        $isAdmin = $this->isAdminUser($user);
+        $selectedUserId = $request->input('user_id');
+        $filteredUserId = null;
+
+        if (! $isAdmin) {
+            $filteredUserId = $user->id;
+        } elseif ($selectedUserId && $selectedUserId !== 'all') {
+            $filteredUserId = User::where('company_id', $user->company_id)
+                ->whereKey($selectedUserId)
+                ->value('id') ?? 0;
+        }
 
         $registers = CashRegister::with(['openedBy', 'closedBy'])
             ->where('company_id', $user->company_id)
+            ->when($request->has('hotel_section'), function ($query) use ($request) {
+                $hotelSection = $request->hotel_section;
+
+                if ($hotelSection === 'null' || $hotelSection === '') {
+                    $query->whereNull('hotel_section');
+                } else {
+                    $query->where('hotel_section', $hotelSection);
+                }
+            })
             ->whereDate('opened_at', $date)
             ->get();
+
+        $companyRegisters = CashRegister::where('company_id', $user->company_id)
+            ->when($request->has('hotel_section'), function ($query) use ($request) {
+                $hotelSection = $request->hotel_section;
+
+                if ($hotelSection === 'null' || $hotelSection === '') {
+                    $query->whereNull('hotel_section');
+                } else {
+                    $query->where('hotel_section', $hotelSection);
+                }
+            })
+            ->pluck('id');
 
         $totalOpening = $registers->sum('opening_balance');
         $totalClosing = $registers->where('status', 'closed')->sum('closing_balance');
         $totalDifference = $registers->where('status', 'closed')->sum('difference');
 
-        $movementSummary = CashMovement::whereIn('cash_register_id', $registers->pluck('id'))
+        $movementSummary = CashMovement::whereIn('cash_register_id', $companyRegisters)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->when(! is_null($filteredUserId), fn ($query) => $query->where('created_by', $filteredUserId))
             ->selectRaw("
                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
-                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
+                COALESCE(SUM(CASE WHEN type = 'adjustment' THEN amount ELSE 0 END), 0) as total_adjustment
             ")
             ->first();
 
-        $totalIncome = $movementSummary->total_income ?? 0;
-        $totalExpense = $movementSummary->total_expense ?? 0;
+        $totalIncome = (float) ($movementSummary->total_income ?? 0);
+        $totalExpense = (float) ($movementSummary->total_expense ?? 0);
+        $totalAdjustment = (float) ($movementSummary->total_adjustment ?? 0);
+
+        $userSummaries = CashMovement::with('createdBy:id,name,email')
+            ->whereIn('cash_register_id', $companyRegisters)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->when(! is_null($filteredUserId), fn ($query) => $query->where('created_by', $filteredUserId))
+            ->select('created_by')
+            ->selectRaw("
+                COUNT(*) as transaction_count,
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
+                COALESCE(SUM(CASE WHEN type = 'adjustment' THEN amount ELSE 0 END), 0) as total_adjustment,
+                MAX(created_at) as latest_transaction_at
+            ")
+            ->groupBy('created_by')
+            ->orderByDesc(DB::raw("COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0)"))
+            ->get()
+            ->map(function ($row) {
+                $totalIncome = (float) ($row->total_income ?? 0);
+                $totalExpense = (float) ($row->total_expense ?? 0);
+                $totalAdjustment = (float) ($row->total_adjustment ?? 0);
+                $netAmount = $totalIncome - $totalExpense + $totalAdjustment;
+
+                return [
+                    'user_id' => $row->created_by,
+                    'user_name' => $row->createdBy?->name ?? 'Utilisateur supprimé',
+                    'user_email' => $row->createdBy?->email,
+                    'transaction_count' => (int) $row->transaction_count,
+                    'total_income' => $totalIncome,
+                    'total_expense' => $totalExpense,
+                    'total_adjustment' => $totalAdjustment,
+                    'net_amount' => $netAmount,
+                    'cash_amount' => $netAmount,
+                    'latest_transaction_at' => $row->latest_transaction_at,
+                ];
+            })
+            ->values();
+
+        $recentMovements = CashMovement::with([
+                'createdBy:id,name,email',
+                'cashRegister:id,opened_by,opened_at,status',
+                'cashRegister.openedBy:id,name',
+            ])
+            ->whereIn('cash_register_id', $companyRegisters)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->when(! is_null($filteredUserId), fn ($query) => $query->where('created_by', $filteredUserId))
+            ->orderBy('created_at', 'desc')
+            ->limit(100)
+            ->get();
 
         return response()->json([
             'success' => true,
             'data' => [
                 'date' => $date,
+                'filtered_user_id' => $filteredUserId,
+                'can_filter_users' => $isAdmin,
                 'registers_count' => $registers->count(),
                 'registers' => $registers,
                 'summary' => [
                     'total_opening' => $totalOpening,
                     'total_income' => $totalIncome,
                     'total_expense' => $totalExpense,
+                    'total_adjustment' => $totalAdjustment,
+                    'net_amount' => $totalIncome - $totalExpense + $totalAdjustment,
                     'total_closing' => $totalClosing,
                     'total_difference' => $totalDifference,
+                    'total_transactions' => $userSummaries->sum('transaction_count'),
                 ],
+                'user_summaries' => $userSummaries,
+                'recent_movements' => $recentMovements,
             ],
         ]);
     }
@@ -414,5 +528,16 @@ class CashRegisterController extends Controller
                 'movements' => $paginatedMovements,
             ],
         ]);
+    }
+
+    private function isAdminUser(User $user): bool
+    {
+        return $user->roles->contains(function ($role) {
+            $name = strtolower($role->name ?? '');
+            $label = strtolower($role->label ?? '');
+
+            return in_array($name, ['admin', 'super_admin'])
+                || in_array($label, ['administrateur', 'super administrateur']);
+        });
     }
 }

@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
+    private const PRIVILEGED_ROLE_NAMES = ['super_admin', 'admin'];
+
     /**
      * Display a listing of users with pagination and search.
      */
@@ -58,6 +60,7 @@ class UserController extends Controller
             'roles.*' => 'exists:roles,id',
         ]);
 
+        $validated['roles'] = $this->normalizeRoleIds($validated['roles']);
         $validated['password'] = bcrypt($validated['password']);
         $validated['user_id'] = auth()->id();
         $companyId = $request->user()->company_id;
@@ -117,6 +120,10 @@ class UserController extends Controller
             'roles' => 'sometimes|required|array|min:1',
             'roles.*' => 'exists:roles,id',
         ]);
+
+        if (isset($validated['roles'])) {
+            $validated['roles'] = $this->normalizeRoleIds($validated['roles']);
+        }
 
         // Update password only if provided
         if (isset($validated['password']) && ! empty($validated['password'])) {
@@ -207,5 +214,25 @@ class UserController extends Controller
             'message' => 'User restored successfully',
             'data' => $user,
         ], Response::HTTP_OK);
+    }
+
+    private function normalizeRoleIds(array $roleIds): array
+    {
+        $roleIds = array_values(array_unique(array_map('intval', $roleIds)));
+
+        $privilegedRoles = Role::whereIn('id', $roleIds)
+            ->get(['id', 'name']);
+
+        $superAdmin = $privilegedRoles->first(fn ($role) => strtolower($role->name) === 'super_admin');
+        if ($superAdmin) {
+            return [$superAdmin->id];
+        }
+
+        $admin = $privilegedRoles->first(fn ($role) => strtolower($role->name) === 'admin');
+        if ($admin) {
+            return [$admin->id];
+        }
+
+        return $roleIds;
     }
 }
