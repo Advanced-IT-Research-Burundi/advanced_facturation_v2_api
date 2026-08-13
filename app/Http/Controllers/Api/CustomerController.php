@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
@@ -51,7 +52,14 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'customer_name' => 'required|string|max:255',
-            'customer_TIN' => 'nullable|string|max:255|unique:customers,customer_TIN,NULL,id,deleted_at,NULL',
+            'type' => ['required', 'string', Rule::in(['PERSONNE PHYSIQUE', 'PERSONNE MORAL'])],
+            'customer_TIN' => [
+                Rule::requiredIf($request->input('type') === 'PERSONNE MORAL'),
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('customers', 'customer_TIN')->whereNull('deleted_at'),
+            ],
             'customer_phone' => 'nullable|string|max:255|unique:customers,customer_phone,NULL,id,deleted_at,NULL',
             'customer_address' => 'nullable|string|max:255',
             'vat_customer_payer' => 'required|string|max:255',
@@ -93,7 +101,16 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'customer_name' => 'sometimes|required|string|max:255',
-            'customer_TIN' => 'nullable|string|unique:customers,customer_TIN,'.$customer->id.'|max:255',
+            'type' => ['sometimes', 'required', 'string', Rule::in(['PERSONNE PHYSIQUE', 'PERSONNE MORAL'])],
+            'customer_TIN' => [
+                Rule::requiredIf($request->input('type') === 'PERSONNE MORAL'),
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('customers', 'customer_TIN')
+                    ->ignore($customer->id)
+                    ->whereNull('deleted_at'),
+            ],
             'customer_phone' => 'nullable|string|unique:customers,customer_phone,'.$customer->id.'|max:255',
             'customer_address' => 'nullable|string|max:255',
             'vat_customer_payer' => 'sometimes|required|string|max:255',
