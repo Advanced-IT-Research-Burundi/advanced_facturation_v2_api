@@ -16,6 +16,7 @@ use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
@@ -519,7 +520,7 @@ class InvoiceController extends Controller
     public function cancelInvoice(Request $request, Invoice $invoice)
     {
         $validated = $request->validate([
-            'motif' => 'required|string|min:10|max:500',
+            'motif' => 'required|string|max:500',
             'restore_stock' => 'boolean',
         ]);
 
@@ -567,6 +568,11 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
+            Log::error('Erreur lors de l\'annulation de la facture.', [
+                'invoice_id' => $invoice->id,
+                'exception' => $e,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de l\'annulation',
@@ -587,17 +593,17 @@ class InvoiceController extends Controller
             }
 
             // Trouver le mouvement de stock original
-            $originalMovement = StockMovement::where('invoice_id', $invoice->id)
+            $originalMovement = StockMovement::where('item_movement_invoice_ref', $invoice->invoice_number)
                 ->where('product_id', $item->product_id)
-                ->where('item_movement_type', 'SN') // Sortie normale
+                ->whereIn('item_movement_type', ['VENTE', 'SN'])
                 ->first();
 
             if ($originalMovement) {
                 // Créer un mouvement de retour (ER = Entrée Retour)
                 $returnMovement = StockMovement::create([
+                    'system_or_device_id' => $originalMovement->system_or_device_id,
                     'product_id' => $item->product_id,
                     'warehouse_id' => $originalMovement->warehouse_id,
-                    'invoice_id' => $invoice->id,
                     'item_code' => $originalMovement->item_code,
                     'item_designation' => $originalMovement->item_designation,
                     'item_quantity' => $item->item_quantity,
@@ -609,7 +615,10 @@ class InvoiceController extends Controller
                     'item_movement_description' => "Retour après annulation - {$motif}",
                     'item_movement_date' => now(),
                     'obr_submission_status' => 'PENDING',
+                    'company_id' => $invoice->company_id,
                     'user_id' => auth()->id(),
+                    'created_by' => auth()->id(),
+                    'created_by_id' => auth()->id(),
                 ]);
 
                 // Mettre à jour le stock dans l'entrepôt
