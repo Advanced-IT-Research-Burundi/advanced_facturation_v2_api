@@ -4,17 +4,54 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\AppConfig;
+use App\Services\ObrService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
-    public function checkTin($tp_TIN)
+    public function __construct(private readonly ObrService $obrService)
     {
+    }
+
+    public function checkTin(Request $request, $tp_TIN = null)
+    {
+        $tpTin = trim((string) ($request->input('tp_TIN', $tp_TIN) ?? ''));
+
+        if ($tpTin === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Veuillez fournir le NIF du contribuable.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (! AppConfig::getConfigKey('CAN_SYNCRONISE_TO_OBR')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OBR désactivé. Vérification NIF non disponible.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        $result = $this->obrService->checkTin($tpTin);
+
+        if (! $result['success']) {
+            $message = $result['message'] ?? 'NIF du contribuable inconnu.';
+            $status = str_contains(mb_strtolower($message), 'inconnu')
+                ? Response::HTTP_BAD_REQUEST
+                : Response::HTTP_BAD_GATEWAY;
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], $status);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'OBR désactivé. Vérification NIF non disponible.',
+            'message' => 'NIF valide.',
+            'data' => $result['data'],
         ]);
     }
 

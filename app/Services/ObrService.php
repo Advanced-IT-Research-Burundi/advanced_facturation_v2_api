@@ -45,10 +45,10 @@ class ObrService
             }
 
             Log::error('OBR Login Failed', ['response' => $json]);
-            return $response->json();
+            return null;
         } catch (\Exception $e) {
             Log::error('OBR Login Exception', ['error' => $e->getMessage()]);
-            return $response->json();
+            return null;
         }
     }
 

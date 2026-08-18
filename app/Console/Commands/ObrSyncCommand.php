@@ -38,4 +38,6 @@ class ObrSyncCommand extends Command
            dump( $result );
         }
     }
+
+    
 }

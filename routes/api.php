@@ -106,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
     Route::get('customers/{customer}/deposits', [CustomerController::class, 'deposits']);
 
+    Route::post('customers/checkTIN', [CustomerController::class, 'checkTin']);
     Route::get('checkTIN/{tp_TIN}', [CustomerController::class, 'checkTin']);
 
     // Invoices
