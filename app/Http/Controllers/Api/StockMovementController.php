@@ -26,7 +26,7 @@ class StockMovementController extends Controller
 
         // Stock actuel avec infos minimales
         $stocks = WarehouseProduct::with([
-            'product:id,item_code,item_designation,item_measurement_unit,quantite_alert',
+            'product:id,item_code,item_designation,item_measurement_unit,quantite_alert,vat_rate',
             'lastStockMovement:id,item_movement_type,created_at',
         ])
             ->where('warehouse_id', $warehouseId)
