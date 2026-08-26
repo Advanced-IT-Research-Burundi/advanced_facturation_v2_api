@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\PatientHistoryController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\ProductController;
@@ -267,6 +268,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
 
     // Payments (Paiements partiels)
+    Route::apiResource('payment-methods', PaymentMethodController::class)->except(['show']);
     Route::get('payments/methods', [PaymentController::class, 'paymentMethods']);
     Route::get('invoices/{invoice}/payments', [PaymentController::class, 'invoicePayments']);
     Route::apiResource('payments', PaymentController::class)->except(['update']);
