@@ -31,8 +31,7 @@ class ObrSyncCommand extends Command
         // Syncronisa ama  invoinces
 
         $this->syncStocks();
-
-     //   $this->syncInvoice();
+         $this->syncInvoice();
        
     }
 

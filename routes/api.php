@@ -464,4 +464,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('depense-categories', [App\Http\Controllers\Api\DepenseCategoryController::class, 'index']);
     });
 
+    Route::get('stock-mouvements', [App\Http\Controllers\Api\WarehouseProductController::class, 'stockMouvementHistory']);
+    
+    Route::get('historique-invoices', [App\Http\Controllers\Api\WarehouseProductController::class, 'historiqueInvoices']);
+    
+
 });

@@ -3,12 +3,31 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\StockMovement;
+use App\Models\Invoice;
 use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class WarehouseProductController extends Controller
 {
+
+    public function stockMouvementHistory(Request $request){
+        $stocksHistory = StockMovement::latest()->paginate();
+        return response()->json([
+            "success"=>true,
+            "data"=>$stocksHistory
+        ],Response::HTTP_OK);
+    }
+    public function historiqueInvoices(){
+        $invoicesHistory = Invoice::with(['customer','user'])->latest()->paginate();
+        return response()->json([
+            "success"=>true,
+            "data"=>$invoicesHistory
+        ],Response::HTTP_OK);
+    }
+
+
     /**
      * Display a listing of warehouse products
      * GET /api/warehouse-products
