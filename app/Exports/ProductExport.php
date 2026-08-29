@@ -19,6 +19,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
         'Quantité Alerte',
         'Prix d\'Achat',
         'Prix de Vente',
+        'Prix Promo',
         'Taux TVA (%)',
         'Catégorie',
         'Description',
@@ -40,6 +41,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
                 10,
                 1000,
                 1500,
+                1200,
                 18,
                 'Catégorie 1',
                 'Description du produit exemple',
@@ -53,6 +55,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
                 5,
                 2000,
                 2800,
+                2500,
                 18,
                 'Catégorie 2',
                 'Autre description',
@@ -102,9 +105,10 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
             'F' => 15,  // Quantité Alerte
             'G' => 15,  // Prix d'Achat
             'H' => 15,  // Prix de Vente
-            'I' => 12,  // Taux TVA
-            'J' => 20,  // Catégorie
-            'K' => 40,  // Description
+            'I' => 15,  // Prix Promo
+            'J' => 12,  // Taux TVA
+            'K' => 20,  // Catégorie
+            'L' => 40,  // Description
         ];
     }
 }

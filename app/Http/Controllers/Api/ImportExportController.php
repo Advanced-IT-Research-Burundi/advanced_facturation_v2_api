@@ -178,6 +178,7 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
             $product->quantite_alert ?? 0,
             $product->price ?? 0,
             $product->price_ttc ?? 0,
+            $product->price_promo ?? 0,
             $product->vat_rate ?? 0,
             $product->categoryProduct?->name ?? '',
             $product->description ?? '',
@@ -211,9 +212,10 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
             'F' => 15,
             'G' => 15,
             'H' => 15,
-            'I' => 12,
-            'J' => 20,
-            'K' => 40,
+            'I' => 15,
+            'J' => 12,
+            'K' => 20,
+            'L' => 40,
         ];
     }
 }

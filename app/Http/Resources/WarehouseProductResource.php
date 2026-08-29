@@ -22,6 +22,7 @@ class WarehouseProductResource extends JsonResource
             'name' => $this->product?->item_designation,
             'price' => $this->product?->price ?: $this->unit_price,
             'unit_price' => $this->unit_price,
+            'price_promo' => $this->price_promo,
             'category' => $this->product?->categoryProduct?->name,
             'stock' => $this->quantity,
             'item_measurement_unit' => $this->product?->item_measurement_unit,

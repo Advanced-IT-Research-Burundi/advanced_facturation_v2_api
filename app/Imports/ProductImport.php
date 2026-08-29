@@ -77,6 +77,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'alert_quantity' => $rowData['quantite_alerte'] ?? 0,
                     'purchase_price' => $rowData['prix_dachat'] ?? 0,
                     'selling_price' => $rowData['prix_de_vente'] ?? 0,
+                    'promo_price' => $rowData['prix_promo'] ?? $rowData['prix_promotion'] ?? 0,
                     'vat_rate' => $rowData['taux_tva'] ?? 0,
                     'category' => $rowData['categorie'] ?? '',
                     'description' => $rowData['description'] ?? '',
@@ -162,6 +163,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'quantite' => floatval($rowData['quantite'] ?? 0),
                     'quantite_alert' => floatval($rowData['quantite_alerte'] ?? 0),
                     'price' => floatval($rowData['prix_dachat'] ?? 0),
+                    'price_promo' => floatval($rowData['prix_promo'] ?? $rowData['prix_promotion'] ?? 0),
                     'price_ttc' => floatval($rowData['prix_de_vente'] ?? 0),
                     'vat_rate' => floatval($rowData['taux_tva'] ?? 0),
                     'product_category_id' => $categoryId,
@@ -175,6 +177,7 @@ class ProductImport implements ToCollection, WithHeadingRow
                     'product_id' => $product->id,
                     'quantity' => floatval($rowData['quantite'] ?? 0),
                     'unit_price' => floatval($rowData['prix_dachat'] ?? 0),
+                    'price_promo' => floatval($rowData['prix_promo'] ?? $rowData['prix_promotion'] ?? 0),
                     'currency' => 'BIF',
                     'user_id' => Auth::id(),
                 ]);

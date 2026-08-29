@@ -26,6 +26,7 @@ class ProductResource extends JsonResource
             'quantite' => $this->quantite,
             'quantite_alert' => $this->quantite_alert,
             'price' => $this->price,
+            'price_promo' => $this->price_promo,
             'price_ttc' => $this->price_ttc,
             'price_max' => $this->price_max,
             'price_min' => $this->price_min,
