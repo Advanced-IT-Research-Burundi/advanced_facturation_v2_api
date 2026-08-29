@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\StockMovement;
 use Illuminate\Console\Command;
 use App\Services\ObrService;
 use App\Models\Invoice;
@@ -30,14 +31,21 @@ class ObrSyncCommand extends Command
         // Syncronisa ama  invoinces
 
         $this->syncStocks();
-
-     //   $this->syncInvoice();
+         $this->syncInvoice();
        
     }
 
-    public function syncStocks(){
-        dd('here');
-        
+    public function syncStocks()
+    {
+
+        $stoksMouvements = StockMovement::where('obr_submission_status', '=', 'PENDING')->latest()->get();
+
+        foreach ($stoksMouvements as $stock){
+            $obrService = new ObrService();
+            $result = $obrService->addStockMovement($stock);
+           dump( $result );
+        }
+      
     }
 
     public function syncInvoice(){
