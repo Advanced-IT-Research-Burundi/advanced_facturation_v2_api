@@ -28,7 +28,20 @@ class ObrSyncCommand extends Command
     public function handle()
     {
         // Syncronisa ama  invoinces
-        $invoices = Invoice::with(['company', 'invoiceItems'])
+
+        $this->syncStocks();
+
+     //   $this->syncInvoice();
+       
+    }
+
+    public function syncStocks(){
+        dd('here');
+        
+    }
+
+    public function syncInvoice(){
+         $invoices = Invoice::with(['company', 'invoiceItems'])
         ->where('obr_submission_status', '=', 'PENDING')
         ->latest()->get();
 
@@ -38,6 +51,5 @@ class ObrSyncCommand extends Command
            dump( $result );
         }
     }
-
     
 }
