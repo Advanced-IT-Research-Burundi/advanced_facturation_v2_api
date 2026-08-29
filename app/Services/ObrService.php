@@ -324,7 +324,7 @@ class ObrService
         // Préparer les items de la facture
         $invoiceItems = [];
         foreach ($invoice->invoiceItems as $item) {
-            $itemPrice = $this->resolvePromoItemPrice($invoice, $item);
+            $itemPrice = $this->resolveObrItemPrice($invoice, $item);
             $priceHtva = $itemPrice * $item->item_quantity + ($item->item_ct ?? 0);
             $vatRate = (float) ($item->vat ?? 0);
             $vatAmount = $priceHtva * ($vatRate / 100);
@@ -384,9 +384,13 @@ class ObrService
         ];
     }
 
-    private function resolvePromoItemPrice(Invoice $invoice, $item): float
+    private function resolveObrItemPrice(Invoice $invoice, $item): float
     {
-        $fallbackPrice = (float) ($item->item_price ?? 0);
+        if ($item->item_price !== null) {
+            return (float) $item->item_price;
+        }
+
+        $fallbackPrice = 0;
 
         if (! $item->product_id) {
             return $fallbackPrice;

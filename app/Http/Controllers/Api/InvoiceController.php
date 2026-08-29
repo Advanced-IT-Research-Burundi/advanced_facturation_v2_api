@@ -358,7 +358,7 @@ class InvoiceController extends Controller
             // Les détails de facture sont utilisés par l'impression et les avoirs.
             // Les mouvements de stock ne sont pas nécessaires ici et certaines
             // installations historiques ne possèdent pas leur clé invoice_id.
-            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems', 'payments']),
+            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product', 'payments', 'latestObrLog']),
         ], Response::HTTP_OK);
     }
 
