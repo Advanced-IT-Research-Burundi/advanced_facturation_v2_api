@@ -27,6 +27,7 @@ class Invoice extends Model
         'invoice_identifier',
         'invoice_currency',
         'payment_type',
+        'payment_method_id',
         'tp_type',
         'tp_name',
         'tp_TIN',
@@ -93,6 +94,7 @@ class Invoice extends Model
             'company_id' => 'integer',
             'customer_id' => 'integer',
             'warehouse_id' => 'integer',
+            'payment_method_id' => 'integer',
             'created_by' => 'integer',
             'user_id' => 'integer',
             'created_by_id' => 'integer',
@@ -153,6 +155,11 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function paymentMethod(): BelongsTo
+    {
+        return $this->belongsTo(PaymentMethod::class);
     }
 
     public function restaurantTable(): BelongsTo
