@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HotelReservation;
 use App\Models\Invoice;
 use App\Services\HotelInvoiceService;
+use App\Services\ObrService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -13,7 +14,8 @@ use Illuminate\Http\Response;
 class HotelInvoiceController extends Controller
 {
     public function __construct(
-        protected HotelInvoiceService $hotelInvoiceService
+        protected HotelInvoiceService $hotelInvoiceService,
+        protected ObrService $obrService
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -57,7 +59,7 @@ class HotelInvoiceController extends Controller
         ]);
     }
 
-    public function generate(HotelReservation $hotelReservation): JsonResponse
+    public function generate(Request $request, HotelReservation $hotelReservation): JsonResponse
     {
         if ($hotelReservation->company_id !== auth()->user()->company_id) {
             return response()->json([
@@ -68,11 +70,13 @@ class HotelInvoiceController extends Controller
 
         try {
             $invoice = $this->hotelInvoiceService->generateInvoice($hotelReservation);
+            $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
 
             return response()->json([
                 'success' => true,
-                'message' => 'Facture créée avec succès',
-                'data' => $invoice->load(['customer', 'invoiceItems']),
+                'message' => $obrResult ? 'Facture créée avec succès. Envoi OBR direct traité.' : 'Facture créée avec succès. En attente d\'envoi OBR.',
+                'data' => $invoice->fresh(['customer', 'invoiceItems']),
+                'obr_result' => $obrResult,
             ], Response::HTTP_CREATED);
         } catch (\Exception $e) {
             return response()->json([

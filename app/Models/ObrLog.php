@@ -101,16 +101,23 @@ class ObrLog extends Model
      */
     public static function logInvoiceCancelled(Invoice $invoice, array $obrResult, string $motif): self
     {
+        $invoiceIdentifier = $obrResult['invoice_identifier']
+            ?? $invoice->obr_invoice_identifier
+            ?? $invoice->electronic_signature;
+
         return self::create([
             'log_type' => self::TYPE_CANCEL,
             'invoice_id' => $invoice->id,
-            'invoice_identifier' => $invoice->obr_invoice_identifier,
+            'invoice_identifier' => $invoiceIdentifier,
             'invoice_number' => $invoice->invoice_number,
             'success' => $obrResult['success'] ?? false,
             'status' => ($obrResult['success'] ?? false) ? self::STATUS_ACCEPTED : self::STATUS_REJECTED,
             'obr_message' => $obrResult['message'] ?? null,
             'obr_response' => json_encode($obrResult),
-            'request_body' => ['motif' => $motif],
+            'request_body' => [
+                'invoice_identifier' => $invoiceIdentifier,
+                'cn_motif' => $motif,
+            ],
             'user_id' => auth()->id(),
         ]);
     }

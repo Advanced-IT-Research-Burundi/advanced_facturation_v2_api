@@ -91,6 +91,7 @@ Route::get('checkTIN/{tp_TIN}', [CustomerController::class, 'checkTin']);
 // Invoices
 Route::post('invoices/sync-obr', [InvoiceController::class, 'syncPendingInvoices']);
 Route::get('invoices/obr-stats', [InvoiceController::class, 'obrStats']);
+Route::get('invoices/obr-monitor', [InvoiceController::class, 'obrInvoices']);
 Route::apiResource('invoices', InvoiceController::class);
 Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);
 Route::post('invoices/{invoice}/resend-obr', [InvoiceController::class, 'resendToObr']);

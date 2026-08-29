@@ -237,6 +237,17 @@ class RestaurantInvoiceService
         return $invoice->fresh(['customer', 'invoiceItems', 'restaurantTable', 'server']);
     }
 
+    public function sendToObr(int $invoiceId): array
+    {
+        $invoice = Invoice::with(['company', 'customer', 'invoiceItems.product'])->findOrFail($invoiceId);
+
+        if (! $invoice->is_restaurant) {
+            throw new \Exception('Cette facture n\'est pas une facture restaurant');
+        }
+
+        return $this->obrService->addInvoice($invoice);
+    }
+
     private function calculateTotals($orders): array
     {
         $subtotal = 0;
