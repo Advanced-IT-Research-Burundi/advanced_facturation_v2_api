@@ -3,30 +3,70 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\StockMovement;
 use App\Models\Invoice;
+use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class WarehouseProductController extends Controller
 {
+    public function stockMouvementHistory(Request $request)
+    {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
 
-    public function stockMouvementHistory(Request $request){
-        $stocksHistory = StockMovement::latest()->paginate();
+        $query = StockMovement::query();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('item_designation', 'like', "%{$search}%")
+                    ->orWhere('item_code', 'like', "%{$search}%")
+                    ->orWhere('item_movement_invoice_ref', 'like', "%{$search}%")
+                    ->orWhere('obr_submission_status', 'like', "%{$search}%")
+                    ->orWhere('system_or_device_id', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('obr_submission_status', $request->status);
+        }
+
+        $stocksHistory = $query->latest()->paginate($perPage);
+
         return response()->json([
-            "success"=>true,
-            "data"=>$stocksHistory
-        ],Response::HTTP_OK);
-    }
-    public function historiqueInvoices(){
-        $invoicesHistory = Invoice::with(['customer','user'])->latest()->paginate();
-        return response()->json([
-            "success"=>true,
-            "data"=>$invoicesHistory
-        ],Response::HTTP_OK);
+            'success' => true,
+            'data' => $stocksHistory,
+        ], Response::HTTP_OK);
     }
 
+    public function historiqueInvoices(Request $request)
+    {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
+
+        $query = Invoice::with(['customer', 'user']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_TIN', 'like', "%{$search}%")
+                    ->orWhere('tp_TIN', 'like', "%{$search}%")
+                    ->orWhere('electronic_signature', 'like', "%{$search}%")
+                    ->orWhere('obr_submission_status', 'like', "%{$search}%");
+            });
+        }
+
+        $invoicesHistory = $query->latest()->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $invoicesHistory,
+        ], Response::HTTP_OK);
+    }
 
     /**
      * Display a listing of warehouse products

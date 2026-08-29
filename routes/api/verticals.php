@@ -164,6 +164,6 @@ Route::prefix('hotel')->group(function () {
     Route::get('depense-categories', [DepenseCategoryController::class, 'index']);
 });
 
-Route::get('stock-mouvements', [WarehouseProductController::class, 'stockMouvementHistory']);
+Route::get('obr-mouvements-stock', [WarehouseProductController::class, 'stockMouvementHistory']);
 
-Route::get('historique-invoices', [WarehouseProductController::class, 'historiqueInvoices']);
+Route::get('obr-invoices', [WarehouseProductController::class, 'historiqueInvoices']);
