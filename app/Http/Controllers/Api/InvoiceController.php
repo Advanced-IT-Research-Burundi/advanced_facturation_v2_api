@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use App\Services\ObrService;
@@ -38,7 +39,7 @@ class InvoiceController extends Controller
     {
         $perPage = max(1, min((int) $request->input('per_page', 15), 100));
 
-        $query = Invoice::with(['company', 'customer'])
+        $query = Invoice::with(['company', 'customer', 'paymentMethod'])
             ->withCount('invoiceItems')
             ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
@@ -95,6 +96,7 @@ class InvoiceController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'warehouse_id' => 'nullable|exists:warehouses,id',
             'payment_type' => 'required|string|max:50',
+            'payment_method_id' => 'nullable|integer|exists:payment_methods,id',
             'reference_invoice_id' => 'nullable|exists:invoices,id',
             'reference_invoice_number' => 'nullable|string',
             'avoir_reason' => 'nullable|string',
@@ -119,6 +121,32 @@ class InvoiceController extends Controller
             throw ValidationException::withMessages([
                 'payment_type' => 'Le mode de paiement doit être 1 (espèces), 2 (banque), 3 (à crédit) ou 4 (autres).',
             ]);
+        }
+
+        $selectedPaymentMethod = null;
+        if (! empty($validated['payment_method_id'])) {
+            $selectedPaymentMethod = PaymentMethod::query()
+                ->whereKey($validated['payment_method_id'])
+                ->where('company_id', auth()->user()->company_id)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $selectedPaymentMethod) {
+                throw ValidationException::withMessages([
+                    'payment_method_id' => 'La méthode de paiement sélectionnée est introuvable ou inactive.',
+                ]);
+            }
+
+            $expectedMethodType = [
+                '2' => 'bank',
+                '4' => 'mobile_money',
+            ][$validated['payment_type']] ?? null;
+
+            if ($expectedMethodType && $selectedPaymentMethod->method_type !== $expectedMethodType) {
+                throw ValidationException::withMessages([
+                    'payment_method_id' => 'La méthode sélectionnée ne correspond pas au mode de paiement choisi.',
+                ]);
+            }
         }
 
         try {
@@ -183,6 +211,7 @@ class InvoiceController extends Controller
                 'invoice_identifier' => $validated['invoice_action'],
                 'invoice_currency' => $validated['invoice_currency'],
                 'payment_type' => $validated['payment_type'] ?? '1',
+                'payment_method_id' => $selectedPaymentMethod?->id,
 
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
                 'tp_name' => $company->tp_name,
@@ -296,7 +325,7 @@ class InvoiceController extends Controller
                 'success' => true,
                 'message' => 'Facture créée avec succès',
                 'data' => [
-                    'invoice' => $invoice->load(['customer', 'invoiceItems']),
+                    'invoice' => $invoice->load(['customer', 'paymentMethod', 'invoiceItems']),
                     'stock_movements' => $stockMovements,
                 ],
             ], Response::HTTP_CREATED);
@@ -321,7 +350,7 @@ class InvoiceController extends Controller
             // Les détails de facture sont utilisés par l'impression et les avoirs.
             // Les mouvements de stock ne sont pas nécessaires ici et certaines
             // installations historiques ne possèdent pas leur clé invoice_id.
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems', 'payments']),
+            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems', 'payments']),
         ], Response::HTTP_OK);
     }
 
