@@ -7,6 +7,7 @@ use App\Models\StockMovement;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Exception;
+use App\Models\AppConfig;
 
 class StockService
 {
@@ -61,13 +62,12 @@ class StockService
                     'currency' => 'BIF',
                     'invoice_number' => $invoiceNumber,
                     'warehouse_id' => $warehouseId,
-                    'movement_type' => 'VENTE',
+                    'movement_type' => 'SN',
                 ]);
 
                 // Réduire la quantité en stock
                 $warehouseProduct->decrement('quantity', $item['item_quantity']);
                 $warehouseProduct->update(['last_stock_movement_id' => $movement->id]);
-
                 $movements[] = $movement;
 
             } catch (Exception $e) {
@@ -95,8 +95,8 @@ class StockService
     private function createStockMovement(array $data): StockMovement
     {
         return StockMovement::create([
-            'system_or_device_id' => gethostname() . '-' . request()->ip(),
-            'item_code' => $data['product']->item_code ?? $data['product']->id,
+            'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME') ?? "-",
+            'item_code' => $data['product']->id,
             'item_designation' => $data['product']->item_designation,
             'item_quantity' => $data['quantity'],
             'item_measurement_unit' => $data['product']->item_measurement_unit ?? 'UNITE',
