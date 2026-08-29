@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\ObrLog;
 use App\Models\StockMovement;
+use App\Models\WarehouseProduct;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -100,47 +101,83 @@ class ObrService
     /**
      * Ajouter une facture avec accusé de réception
      */
-    public function addInvoice( $invoice)
+    public function addInvoice($invoice)
     {
         // Générer l'identifiant unique de la facture
         // Préparer les données de la facture selon le format EBMS
+        $invoice->loadMissing(['company', 'customer', 'invoiceItems.product']);
         $invoiceData = $this->formatInvoiceData($invoice, $invoice->company, $invoice->electronic_signature);
         //dd( $invoiceData);
         $response = $this->post('addInvoice_confirm', $invoiceData);
         $json = $response->json();
         if (isset($json['success']) && $json['success']) {
-            $this->saveLogs("ADD_INVOICE", $json, true,  $invoice->id, null);
+            $this->saveLogs(ObrLog::TYPE_INVOICE, $json, true, $invoice->id, null, $invoiceData);
             $invoice->update([
                 'obr_invoice_identifier' => $json['result']['invoice_identifier'] ?? null,
                 'obr_invoice_registered_number' => $json['result']['invoice_registered_number'] ?? null,
                 'obr_invoice_registered_date' => $json['result']['invoice_registered_date'] ?? null,
                 'obr_electronic_signature' => $json['electronic_signature'] ?? null,
                 'obr_submission_status' => 'ACCEPTED',
+                'obr_response_message' => $json['msg'] ?? 'Facture ajoutée avec succès',
+                'obr_sent_at' => now(),
             ]);
+
             return [
                 'success' => true,
                 'message' => $json['msg'] ?? 'Facture ajoutée avec succès',
-                'invoice_identifier' => $response->json(),
+                'invoice_identifier' => $json['result']['invoice_identifier'] ?? null,
                 'invoice_registered_number' => $json['result']['invoice_registered_number'] ?? null,
                 'invoice_registered_date' => $json['result']['invoice_registered_date'] ?? null,
                 'electronic_signature' => $json['electronic_signature'] ?? null,
+                'raw_response' => $json,
             ];
         }
-        if(isset($json['msg']) && $json['msg'] == 'Une facture avec le même numéro existe déjà.'){
+
+        if (isset($json['msg']) && $json['msg'] == 'Une facture avec le même numéro existe déjà.') {
             $invoice->update([
                 'obr_submission_status' => 'SENT',
+                'obr_response_message' => $json['msg'],
+                'obr_sent_at' => now(),
             ]);
-        }else{
-             $invoice->update([
+        } else {
+            $invoice->update([
                 'obr_submission_status' => 'REJECTED',
+                'obr_response_message' => $json['msg'] ?? 'Erreur lors de l\'envoi de la facture',
+                'obr_sent_at' => now(),
             ]);
         }
-        $this->saveLogs("ADD_INVOICE", $json, false,  $invoice->id, null);
+        $this->saveLogs(ObrLog::TYPE_INVOICE, $json, false, $invoice->id, null, $invoiceData);
+
         return [
             'success' => false,
             'message' => $json['msg'] ?? 'Erreur lors de l\'envoi de la facture',
-            'invoice_identifier' => $response->json(),
+            'invoice_identifier' => $json['result']['invoice_identifier'] ?? null,
+            'raw_response' => $json,
         ];
+    }
+
+    public function sendInvoiceIfSuperAdmin(Invoice $invoice, $user = null): ?array
+    {
+        if (! $this->isSuperAdmin($user ?? auth()->user())) {
+            return null;
+        }
+
+        return $this->addInvoice($invoice);
+    }
+
+    public function isSuperAdmin($user = null): bool
+    {
+        $user ??= auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        $roles = $user->relationLoaded('roles') ? $user->roles : $user->roles()->get();
+
+        return $roles->contains(function ($role) {
+            return in_array(strtolower($role->name ?? ''), ['super_admin', 'superadmin'], true)
+                || strtolower($role->label ?? '') === 'super administrateur';
+        });
     }
 
     /**
@@ -148,7 +185,7 @@ class ObrService
      */
     public function cancelInvoice($invoiceIdentifier, $motif)
     {
-        $response = $this->post('cancelInvoice', [
+        $response = $this->post('cancelInvoice/', [
             'invoice_identifier' => $invoiceIdentifier,
             'cn_motif' => $motif,
         ]);
@@ -159,12 +196,16 @@ class ObrService
             return [
                 'success' => true,
                 'message' => $json['msg'] ?? 'Facture annulée avec succès',
+                'invoice_identifier' => $invoiceIdentifier,
+                'raw_response' => $json,
             ];
         }
 
         return [
             'success' => false,
             'message' => $json['msg'] ?? 'Erreur lors de l\'annulation de la facture',
+            'invoice_identifier' => $invoiceIdentifier,
+            'raw_response' => $json,
         ];
     }
 
@@ -191,7 +232,7 @@ class ObrService
         $json = $response->json();
 
         if (isset($json['success']) && $json['success']) {
-            $this->saveLogs("ADD_STOCK_MOVEMENT", $json, true,  $movement->id, $movement->id);
+            $this->saveLogs("ADD_STOCK_MOVEMENT", $json, true, null, $movement->id);
 
             $movement->update([
                 'obr_submission_status' => 'ACCEPTED',
@@ -203,7 +244,7 @@ class ObrService
                 'message' => $json['msg'] ?? 'Mouvement de stock ajouté avec succès',
             ];
         }
-        $this->saveLogs("ADD_STOCK_MOVEMENT", $json, false,  $movement->id, $movement->id);
+        $this->saveLogs("ADD_STOCK_MOVEMENT", $json, false, null, $movement->id);
         $movement->update([
             'obr_submission_status' => 'REJECTED',
             'obr_sent_at' => now(),
@@ -253,15 +294,26 @@ class ObrService
         );
     }
 
-    public function saveLogs($logType ,$json, $success, $invoiceId= null, $stockMovementId= null)
+    public function saveLogs($logType, $json, $success, $invoiceId = null, $stockMovementId = null, array $requestBody = [])
     {
-          ObrLog::create([
-                'log_type' => $logType,
-                'success' => $success,
-                'invoice_id' => $invoiceId,
-                'stock_movement_id' => $stockMovementId,
-                'obr_response' => json_encode($json),
-            ]);
+        $invoice = $invoiceId ? Invoice::find($invoiceId) : null;
+
+        ObrLog::create([
+            'log_type' => $logType,
+            'success' => $success,
+            'status' => $success ? ObrLog::STATUS_ACCEPTED : ObrLog::STATUS_REJECTED,
+            'invoice_id' => $invoiceId,
+            'stock_movement_id' => $stockMovementId,
+            'invoice_identifier' => $json['result']['invoice_identifier'] ?? $invoice?->obr_invoice_identifier ?? $invoice?->electronic_signature,
+            'invoice_number' => $invoice?->invoice_number,
+            'obr_message' => $json['msg'] ?? null,
+            'obr_response' => json_encode($json),
+            'electronic_signature' => $json['electronic_signature'] ?? null,
+            'invoice_registered_number' => $json['result']['invoice_registered_number'] ?? null,
+            'invoice_registered_date' => $json['result']['invoice_registered_date'] ?? null,
+            'request_body' => $requestBody,
+            'user_id' => auth()->id(),
+        ]);
     }
 
     /**
@@ -272,7 +324,8 @@ class ObrService
         // Préparer les items de la facture
         $invoiceItems = [];
         foreach ($invoice->invoiceItems as $item) {
-            $priceHtva = $item->item_price * $item->item_quantity + ($item->item_ct ?? 0);
+            $itemPrice = $this->resolveObrItemPrice($invoice, $item);
+            $priceHtva = $itemPrice * $item->item_quantity + ($item->item_ct ?? 0);
             $vatRate = (float) ($item->vat ?? 0);
             $vatAmount = $priceHtva * ($vatRate / 100);
             $priceTvac = $priceHtva + $vatAmount;
@@ -281,7 +334,7 @@ class ObrService
             $invoiceItems[] = [
                 'item_designation' => $item->item_designation ?? $item->product->item_designation ?? '',
                 'item_quantity' => (string) $item->item_quantity,
-                'item_price' => (string) $item->item_price,
+                'item_price' => (string) $itemPrice,
                 'item_ct' => (string) ($item->item_ct ?? 0),
                 'item_tl' => (string) ($item->item_tl ?? 0),
                 'item_ott_tax' => (string) ($item->item_ott_tax ?? 0),
@@ -329,6 +382,36 @@ class ObrService
             'invoice_identifier' => $invoiceIdentifier,
             'invoice_items' => $invoiceItems,
         ];
+    }
+
+    private function resolveObrItemPrice(Invoice $invoice, $item): float
+    {
+        if ($item->item_price !== null) {
+            return (float) $item->item_price;
+        }
+
+        $fallbackPrice = 0;
+
+        if (! $item->product_id) {
+            return $fallbackPrice;
+        }
+
+        $warehousePromoPrice = WarehouseProduct::query()
+            ->where('product_id', $item->product_id)
+            ->when($invoice->warehouse_id, fn ($query) => $query->where('warehouse_id', $invoice->warehouse_id))
+            ->orderByRaw($invoice->warehouse_id ? 'id asc' : 'quantity desc')
+            ->value('price_promo');
+
+        if ((float) $warehousePromoPrice > 0) {
+            return (float) $warehousePromoPrice;
+        }
+
+        $productPromoPrice = (float) ($item->product?->price_promo ?? 0);
+        if ($productPromoPrice > 0) {
+            return $productPromoPrice;
+        }
+
+        return $fallbackPrice;
     }
 
     /**
@@ -386,12 +469,13 @@ class ObrService
         }
 
         try {
+            $endpoint = rtrim($this->baseUrl, '/').'/'.ltrim($url, '/');
             $response = Http::withToken($token)
                 ->timeout(30)
-                ->post($this->baseUrl.'/'.$url, $data);
+                ->post($endpoint, $data);
 
             Log::info('OBR API Call', [
-                'url' => $url,
+                'url' => $endpoint,
                 'status' => $response->status(),
                 'response' => $response->json(),
             ]);

@@ -8,6 +8,7 @@ use App\Models\HotelMenuItem;
 use App\Models\HotelRestaurantOrder;
 use App\Models\HotelRestaurantTable;
 use App\Services\HotelInvoiceService;
+use App\Services\ObrService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,7 +16,10 @@ use Illuminate\Support\Facades\DB;
 
 class HotelRestaurantOrderController extends Controller
 {
-    public function __construct(protected HotelInvoiceService $hotelInvoiceService) {}
+    public function __construct(
+        protected HotelInvoiceService $hotelInvoiceService,
+        protected ObrService $obrService
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -176,11 +180,13 @@ class HotelRestaurantOrderController extends Controller
         }
 
         $invoice = null;
+        $obrResult = null;
         if ($validated['status'] === 'paid' && ! $hotelRestaurantOrder->invoice_id) {
             try {
                 $invoice = $this->hotelInvoiceService->generateRestaurantOrderInvoice(
                     $hotelRestaurantOrder->fresh(['items', 'restaurantTable'])
                 );
+                $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
             } catch (\Exception $e) {
                 \Log::warning('Impossible de créer la facture pour la commande '.$hotelRestaurantOrder->id.': '.$e->getMessage());
             }
@@ -191,6 +197,7 @@ class HotelRestaurantOrderController extends Controller
             'message' => 'Statut mis à jour',
             'data' => $hotelRestaurantOrder->load(['restaurantTable', 'items', 'invoice']),
             'invoice' => $invoice,
+            'obr_result' => $obrResult,
         ]);
     }
 }

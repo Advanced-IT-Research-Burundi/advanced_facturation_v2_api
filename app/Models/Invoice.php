@@ -152,6 +152,16 @@ class Invoice extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    public function obrLogs(): HasMany
+    {
+        return $this->hasMany(ObrLog::class);
+    }
+
+    public function latestObrLog(): HasOne
+    {
+        return $this->hasOne(ObrLog::class)->latestOfMany();
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);

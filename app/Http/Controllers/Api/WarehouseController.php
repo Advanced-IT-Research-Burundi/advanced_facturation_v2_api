@@ -55,6 +55,7 @@ class WarehouseController extends Controller
                     'item_measurement_unit' => $product->item_measurement_unit,
                     'quantite_alert' => $product->quantite_alert,
                     'stock_quantity' => $stockQuantity,
+                    'price_promo' => $stock?->price_promo,
                     'alert_threshold' => $alertThreshold,
                     'is_alert' => $stockQuantity <= $alertThreshold,
                 ];
@@ -114,6 +115,7 @@ class WarehouseController extends Controller
             'product_id' => $product->id,
             'quantity' => 0,
             'unit_price' => 0,
+            'price_promo' => $product->price_promo,
             'currency' => 'BIF',
             'user_id' => auth()->id(),
         ]);

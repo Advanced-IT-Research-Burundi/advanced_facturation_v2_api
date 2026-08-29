@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
+use App\Services\ObrService;
 use App\Services\RestaurantInvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,8 +16,10 @@ class RestaurantInvoiceController extends Controller
 {
     protected RestaurantInvoiceService $invoiceService;
 
-    public function __construct(RestaurantInvoiceService $invoiceService)
-    {
+    public function __construct(
+        RestaurantInvoiceService $invoiceService,
+        protected ObrService $obrService
+    ) {
         $this->invoiceService = $invoiceService;
     }
 
@@ -69,11 +72,13 @@ class RestaurantInvoiceController extends Controller
                 $validated['warehouse_id'],
                 $validated['order_ids'] ?? null
             );
+            $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $user);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Facture générée',
-                'data' => $invoice,
+                'message' => $obrResult ? 'Facture générée et envoi OBR traité' : 'Facture générée. En attente d\'envoi OBR.',
+                'data' => $invoice->fresh(['customer', 'invoiceItems', 'restaurantTable', 'server']),
+                'obr_result' => $obrResult,
             ], Response::HTTP_CREATED);
         } catch (\Exception $e) {
             return response()->json([

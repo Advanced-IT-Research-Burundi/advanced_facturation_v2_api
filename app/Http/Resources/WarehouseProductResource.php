@@ -14,14 +14,21 @@ class WarehouseProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-          
+        $promoPrice = (float) ($this->price_promo ?? $this->product?->price_promo ?? 0);
+        $basePrice = $this->product?->price ?: $this->unit_price;
+        $roles = $request->user()?->roles ?? collect();
+        $isSuperAdmin = $roles->contains(function ($role) {
+            return in_array(strtolower($role->name ?? ''), ['super_admin', 'superadmin'], true)
+                || strtolower($role->label ?? '') === 'super administrateur';
+        });
 
         return [
             'id' => $this->product_id,
             'warehouse_product_id' => $this->id,
             'name' => $this->product?->item_designation,
-            'price' => $this->product?->price ?: $this->unit_price,
+            'price' => $isSuperAdmin && $promoPrice > 0 ? $promoPrice : $basePrice,
             'unit_price' => $this->unit_price,
+            'price_promo' => $promoPrice,
             'category' => $this->product?->categoryProduct?->name,
             'stock' => $this->quantity,
             'item_measurement_unit' => $this->product?->item_measurement_unit,

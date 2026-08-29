@@ -139,6 +139,7 @@ class WarehouseProductController extends Controller
                 'warehouse_id' => 'nullable|integer|exists:warehouses,id',
                 'quantity' => 'required|numeric|min:0',
                 'unit_price' => 'required|numeric|min:0',
+                'price_promo' => 'nullable|numeric|min:0',
                 'currency' => 'required|string|max:10',
                 'user_id' => 'required|integer|exists:users,id',
             ]);
@@ -235,6 +236,7 @@ class WarehouseProductController extends Controller
                 'warehouse_id' => 'sometimes|nullable|integer|exists:warehouses,id',
                 'quantity' => 'sometimes|numeric|min:0',
                 'unit_price' => 'sometimes|numeric|min:0',
+                'price_promo' => 'sometimes|nullable|numeric|min:0',
                 'currency' => 'sometimes|string|max:10',
                 'user_id' => 'sometimes|integer|exists:users,id',
                 'last_stock_movement_id' => 'sometimes|nullable|integer|exists:stock_movements,id',

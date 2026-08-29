@@ -8,6 +8,7 @@ use App\Models\CashRegister;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\ObrLog;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Models\StockMovement;
@@ -31,7 +32,7 @@ class InvoiceController extends Controller
         $this->stockService = $stockService;
         $this->obrService = $obrService;
     }
-
+    
     /**
      * Display a listing of invoices.
      */
@@ -244,6 +245,7 @@ class InvoiceController extends Controller
 
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
+                'warehouse_id' => $validated['warehouse_id'] ?? null,
                 'user_id' => auth()->id(),
                 'created_by' => auth()->id(),
                 'created_by_id' => auth()->id(),
@@ -321,12 +323,18 @@ class InvoiceController extends Controller
 
             DB::commit();
 
+            $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product']);
+            $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
+
             return response()->json([
                 'success' => true,
-                'message' => 'Facture créée avec succès',
+                'message' => $obrResult
+                    ? 'Facture créée avec succès. Envoi OBR direct traité.'
+                    : 'Facture créée avec succès. En attente d\'envoi OBR.',
                 'data' => [
-                    'invoice' => $invoice->load(['customer', 'paymentMethod', 'invoiceItems']),
+                    'invoice' => $invoice->fresh(['customer', 'paymentMethod', 'invoiceItems']),
                     'stock_movements' => $stockMovements,
+                    'obr_result' => $obrResult,
                 ],
             ], Response::HTTP_CREATED);
 
@@ -350,7 +358,7 @@ class InvoiceController extends Controller
             // Les détails de facture sont utilisés par l'impression et les avoirs.
             // Les mouvements de stock ne sont pas nécessaires ici et certaines
             // installations historiques ne possèdent pas leur clé invoice_id.
-            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems', 'payments']),
+            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product', 'payments', 'latestObrLog']),
         ], Response::HTTP_OK);
     }
 
@@ -502,10 +510,35 @@ class InvoiceController extends Controller
      */
     public function syncPendingInvoices()
     {
+        $pendingInvoices = Invoice::with(['company', 'customer', 'invoiceItems.product'])
+            ->where('obr_submission_status', 'PENDING')
+            ->where('is_cancelled', false)
+            ->whereIn('invoice_type', ['FN', 'FA', 'FC', 'RC'])
+            ->orderBy('invoice_date')
+            ->limit(50)
+            ->get();
+
+        $results = ['total' => $pendingInvoices->count(), 'success' => 0, 'failed' => 0, 'errors' => []];
+
+        foreach ($pendingInvoices as $invoice) {
+            $result = $this->obrService->addInvoice($invoice);
+
+            if ($result['success']) {
+                $results['success']++;
+            } else {
+                $results['failed']++;
+                $results['errors'][] = [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'message' => $result['message'],
+                ];
+            }
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'OBR désactivé. Aucune synchronisation effectuée.',
-            'data' => ['total' => 0, 'success' => 0, 'failed' => 0, 'errors' => []],
+            'message' => 'Synchronisation OBR terminée.',
+            'data' => $results,
         ], Response::HTTP_OK);
     }
 
@@ -514,10 +547,87 @@ class InvoiceController extends Controller
      */
     public function resendToObr(Invoice $invoice)
     {
+        if ($invoice->is_cancelled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible d\'envoyer une facture annulée.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($invoice->obr_submission_status === 'ACCEPTED') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Cette facture a déjà été acceptée par OBR.',
+                'data' => $invoice->load(['customer', 'latestObrLog']),
+            ], Response::HTTP_OK);
+        }
+
+        $result = $this->obrService->addInvoice(
+            $invoice->load(['company', 'customer', 'invoiceItems.product'])
+        );
+
         return response()->json([
-            'success' => false,
-            'message' => 'OBR désactivé. Envoi non disponible.',
-        ], Response::HTTP_BAD_REQUEST);
+            'success' => $result['success'],
+            'message' => $result['message'] ?? ($result['success'] ? 'Facture envoyée à OBR.' : 'Erreur OBR.'),
+            'data' => [
+                'invoice' => $invoice->fresh(['customer', 'latestObrLog']),
+                'obr_result' => $result,
+            ],
+        ], $result['success'] ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST);
+    }
+
+    public function obrInvoices(Request $request)
+    {
+        $perPage = max(1, min((int) $request->input('per_page', 20), 100));
+        $statusGroup = $request->input('status_group', 'all');
+        $companyId = auth()->user()->company_id;
+
+        $query = Invoice::with(['customer', 'latestObrLog'])
+            ->withCount('invoiceItems')
+            ->where('company_id', $companyId)
+            ->orderBy('created_at', 'desc');
+
+        if ($statusGroup === 'sent') {
+            $query->where('is_cancelled', false)
+                ->whereIn('obr_submission_status', ['ACCEPTED', 'SENT']);
+        } elseif ($statusGroup === 'unsent') {
+            $query->where('is_cancelled', false)
+                ->whereIn('obr_submission_status', ['PENDING', 'REJECTED']);
+        } elseif ($statusGroup === 'cancelled') {
+            $query->where('is_cancelled', true);
+        }
+
+        if ($request->filled('obr_status') && $request->obr_status !== 'all') {
+            $query->where('obr_submission_status', $request->obr_status);
+        }
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhere('obr_invoice_identifier', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('customer_TIN', 'like', "%{$search}%");
+            });
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $query->paginate($perPage),
+            'stats' => [
+                'total' => Invoice::where('company_id', $companyId)->count(),
+                'sent' => Invoice::where('company_id', $companyId)
+                    ->where('is_cancelled', false)
+                    ->whereIn('obr_submission_status', ['ACCEPTED', 'SENT'])
+                    ->count(),
+                'unsent' => Invoice::where('company_id', $companyId)
+                    ->where('is_cancelled', false)
+                    ->whereIn('obr_submission_status', ['PENDING', 'REJECTED'])
+                    ->count(),
+                'cancelled' => Invoice::where('company_id', $companyId)
+                    ->where('is_cancelled', true)
+                    ->count(),
+            ],
+        ], Response::HTTP_OK);
     }
 
     /**
@@ -561,10 +671,33 @@ class InvoiceController extends Controller
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        $invoiceIdentifier = $invoice->obr_invoice_identifier ?: $invoice->electronic_signature;
+        $requireObrCancel = in_array($invoice->obr_submission_status, ['ACCEPTED', 'SENT'], true)
+            || ! empty($invoice->obr_invoice_identifier);
+        $obrCancelResult = null;
+
+        if ($requireObrCancel) {
+            if (! $invoiceIdentifier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Identifiant OBR introuvable pour annuler cette facture.',
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            $obrCancelResult = $this->obrService->cancelInvoice($invoiceIdentifier, $validated['motif']);
+            ObrLog::logInvoiceCancelled($invoice, $obrCancelResult, $validated['motif']);
+
+            if (! $obrCancelResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $obrCancelResult['message'] ?? 'Annulation refusée par OBR.',
+                    'data' => ['obr_result' => $obrCancelResult],
+                ], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
         try {
             DB::beginTransaction();
-
-            $requireObrCancel = false;
 
             // 1. Restaurer le stock si demandé et si c'était une vente POS
             $stockRestored = [];
@@ -591,6 +724,7 @@ class InvoiceController extends Controller
                     'invoice' => $invoice->fresh(),
                     'stock_restored' => $stockRestored,
                     'obr_cancelled' => $requireObrCancel,
+                    'obr_result' => $obrCancelResult,
                 ],
             ], Response::HTTP_OK);
 
