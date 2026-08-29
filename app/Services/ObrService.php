@@ -173,6 +173,7 @@ class ObrService
      */
     public function addStockMovement(StockMovement $movement)
     {
+        
         $data = [
             'system_or_device_id' => $movement->system_or_device_id ?? $this->systemId,
             'item_code' => $movement->item_code,
@@ -186,17 +187,27 @@ class ObrService
             'item_movement_description' => $movement->item_movement_description ?? '',
             'item_movement_date' => $movement->item_movement_date->format('Y-m-d H:i:s'),
         ];
-
         $response = $this->post('AddStockMovement', $data);
         $json = $response->json();
 
         if (isset($json['success']) && $json['success']) {
+            $this->saveLogs("ADD_STOCK_MOVEMENT", $json, true,  $movement->id, $movement->id);
+
+            $movement->update([
+                'obr_submission_status' => 'ACCEPTED',
+                'obr_response_message' => $json['msg'] ?? 'Mouvement de stock ajouté avec succès',
+                'obr_sent_at' => now(),
+            ]);
             return [
                 'success' => true,
                 'message' => $json['msg'] ?? 'Mouvement de stock ajouté avec succès',
             ];
         }
-
+        $this->saveLogs("ADD_STOCK_MOVEMENT", $json, false,  $movement->id, $movement->id);
+        $movement->update([
+            'obr_submission_status' => 'REJECTED',
+            'obr_sent_at' => now(),
+        ]);
         return [
             'success' => false,
             'message' => $json['msg'] ?? 'Erreur lors de l\'envoi du mouvement de stock',
