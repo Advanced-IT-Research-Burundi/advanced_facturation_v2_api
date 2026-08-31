@@ -208,6 +208,15 @@ class ObrService
             'raw_response' => $json,
         ];
     }
+    
+     public function  getDmcItems($reference_dmc){
+        $response = $this->post('getDmcItems/',[
+            "nif" => AppConfig::getConfigKey('OBR_NIF'),
+            "reference_dmc" => $reference_dmc
+        ]);
+        $json = $response->json();
+        return $json;
+    }
 
     /**
      * Ajouter un mouvement de stock
@@ -495,4 +504,7 @@ class ObrService
             );
         }
     }
+
+
+   
 }

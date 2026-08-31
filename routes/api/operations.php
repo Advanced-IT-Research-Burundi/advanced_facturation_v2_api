@@ -161,3 +161,8 @@ Route::post('import/products', [ImportExportController::class, 'importProducts']
 // ANNULATION DE FACTURES
 // =============================================
 Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancelInvoice']);
+
+
+// =============================================
+// GetDmcItems
+Route::get('getDmcItems/{reference_dmc}', [InvoiceController::class, 'getDmcItems']);

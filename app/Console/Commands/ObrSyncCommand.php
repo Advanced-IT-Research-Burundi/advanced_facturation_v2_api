@@ -29,10 +29,8 @@ class ObrSyncCommand extends Command
     public function handle()
     {
         // Syncronisa ama  invoinces
-
         $this->syncStocks();
          $this->syncInvoice();
-       
     }
 
     public function syncStocks()

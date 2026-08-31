@@ -36,6 +36,34 @@ class InvoiceController extends Controller
     /**
      * Display a listing of invoices.
      */
+
+    public function getDmcItems($reference_dmc){
+        try{
+            $dmcItems = $this->obrService->getDmcItems($reference_dmc);
+
+            return response()->json([
+                'success' => true,
+                'data' => $dmcItems,
+                'message' => 'Articles DMC récupérés avec succès',
+            ], Response::HTTP_OK);
+        }catch(ValidationException $exception) {
+            return response()->json([
+                'success' => false,
+                'data' => $exception->errors(),
+                'message' => 'Validation error',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch(\Exception $exception) {
+            Log::error("[OBR:getDmcItems] - Erreur inattendue lors de la récupération des articles DMC : " . $exception->getMessage(), [
+                'error_code' => 'ERR_OBR_GET_DMC_ITEMS_INTERNAL',
+                'reference_dmc' => $request->reference_dmc ?? 'N/A',
+                'exception' => (string) $exception,
+            ]);
+            return $this->error('Une erreur inattendue s\'est produite lors de la récupération des articles DMC.',
+                'ERR_OBR_GET_DMC_ITEMS_INTERNAL',
+                Response::HTTP_INTERNAL_SERVER_ERROR
+            );
+        }
+    }
     public function index(Request $request)
     {
         $perPage = max(1, min((int) $request->input('per_page', 15), 100));
