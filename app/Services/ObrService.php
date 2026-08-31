@@ -38,13 +38,11 @@ class ObrService
                 'username' => AppConfig::getConfigKey('OBR_USERNAME'),
                 'password' => AppConfig::getConfigKey('OBR_PASSWORD'),
             ]);
-
+            
             $json = $response->json();
-
             if (isset($json['success']) && $json['success']) {
                 return $json['result']['token'] ?? null;
             }
-
             Log::error('OBR Login Failed', ['response' => $json]);
             return null;
         } catch (\Exception $e) {
