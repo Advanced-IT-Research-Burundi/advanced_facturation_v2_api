@@ -12,11 +12,22 @@ class CategoryProductController extends Controller
     /**
      * Display a listing of category products.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
+        $query = CategoryProduct::query();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
         return response()->json([
             'success' => true,
-            'data' => CategoryProduct::latest()->paginate(15)
+            'data' => $query->latest()->paginate($perPage),
         ], Response::HTTP_OK);
     }
 
@@ -27,7 +38,7 @@ class CategoryProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
         ]);
 
         $validated['user_id'] = auth()->id();
@@ -37,7 +48,7 @@ class CategoryProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Category product created successfully',
-            'data' => $categoryProduct->load(['company', 'user'])
+            'data' => $categoryProduct->load(['company', 'user']),
         ], Response::HTTP_CREATED);
     }
 
@@ -48,7 +59,7 @@ class CategoryProductController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $categoryProduct->load(['company', 'user'])
+            'data' => $categoryProduct->load(['company', 'user']),
         ], Response::HTTP_OK);
     }
 
@@ -68,7 +79,7 @@ class CategoryProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Category product updated successfully',
-            'data' => $categoryProduct->load(['company', 'user'])
+            'data' => $categoryProduct->load(['company', 'user']),
         ], Response::HTTP_OK);
     }
 
@@ -81,7 +92,7 @@ class CategoryProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Category product deleted successfully'
+            'message' => 'Category product deleted successfully',
         ], Response::HTTP_OK);
     }
 
@@ -96,7 +107,7 @@ class CategoryProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Category product restored successfully',
-            'data' => $categoryProduct->load(['company', 'user'])
+            'data' => $categoryProduct->load(['company', 'user']),
         ], Response::HTTP_OK);
     }
 }

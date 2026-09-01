@@ -166,3 +166,6 @@ Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancelInvoi
 // =============================================
 // GetDmcItems
 Route::get('getDmcItems/{reference_dmc}', [InvoiceController::class, 'getDmcItems']);
+
+
+Route::post('productstMovements', [ProductController::class, 'productstMovements']);

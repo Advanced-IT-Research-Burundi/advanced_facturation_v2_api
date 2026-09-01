@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\HotelRestaurantTableController;
 use App\Http\Controllers\Api\HotelRoomController;
 use App\Http\Controllers\Api\HotelStockMovementController;
 use App\Http\Controllers\Api\ObrLogController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\RestaurantInvoiceController;
 use App\Http\Controllers\Api\RestaurantOrderController;
 use App\Http\Controllers\Api\RestaurantTableController;
@@ -167,3 +168,5 @@ Route::prefix('hotel')->group(function () {
 Route::get('obr-mouvements-stock', [WarehouseProductController::class, 'stockMouvementHistory']);
 
 Route::get('obr-invoices', [WarehouseProductController::class, 'historiqueInvoices']);
+
+Route::get('productsItemes/{search}', [ProductController::class, 'search']);

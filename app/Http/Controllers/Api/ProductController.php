@@ -5,15 +5,131 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\WarehouseProductResource;
+use App\Models\AppConfig;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Picqer\Barcode\BarcodeGeneratorSVG;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use App\Models\MouvementStockImportation;
+use Illuminate\Support\Facades\DB;
+use Exception;
 
 class ProductController extends Controller
 {
+
+    public function productstMovements(Request $request)
+    {
+        $request->validate([
+        'item_code' => 'required',
+        'item_designation' => 'required|string',
+        'item_quantity' => 'required|numeric',
+        'item_measurement_unit' => 'required|string',
+        'item_cost_price' => 'required|numeric',
+        'item_cost_price_currency' => 'required|string',
+        'item_movement_type' => 'required|string',
+        'item_movement_date' => 'required|date_format:Y-m-d H:i:s',
+        'reference_dmc' => 'required|string',
+        'rubrique_tarifaire' => 'required|string',
+        'nombre_par_paquet' => 'required|numeric',
+        'description_paquet' => 'required|string',
+    ]); 
+    // Product for the current Id
+    // Augmenter le stock 
+    //"product_id": 26
+
+    try{
+        DB::beginTransaction();
+    
+    $product = WarehouseProduct::where("warehouse_id", 1)
+    ->where('product_id', $request->product_id)->firstOrFail();
+
+    $product->quantity = $product->quantity + $request->item_quantity;
+    $product->save();
+
+    $mouvement = MouvementStockImportation::create([
+        'warehouse_id' => $product->warehouse_id,
+        'product_id' => $product->product_id,
+        'reference_dmc' => $request->reference_dmc,
+        'rubrique_tarifaire' => $request->rubrique_tarifaire,
+        'nombre_par_paquet' => $request->nombre_par_paquet,
+        'description_paquet' => $request->description_paquet,
+        'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
+        'item_code' => $request->item_code,
+        'item_designation' => $request->item_designation,
+        'item_quantity' => $request->item_quantity,
+        'item_measurement_unit' => $request->item_measurement_unit,
+        'item_cost_price' => $request->item_cost_price,
+        'item_cost_price_currency' => $request->item_cost_price_currency,
+        'item_movement_type' => $request->item_movement_type,
+        'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
+        'item_movement_description' => $request->item_movement_description,
+        'item_movement_date' => $request->item_movement_date,
+        'item_product_name' => $request->description_article,
+        
+        'is_sent_to_obr' => 0,
+        'obr_status' => '',
+        'obr_message' => '',
+    ]);
+
+    StockMovement::create([
+        'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
+        'item_code' => $request->item_code,
+        'item_designation' => $request->item_designation,
+        'item_quantity' => $request->item_quantity,
+        'stock_movement_importation_id' => $mouvement->id,
+        'item_measurement_unit' => $request->item_measurement_unit,
+        'item_purchase_or_sale_price' => $request->item_cost_price,
+        'item_purchase_or_sale_currency' => $request->item_cost_price_currency,
+        'item_movement_type' => $request->item_movement_type,
+        'item_cost_price' => $request->item_cost_price,
+        'item_cost_price_currency' => $request->item_cost_price_currency,
+        'is_production' => 1,
+        'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
+        'item_movement_description' => $request->item_movement_description,
+        'item_movement_date' => $request->item_movement_date,
+        'obr_submission_status' => 'PENDING', 
+        'user_id' => auth()->user()->id,
+        'created_by' => auth()->user()->id,
+        'obr_sent_at' => null,
+        'company_id' => $product->company_id,
+        'product_id' => $product->product_id,
+        'warehouse_id' => $product->warehouse_id,
+    ]);
+    
+    DB::commit();
+
+        return response()->json([
+                'success' => true,
+                'message' => 'Stock added successfully',
+            ], Response::HTTP_OK);     
+        }catch(Exception $e){
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    
+
+
+  
+
+    }
+    
+    public function search(Request $request)
+    {
+        $search = $request->search;
+        $products = Product::select('id', 'item_designation', 'item_measurement_unit')->where('item_designation', 'like', "%{$search}%")->limit(10)->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $products,
+        ], Response::HTTP_OK);
+    }
+
     /**
      * Display a listing of products.
      */

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('system_or_device_id');
             $table->string('item_code');
+            $table->foreignId('stock_movement_importation_id')->constrained()->nullable();
             $table->string('item_designation');
             $table->double('item_quantity');
             $table->string('item_measurement_unit');

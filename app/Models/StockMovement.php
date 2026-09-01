@@ -33,6 +33,7 @@ class StockMovement extends Model
         'obr_submission_status',
         'obr_sent_at',
         'company_id',
+        'stock_movement_importation_id',
         'product_id',
         'warehouse_id',
         'user_id',
