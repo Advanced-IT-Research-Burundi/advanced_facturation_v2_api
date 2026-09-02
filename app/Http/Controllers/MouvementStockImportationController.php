@@ -14,6 +14,9 @@ class MouvementStockImportationController extends Controller
     public function index()
     {
         //
+        return response()->json([
+            'mouvementStockImportations' => MouvementStockImportation::latest()->paginate(15)
+        ]);
     }
 
     /**
@@ -22,6 +25,7 @@ class MouvementStockImportationController extends Controller
     public function create()
     {
         //
+        
     }
 
     /**

@@ -27,7 +27,9 @@ use App\Http\Controllers\Api\RestaurantInvoiceController;
 use App\Http\Controllers\Api\RestaurantOrderController;
 use App\Http\Controllers\Api\RestaurantTableController;
 use App\Http\Controllers\Api\WarehouseProductController;
+use App\Http\Controllers\MouvementStockImportationController;
 use Illuminate\Support\Facades\Route;
+
 
 // =============================================
 // LOGS OBR
@@ -170,3 +172,5 @@ Route::get('obr-mouvements-stock', [WarehouseProductController::class, 'stockMou
 Route::get('obr-invoices', [WarehouseProductController::class, 'historiqueInvoices']);
 
 Route::get('productsItemes/{search}', [ProductController::class, 'search']);
+
+Route::apiResource('mouvement_stock_importations', MouvementStockImportationController::class);
