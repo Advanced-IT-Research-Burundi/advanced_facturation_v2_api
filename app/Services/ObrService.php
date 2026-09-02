@@ -504,25 +504,42 @@ class ObrService
         }
     }
 
-    public function AddStockMovementImporters(MouvementStockImportation $mouvement){
+    public function addStockMovementImportation(MouvementStockImportation $mouvement){
        $resp =  $this->post("AddStockMovementImporters", $mouvement);
 
        if ($resp['success']) {
             $mouvement->update([
                 'obr_submission_status' => 'ACCEPTED',
                 'obr_sent_at' => now(),
-                'obr_response_message' => $resp['message'],
+                'obr_message' => $resp['msg'],
+                'is_sent_to_obr' => 1,
+                'obr_status' => 'ACCEPTED',
             ]);
         } else {
-            $mouvement->update([
-                'obr_submission_status' => 'REJECTED',
-                'obr_response_message' => $resp['message'],
-            ]);
+//             "success" => false
+//   "message" => "Le mouvement de stock a deja ete enregistre dans le systeme"
+            if($resp['msg'] == "Le mouvement de stock a deja ete enregistre dans le systeme") {
+                $mouvement->update([
+                    'obr_submission_status' => 'ACCEPTED',
+                    'obr_sent_at' => now(),
+                    'obr_message' => $resp['msg'],
+                    'is_sent_to_obr' => 1,
+                    'obr_status' => 'ACCEPTED',
+                ]);
+            } else {
+                $mouvement->update([
+                    'obr_submission_status' => 'REJECTED',
+                    'obr_message' => $resp['msg'],
+                    'is_sent_to_obr' => 1,
+                    'obr_status' => 'REJECTED',
+                    'obr_sent_at' => now(),
+                ]);
+            }
         }
 
         return [
             'success' => $resp['success'],
-            'message' => $resp['message'],
+            'message' => $resp['msg'],
         ];
     }
 

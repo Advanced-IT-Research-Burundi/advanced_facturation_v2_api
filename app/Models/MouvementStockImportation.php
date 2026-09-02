@@ -34,5 +34,6 @@ class MouvementStockImportation extends Model
         "item_product_name",
         "obr_status",
         "obr_message",
+        "obr_sent_at",
     ];
 }

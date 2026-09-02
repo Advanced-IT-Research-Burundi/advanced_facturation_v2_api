@@ -33,6 +33,7 @@ return new class extends Migration
             $table->boolean("is_sent_to_obr")->default(0);
             $table->string("obr_status")->nullable();
             $table->string("obr_message")->nullable();
+            $table->dateTime("obr_sent_at")->nullable();
             $table->dateTime("item_movement_date");
             $table->timestamps();
             $table->softDeletes();

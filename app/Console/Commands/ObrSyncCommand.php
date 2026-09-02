@@ -38,7 +38,11 @@ class ObrSyncCommand extends Command
     public function syncroniseImportation(){
         $stocksLines = MouvementStockImportation::where('is_sent_to_obr', 0)
             ->get();
-            
+            foreach ($stocksLines as $stockLine) {
+                $obrService = new ObrService();
+                $result = $obrService->addStockMovementImportation($stockLine);
+               dump( $result );
+            }
     }
 
     public function syncStocks()
