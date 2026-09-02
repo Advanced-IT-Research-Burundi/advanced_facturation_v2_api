@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\MouvementStockImportation;
 use App\Models\StockMovement;
 use Illuminate\Console\Command;
 use App\Services\ObrService;
@@ -30,14 +31,19 @@ class ObrSyncCommand extends Command
     {
         // Syncronisa ama  invoinces
         $this->syncStocks();
-         $this->syncInvoice();
+        $this->syncInvoice();
+        $this->syncroniseImportation();
+    }
+
+    public function syncroniseImportation(){
+        $stocksLines = MouvementStockImportation::where('is_sent_to_obr', 0)
+            ->get();
+            
     }
 
     public function syncStocks()
     {
-
         $stoksMouvements = StockMovement::where('obr_submission_status', '=', 'PENDING')->latest()->get();
-
         foreach ($stoksMouvements as $stock){
             $obrService = new ObrService();
             $result = $obrService->addStockMovement($stock);

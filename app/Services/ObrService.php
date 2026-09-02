@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\MouvementStockImportation;
 
 class ObrService
 {
@@ -503,6 +504,29 @@ class ObrService
         }
     }
 
+    public function AddStockMovementImporters(MouvementStockImportation $mouvement){
+       $resp =  $this->post("AddStockMovementImporters", $mouvement);
+
+       if ($resp['success']) {
+            $mouvement->update([
+                'obr_submission_status' => 'ACCEPTED',
+                'obr_sent_at' => now(),
+                'obr_response_message' => $resp['message'],
+            ]);
+        } else {
+            $mouvement->update([
+                'obr_submission_status' => 'REJECTED',
+                'obr_response_message' => $resp['message'],
+            ]);
+        }
+
+        return [
+            'success' => $resp['success'],
+            'message' => $resp['message'],
+        ];
+    }
+
+    
 
    
 }
