@@ -44,6 +44,8 @@ class InvoiceController extends Controller
                         ->with('invoiceItems')
                         ->take(50)->get();
 
+       
+
         return response()->json($newInvoices, Response::HTTP_OK);
 
     }

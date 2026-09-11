@@ -15,14 +15,14 @@ class SyncMainApp{
             'password' => 'Advanced2026'
         ]);
         if($response->successful()) {
-            $response = $response->json();
+            $response =  $response->json();
             return $response['data']['access_token'];
         }
         return false;
     }
     
     public function syncInvoices(){
-        $maxId = TruckSyncroniser::where('model_name', 'Invoice')->first()->last_id ?? 0;
+        $maxId = TruckSyncroniser::where('model_name', 'Invoice')->latest()->first()->last_id ?? 0;
        $invoices = $this->get('/invoices_sync/'.$maxId);
 
        if($invoices){
@@ -87,11 +87,7 @@ class SyncMainApp{
                     "created_by_id" => $invoice['created_by_id'],
                     "created_at" => $invoice['created_at'],
                     "updated_at" => $invoice['updated_at']
-                ]);
-
-                dump($c->id,  $invoice['invoice_number'], $c->invoice_number);
-
-              
+                ]);              
                 // Invoices Items 
 
                 foreach($invoice['invoice_items'] as $invoiceItem){
@@ -112,6 +108,8 @@ class SyncMainApp{
                         "user_id" => $invoiceItem['user_id'] ?? null,
                         
                     ]);
+
+                    // Client NAME
                 }
                
 
