@@ -20,7 +20,7 @@ class SyncMainApp{
     }
     
     public function syncInvoices(){
-       $invoices = $this->get('/invoices_sync/1');
+       $invoices = $this->get('/invoices_sync');
         dd($invoices);
        if($invoices){
             foreach ($invoices['data'] as $invoice) {
@@ -116,7 +116,7 @@ class SyncMainApp{
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $this->getToken(),
         ])->get( $currntUrl,$params);
-        dd(  $currntUrl);
+     
         if($response->successful()) {
             $response = $response->json();
             return $response['data'];
