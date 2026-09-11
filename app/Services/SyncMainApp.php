@@ -112,9 +112,11 @@ class SyncMainApp{
     }
 
     public function get($url,$params=null){
+        $currntUrl =  self::BASE_URL . $url;
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $this->getToken(),
-        ])->get( self::BASE_URL . $url,$params);
+        ])->get( $currntUrl,$params);
+        dd(  $currntUrl);
         if($response->successful()) {
             $response = $response->json();
             return $response['data'];

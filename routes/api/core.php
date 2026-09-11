@@ -168,4 +168,4 @@ Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 // Fourinsseurs
 Route::apiResource('fournisseurs', FourinsseurController::class);
 
-Route::get("invoinces_sync/{lastInvoinceID?}", [InvoiceController::class, 'syncInvoices']);
+Route::get("invoinces_sync", [InvoiceController::class, 'syncInvoices']);
