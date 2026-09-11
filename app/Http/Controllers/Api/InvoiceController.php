@@ -37,7 +37,7 @@ class InvoiceController extends Controller
      * Display a listing of invoices.
      */
 
-    public function syncInvoices($lastInvoinceID =1){
+    public function syncInvoices($lastInvoinceID){
 
         $newInvoices = Invoice::where('id', '>', $lastInvoinceID)
                         ->with('customer')

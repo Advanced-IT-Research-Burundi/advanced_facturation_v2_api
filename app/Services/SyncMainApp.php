@@ -3,6 +3,8 @@ namespace App\Services;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Http;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\TruckSyncroniser;
 
 class SyncMainApp{
 
@@ -20,10 +22,12 @@ class SyncMainApp{
     }
     
     public function syncInvoices(){
-       $invoices = $this->get('/invoices_sync');
-        dd($invoices);
+        $maxId = TruckSyncroniser::where('model_name', 'Invoice')->first()->last_id ?? 0;
+       $invoices = $this->get('/invoices_sync/'.$maxId);
+
        if($invoices){
-            foreach ($invoices['data'] as $invoice) {
+            $maxInvoicesId = collect($invoices)->pluck("id")->max();
+            foreach ($invoices as $invoice) {
 
                $c= Invoice::updateOrCreate([
                     'invoice_number'=> $invoice['invoice_number']
@@ -82,31 +86,43 @@ class SyncMainApp{
                     "user_id" => $invoice['user_id'],
                     "created_by_id" => $invoice['created_by_id'],
                     "created_at" => $invoice['created_at'],
-                    "updated_at" => $invoice['updated_at'],
-                    "invoice_items_count" => $invoice['invoice_items_count'],
-                    "payments_sum_amount" => $invoice['payments_sum_amount'],
-                    
+                    "updated_at" => $invoice['updated_at']
                 ]);
 
                 dump($c->id,  $invoice['invoice_number'], $c->invoice_number);
 
-                Customer::updateOrCreate([
-                    "id" => $invoice['customer']["id"],
-                ],[
-                    "id" => $invoice['customer']["id"],
-                    "customer_name" => $invoice['customer']["customer_name"],
-                    "type" => $invoice['customer']["type"],
-                    "customer_TIN" => $invoice['customer']["customer_TIN"],
-                    "customer_phone" => $invoice['customer']["customer_phone"],
-                    "customer_address" => $invoice['customer']["customer_address"],
-                    "vat_customer_payer" => $invoice['customer']["vat_customer_payer"],
-                    "company_id" => $invoice['customer']["company_id"],
-                    "user_id" => $invoice['customer']["user_id"],
-                   
-                ]);
-
               
+                // Invoices Items 
+
+                foreach($invoice['invoice_items'] as $invoiceItem){
+                    InvoiceItem::create([
+                        "invoice_id" => $c->id ,
+                        "product_id" => $invoiceItem['product_id'] ,
+                        "item_designation" => $invoiceItem['item_designation'] ,
+                        "item_quantity" => $invoiceItem['item_quantity'] ,
+                        "item_price" => $invoiceItem['item_price'] ,
+                        "item_ct" => $invoiceItem['item_ct'] ,
+                        "item_tl" => $invoiceItem['item_tl'] ,
+                        "item_ott_tax" => $invoiceItem['item_ott_tax'],
+                        "item_tsce_tax" => $invoiceItem['item_tsce_tax'],
+                        "item_price_nvat" => $invoiceItem['item_price_nvat'],
+                        "vat" => $invoiceItem['vat'],
+                        "item_price_wvat" => $invoiceItem['item_price_wvat'],
+                        "item_total_amount" => $invoiceItem['item_total_amount'],
+                        "user_id" => $invoiceItem['user_id'] ?? null,
+                        
+                    ]);
+                }
+               
+
             }
+            TruckSyncroniser::updateOrCreate([
+                "model_name" => "Invoice",
+                "last_id" => $maxInvoicesId 
+            ],[
+                "model_name" => "Invoice",
+                "last_id" => $maxInvoicesId
+            ]);
        }    
 
     }
