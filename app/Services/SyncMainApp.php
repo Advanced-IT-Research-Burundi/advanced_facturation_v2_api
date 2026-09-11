@@ -6,7 +6,7 @@ use App\Models\Invoice;
 
 class SyncMainApp{
 
-    private const BASE_URL = 'https://api.edenmart257.com/api';
+    private const BASE_URL = 'http://127.0.0.1:8080/api';
     public function getToken(){
         $response = Http::post( self::BASE_URL . '/login', [
             'email' => 'nijeanlionel@gmail.com',
@@ -20,7 +20,8 @@ class SyncMainApp{
     }
     
     public function syncInvoices(){
-       $invoices = $this->get('/invoices');
+       $invoices = $this->get('/invoices_sync/1');
+        dd($invoices);
        if($invoices){
             foreach ($invoices['data'] as $invoice) {
 

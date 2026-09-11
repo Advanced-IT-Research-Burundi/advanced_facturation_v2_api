@@ -39,6 +39,8 @@ class InvoiceController extends Controller
 
     public function syncInvoices($lastInvoinceID){
 
+        return "good";
+
         $newInvoices = Invoice::where('id', '>', $lastInvoinceID)
                         ->with('customer')
                         ->with('invoiceItems')
