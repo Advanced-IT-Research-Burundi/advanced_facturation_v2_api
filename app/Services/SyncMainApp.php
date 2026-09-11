@@ -119,7 +119,7 @@ class SyncMainApp{
      
         if($response->successful()) {
             $response = $response->json();
-            return $response['data'];
+            return $response;
         }
         return false;
     }
