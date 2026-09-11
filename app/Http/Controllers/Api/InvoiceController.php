@@ -37,6 +37,17 @@ class InvoiceController extends Controller
      * Display a listing of invoices.
      */
 
+    public function syncInvoices($lastInvoinceID){
+
+        $newInvoices = Invoice::where('id', '>', $lastInvoinceID)
+                        ->with('customer')
+                        ->with('invoiceItems')
+                        ->take(50)->get();
+
+        return response()->json($newInvoices, Response::HTTP_OK);
+
+    }
+
     public function getDmcItems($reference_dmc){
         try{
             $dmcItems = $this->obrService->getDmcItems($reference_dmc);
