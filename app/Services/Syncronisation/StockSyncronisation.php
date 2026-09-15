@@ -30,6 +30,12 @@ class StockSyncronisation{
                 ];
             }
 
+            $received = is_array($stockMovements['data'] ?? null)
+                ? count($stockMovements['data'])
+                : 0;
+            $created = 0;
+            $existing = 0;
+
             DB::beginTransaction();
             if(! empty($stockMovements['data']) && is_array($stockMovements['data'])){
                 $maxId = collect($stockMovements["data"])->max('id');
@@ -58,7 +64,7 @@ class StockSyncronisation{
                         'created_by' => $stockMovement['created_by'],
                         'user_id' => $stockMovement['user_id'],
                     ]);
-                    dump(  $stock->id);
+                    $stock->wasRecentlyCreated ? $created++ : $existing++;
                 }
                 TruckSyncroniser::create([
                     'model_name' => 'StockMovement',
@@ -69,7 +75,10 @@ class StockSyncronisation{
 
             return [
                 'success' => true,
-                'total_synced' => count($stockMovements['data'] ?? []),
+                'received' => $received,
+                'created' => $created,
+                'already_present' => $existing,
+                'last_id' => $received > 0 ? $maxId : null,
             ];
 
         } catch (Exception $e) {

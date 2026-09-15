@@ -19,15 +19,27 @@ use App\Services\Syncronisation\UserSyncronisation;
 
 class SyncMainApp{
     private const BASE_URL = 'http://127.0.0.1:8080/api';
+
+    private static ?string $token = null;
+
     public function getToken(){
+        if (self::$token) {
+            return self::$token;
+        }
+
         $response = Http::post( self::BASE_URL . '/login', [
             'email' => 'nijeanlionel@gmail.com',
             'password' => 'Advanced2026'
         ]);
         if($response->successful()) {
             $response =  $response->json();
-            return $response['data']['access_token'];
+            return self::$token = $response['data']['access_token'] ?? null;
         }
+
+        Log::warning('Synchronization login failed.', [
+            'status' => $response->status(),
+        ]);
+
         return false;
     }
 
@@ -41,7 +53,15 @@ class SyncMainApp{
         (new WarehouseProductSyncronisation())->syncWarehouseProducts();
 
         (new InvoinceSyncronisation())->syncInvoices();
-        $stockSyncronisation->syncStockMovements();
+        $stockResult = $stockSyncronisation->syncStockMovements();
+
+        Log::info('Stock movement synchronization completed.', [
+            'result' => $stockResult,
+        ]);
+
+        return [
+            'stock_movements' => $stockResult,
+        ];
     }
 
     public function get($url,$params=null){

@@ -13,6 +13,8 @@ class SyncData extends Command
      */
     protected $signature = 'app:sync-data';
 
+    protected $aliases = ['app:sync'];
+
     /**
      * The console command description.
      *
@@ -26,10 +28,11 @@ class SyncData extends Command
     public function handle()
     {
         $app = new SyncMainApp();
-         $app->syncAll();
-        
-      
-        
-       
+        $result = $app->syncAll();
+
+        $this->info('Synchronisation terminée.');
+        $this->line(json_encode($result, JSON_PRETTY_PRINT));
+
+        return self::SUCCESS;
         }
 }
