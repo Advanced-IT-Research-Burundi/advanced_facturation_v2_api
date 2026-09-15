@@ -26,18 +26,36 @@ class InvoinceSyncronisation{
             dump($e->getMessage());
             return $e->getMessage();
         }
-      
-     
+
+
         try {
             DB::beginTransaction();
        if($invoices){
             $maxInvoicesId = collect($invoices)->pluck("id")->max();
             foreach ($invoices as $invoice) {
 
+                $remoteCustomer = $invoice['customer'] ?? [];
+                $remoteCustomerId = $invoice['customer_id'] ?? ($remoteCustomer['id'] ?? null);
+                $customer = Customer::updateOrCreate(
+                    [
+                        'customer_id' => $remoteCustomerId,
+                    ],
+                    [
+                        'customer_name' => $remoteCustomer['customer_name'] ?? $invoice['customer_name'],
+                        'type' => $remoteCustomer['type'] ?? null,
+                        'customer_TIN' => $remoteCustomer['customer_TIN'] ?? ($invoice['customer_TIN'] ?? null),
+                        'customer_phone' => $remoteCustomer['customer_phone'] ?? null,
+                        'customer_address' => $remoteCustomer['customer_address'] ?? ($invoice['customer_address'] ?? null),
+                        'vat_customer_payer' => $remoteCustomer['vat_customer_payer'] ?? ($invoice['vat_customer_payer'] ?? '0'),
+                        'company_id' => $remoteCustomer['company_id'] ?? $invoice['company_id'],
+                        'user_id' => $remoteCustomer['user_id'] ?? $invoice['user_id'],
+                    ]
+                );
+
                $c= Invoice::updateOrCreate([
                     'invoice_number'=> $invoice['invoice_number']
                 ],[
-                   
+
                     "invoice_number" => $invoice['invoice_number'],
                     "invoice_date" => $invoice['invoice_date'],
                     "invoice_type" => $invoice['invoice_type'],
@@ -79,7 +97,7 @@ class InvoinceSyncronisation{
                     "cancel_reason" => $invoice['cancel_reason'],
                     "obr_response_message" => $invoice['obr_response_message'],
                     "company_id" => $invoice['company_id'],
-                    "customer_id" => $invoice['customer_id'],
+                    "customer_id" => $customer->id,
                     "reference_invoice_id" => $invoice['reference_invoice_id'],
                     "hotel_reservation_id" => $invoice['hotel_reservation_id'],
                     "warehouse_id" => $invoice['warehouse_id'],
@@ -92,9 +110,9 @@ class InvoinceSyncronisation{
                     "created_by_id" => $invoice['created_by_id'],
                     "created_at" => $invoice['created_at'],
                     "updated_at" => $invoice['updated_at']
-                ]);              
-                // Invoices Items 
-                
+                ]);
+                // Invoices Items
+
                 foreach($invoice['invoice_items'] as $invoiceItem){
                     InvoiceItem::create([
                         "invoice_id" => $c->id ,
@@ -111,30 +129,13 @@ class InvoinceSyncronisation{
                         "item_price_wvat" => $invoiceItem['item_price_wvat'],
                         "item_total_amount" => $invoiceItem['item_total_amount'],
                         "user_id" => $invoiceItem['user_id'] ?? null,
-                        
+
                     ]);
                     // update product total quantity in stock
                 }
-                $customer =   Customer::updateOrCreate([
-                        "customer_id" =>  $invoice['customer_id']
-                    ],[
-                        "customer_name" => $invoice['customer']['customer_name'],
-                        "type" => $invoice['customer']['type'],
-                        "customer_id" => $invoice['customer_id'],
-                        "customer_TIN" => $invoice['customer']['customer_TIN'],
-                        "customer_phone" => $invoice['customer']['customer_phone'],
-                        "customer_address" => $invoice['customer']['customer_address'],
-                        "vat_customer_payer" => $invoice['customer']['vat_customer_payer'],
-                        "company_id" => $invoice['customer']['company_id'],
-                        "user_id" => $invoice['customer']['user_id']
-                    ]);
-
-                $c->customer_id = $customer->id;
-                $c->save();
-                
                 TruckSyncroniser::updateOrCreate([
                     "model_name" => "Invoice",
-                    "last_id" => $maxInvoicesId 
+                    "last_id" => $maxInvoicesId
                 ],
                 [
                     "model_name" => "Invoice",
@@ -142,9 +143,9 @@ class InvoinceSyncronisation{
             ]);
             dump("Invoice synced successfully with id: " . $c->id);
             }
-           
-       }  
-       
+
+       }
+
             DB::commit();
         } catch (\Throwable $th) {
             //throw $th;
@@ -154,6 +155,6 @@ class InvoinceSyncronisation{
         }
     }
 
-    
-    
+
+
 }
