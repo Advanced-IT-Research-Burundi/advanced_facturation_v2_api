@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\SyncMainApp;
 use Exception;
+use App\Models\Product;
+use App\Models\Warehouse;
+
 
 class StockSyncronisation{
 
@@ -65,11 +68,35 @@ class StockSyncronisation{
     public function stockSync(){
 
         $syncMainApp = new SyncMainApp();
-        $maxId = TruckSyncroniser::where('model_name', 'Stock')->latest()->first()->last_id ?? 0;
+        $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
+        $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
 
-        
-
-
+        DB::beginTransaction();
+        if($stocks["data"]){
+            $maxId = collect($stocks["data"])->max('id');
+            foreach($stocks["data"] as $stock){
+                $stock = Warehouse::firstOrCreate(
+                [
+                    'parent_id' => $stock['id'],
+                ],
+                [
+                    'name' => $stock['name'],
+                    'location' => $stock['location'],
+                    'description' => $stock['description'],
+                    'is_production' => $stock['is_production'],
+                    'parent_id' => $stock['parent_id'],
+                    'company_id' => $stock['company_id'],
+                    'user_id' => $stock['user_id'],
+                ]);
+            
+                dump( " Stock : ", $stock->id); 
+            }
+            TruckSyncroniser::create([
+                'model_name' => 'Stock',
+                'last_id' => $maxId,
+            ]);
+        }
+        DB::commit();
     }
 
     

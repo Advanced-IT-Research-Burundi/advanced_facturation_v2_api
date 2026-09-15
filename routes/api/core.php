@@ -176,3 +176,5 @@ Route::apiResource('fournisseurs', FourinsseurController::class);
 
 Route::get("invoices_sync/{max_id}", [InvoiceController::class, 'syncInvoices']);
 Route::get("stock_movements_sync/{max_id}", [AppSyncroniserController::class, 'syncStockMouvements']);
+
+Route::get("warehouses_sync/{max_id}", [AppSyncroniserController::class, 'syncWarehouses']);
