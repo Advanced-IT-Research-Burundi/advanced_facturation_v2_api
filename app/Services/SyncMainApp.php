@@ -29,12 +29,11 @@ class SyncMainApp{
     }
 
     public function syncAll(){
-        // $invoinceSyncronisation = new InvoinceSyncronisation();
-        // $invoinceSyncronisation->syncInvoices();
+        $invoinceSyncronisation = new InvoinceSyncronisation();
+        $invoinceSyncronisation->syncInvoices();
         $stockSyncronisation = new StockSyncronisation();
-        //$stockSyncronisation->syncStockMovements();
+        $stockSyncronisation->syncStockMovements();
         $stockSyncronisation->stockSync();
-
         $warehouseProductSyncronisation = new WarehouseProductSyncronisation();
         $warehouseProductSyncronisation->syncWarehouseProducts();
     }
