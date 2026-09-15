@@ -38,6 +38,7 @@ class StockMovement extends Model
         'warehouse_id',
         'invoice_id',
         'user_id',
+        'parent_id',
         'created_by',
         'created_by_id',
     ];

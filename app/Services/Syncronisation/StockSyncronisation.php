@@ -17,7 +17,6 @@ class StockSyncronisation{
             $syncMainApp = new SyncMainApp();
             $maxId = TruckSyncroniser::where('model_name', 'StockMovement')->latest()->first()->last_id ?? 0;
             $stockMovements = $syncMainApp->get('/stock_movements_sync/' . $maxId);
-           
             DB::beginTransaction();
             if($stockMovements["data"]){
                 $maxId = collect($stockMovements["data"])->max('id');
@@ -27,6 +26,7 @@ class StockSyncronisation{
                         'parent_id' => $stockMovement['id'],
                     ],
                     [
+                        "parent_id" => $stockMovement['id'],
                         'item_code' => $stockMovement['item_code'],
                         "system_or_device_id" => $stockMovement["system_or_device_id"],
                         'item_designation' => $stockMovement['item_designation'],
@@ -60,6 +60,16 @@ class StockSyncronisation{
             return $e->getMessage();
         }
     
+    }
+
+    public function stockSync(){
+
+        $syncMainApp = new SyncMainApp();
+        $maxId = TruckSyncroniser::where('model_name', 'Stock')->latest()->first()->last_id ?? 0;
+
+        
+
+
     }
 
     
