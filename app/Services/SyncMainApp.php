@@ -14,6 +14,7 @@ use App\Services\Syncronisation\StockSyncronisation;
 use App\Services\Syncronisation\WarehouseProductSyncronisation;
 use App\Services\Syncronisation\LibelleSyncronisation;
 use App\Services\Syncronisation\ProductSyncronisation;
+use App\Services\Syncronisation\UserSyncronisation;
 
 
 class SyncMainApp{
@@ -31,6 +32,7 @@ class SyncMainApp{
     }
 
     public function syncAll(){
+        (new UserSyncronisation())->syncUsers();
         (new LibelleSyncronisation())->syncLibelles();
         (new ProductSyncronisation())->syncProducts();
 
