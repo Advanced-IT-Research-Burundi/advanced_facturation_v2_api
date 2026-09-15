@@ -14,4 +14,12 @@ class AppSyncroniserController extends Controller
             'data' => $stockMovements,
         ]);
     }
+
+    public function SyncWarehouseProduct($max_id){
+        $warehouseProducts = \App\Models\WarehouseProduct::where('id', '>', $max_id)->take(100)->get();
+        return response()->json([
+            'success' => true,
+            'data' => $warehouseProducts,
+        ]);
+    }
 }
