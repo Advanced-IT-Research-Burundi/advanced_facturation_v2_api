@@ -11,6 +11,8 @@ use App\Services\SyncMainApp;
 use Exception;
 use App\Models\Product;
 use App\Models\Warehouse;
+use App\Models\User;
+use Illuminate\Database\QueryException;
 
 
 class StockSyncronisation{
@@ -35,16 +37,23 @@ class StockSyncronisation{
                 : 0;
             $created = 0;
             $existing = 0;
+            $localUserId = User::query()->orderBy('id')->value('id');
+
+            if (! $localUserId) {
+                throw new Exception('Aucun utilisateur local disponible pour synchroniser les mouvements de stock.');
+            }
+
+            $resolveUserId = static function ($remoteUserId) use ($localUserId): int {
+                return $remoteUserId && User::whereKey($remoteUserId)->exists()
+                    ? (int) $remoteUserId
+                    : (int) $localUserId;
+            };
 
             DB::beginTransaction();
             if(! empty($stockMovements['data']) && is_array($stockMovements['data'])){
                 $maxId = collect($stockMovements["data"])->max('id');
                 foreach($stockMovements["data"] as $stockMovement){
-                  $stock = StockMovement::firstOrCreate(
-                    [
-                        'parent_id' => $stockMovement['id'],
-                    ],
-                    [
+                      $attributes = [
                         "parent_id" => $stockMovement['id'],
                         'item_code' => $stockMovement['item_code'],
                         "system_or_device_id" => $stockMovement["system_or_device_id"],
@@ -61,9 +70,23 @@ class StockSyncronisation{
                         'invoice_id' => $stockMovement['invoice_id'] ?? null,
                         'product_id' => $stockMovement['product_id'],
                         'warehouse_id' => $stockMovement['warehouse_id'],
-                        'created_by' => $stockMovement['created_by'],
-                        'user_id' => $stockMovement['user_id'],
-                    ]);
+                        'created_by' => $resolveUserId($stockMovement['created_by'] ?? null),
+                        'user_id' => $resolveUserId($stockMovement['user_id'] ?? null),
+                    ];
+
+                      try {
+                          $stock = StockMovement::firstOrCreate(
+                              ['parent_id' => $stockMovement['id']],
+                              $attributes
+                          );
+                      } catch (QueryException $exception) {
+                          $this->refetchForeignKeyData($exception);
+
+                          $stock = StockMovement::firstOrCreate(
+                              ['parent_id' => $stockMovement['id']],
+                              $attributes
+                          );
+                      }
                     $stock->wasRecentlyCreated ? $created++ : $existing++;
                 }
                 TruckSyncroniser::create([
@@ -90,6 +113,33 @@ class StockSyncronisation{
             return $e->getMessage();
         }
 
+    }
+    private function refetchForeignKeyData(QueryException $exception): void
+    {
+        $message = $exception->getMessage();
+
+        Log::warning('Foreign key missing during stock movement synchronization; refetching dependency.', [
+            'error' => $message,
+        ]);
+
+        if (str_contains($message, 'created_by') || str_contains($message, 'user_id')) {
+            (new UserSyncronisation())->syncUsers();
+            return;
+        }
+
+        if (str_contains($message, 'product_id')) {
+            (new ProductSyncronisation())->syncProducts();
+            return;
+        }
+
+        if (str_contains($message, 'warehouse_id')) {
+            $this->stockSync();
+            return;
+        }
+
+        if (str_contains($message, 'invoice_id')) {
+            (new InvoinceSyncronisation())->syncInvoices();
+        }
     }
 
     public function stockSync(){
