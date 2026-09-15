@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use App\Services\Syncronisation\InvoinceSyncronisation;
 use App\Services\Syncronisation\StockSyncronisation;
 use App\Services\Syncronisation\WarehouseProductSyncronisation;
+use App\Services\Syncronisation\LibelleSyncronisation;
+use App\Services\Syncronisation\ProductSyncronisation;
 
 
 class SyncMainApp{
@@ -29,13 +31,15 @@ class SyncMainApp{
     }
 
     public function syncAll(){
-        $invoinceSyncronisation = new InvoinceSyncronisation();
-        $invoinceSyncronisation->syncInvoices();
+        (new LibelleSyncronisation())->syncLibelles();
+        (new ProductSyncronisation())->syncProducts();
+
         $stockSyncronisation = new StockSyncronisation();
-        $stockSyncronisation->syncStockMovements();
         $stockSyncronisation->stockSync();
-        $warehouseProductSyncronisation = new WarehouseProductSyncronisation();
-        $warehouseProductSyncronisation->syncWarehouseProducts();
+        (new WarehouseProductSyncronisation())->syncWarehouseProducts();
+
+        (new InvoinceSyncronisation())->syncInvoices();
+        $stockSyncronisation->syncStockMovements();
     }
 
     public function get($url,$params=null){
