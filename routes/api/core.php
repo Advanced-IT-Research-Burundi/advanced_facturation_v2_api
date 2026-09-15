@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AppSyncroniserController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -174,3 +175,4 @@ Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 Route::apiResource('fournisseurs', FourinsseurController::class);
 
 Route::get("invoices_sync/{max_id}", [InvoiceController::class, 'syncInvoices']);
+Route::get("stock_movements_sync/{max_id}", [AppSyncroniserController::class, 'syncStockMouvements']);

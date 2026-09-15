@@ -26,7 +26,10 @@ class SyncData extends Command
     public function handle()
     {
         $app = new SyncMainApp();
-       $app->syncInvoices();
+         $app->syncAll();
+        
+      
+        
        
         }
 }
