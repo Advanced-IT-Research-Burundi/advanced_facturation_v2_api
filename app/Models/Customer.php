@@ -27,6 +27,7 @@ class Customer extends Model
         'customer_address',
         'vat_customer_payer',
         'company_id',
+        'customer_id',
         'user_id',
     ];
 
@@ -58,4 +59,8 @@ class Customer extends Model
     {
         return $this->hasMany(Invoice::class);
     }
+
+    // add culumn customer_id if it doesn't exist 
+    // add it to sc
+   
 }

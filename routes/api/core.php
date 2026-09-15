@@ -172,3 +172,5 @@ Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 
 // Fourinsseurs
 Route::apiResource('fournisseurs', FourinsseurController::class);
+
+Route::get("invoices_sync/{max_id}", [InvoiceController::class, 'syncInvoices']);

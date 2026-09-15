@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\ObrService;
 use Illuminate\Console\Command;
+use App\Services\SyncMainApp;
 
 class ObrCheck extends Command
 {
@@ -26,9 +27,8 @@ class ObrCheck extends Command
      */
     public function handle()
     {
-        //
-        $obrService = new ObrService();
-        $token = $obrService->getToken();
+        $SyncMainApp = new SyncMainApp();
+        $token = $SyncMainApp->getToken();
         dd($token);
     }
 }
