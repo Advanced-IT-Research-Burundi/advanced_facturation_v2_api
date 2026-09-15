@@ -23,6 +23,7 @@ class Warehouse extends Model
         'location',
         'description',
         'is_production',
+        'parent_id',
         'company_id',
         'user_id',
     ];

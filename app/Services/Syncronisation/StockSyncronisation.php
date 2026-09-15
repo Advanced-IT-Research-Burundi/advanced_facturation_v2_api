@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\SyncMainApp;
 use Exception;
+use App\Models\Product;
+use App\Models\Warehouse;
+
 
 class StockSyncronisation{
 
@@ -27,6 +30,7 @@ class StockSyncronisation{
                         'parent_id' => $stockMovement['id'],
                     ],
                     [
+                        "parent_id" => $stockMovement['id'],
                         'item_code' => $stockMovement['item_code'],
                         "system_or_device_id" => $stockMovement["system_or_device_id"],
                         'item_designation' => $stockMovement['item_designation'],
@@ -60,6 +64,41 @@ class StockSyncronisation{
             return $e->getMessage();
         }
 
+    }
+
+    public function stockSync(){
+
+        $syncMainApp = new SyncMainApp();
+        $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
+        $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
+
+
+        DB::beginTransaction();
+        if($stocks["data"]){
+            $maxId = collect($stocks["data"])->max('id');
+            foreach($stocks["data"] as $stock){
+                $stock = Warehouse::firstOrCreate(
+                [
+                    'parent_id' => $stock['id'],
+                ],
+                [
+
+                    'name' => $stock['name'],
+                    'location' => $stock['location'],
+                    'parent_id' => $stock['id'],
+                    'is_production' => $stock['is_production'],
+                    'company_id' => $stock['company_id'],
+                    'user_id' => $stock['user_id'],
+                ]);
+
+                dump( " Stock : ", $stock);
+            }
+            TruckSyncroniser::create([
+                'model_name' => 'Stock',
+                'last_id' => $maxId,
+            ]);
+        }
+        DB::commit();
     }
 
 

@@ -1,0 +1,40 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('stock_movements', function (Blueprint $table) {
+            $table->foreignId('invoice_id')
+                ->nullable()
+                ->after('warehouse_id')
+                ->constrained()
+                ->nullOnDelete();
+        });
+
+        Schema::table('warehouses', function (Blueprint $table) {
+            $table->foreignId('parent_id')
+                ->nullable()
+                ->after('company_id')
+                ->constrained()
+                ->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('stock_movements', function (Blueprint $table) {
+            $table->dropForeign(['invoice_id']);
+            $table->dropColumn('invoice_id');
+        });
+
+        Schema::table('warehouses', function (Blueprint $table) {
+            $table->dropForeign(['parent_id']);
+            $table->dropColumn('parent_id');
+        });
+    }
+};
