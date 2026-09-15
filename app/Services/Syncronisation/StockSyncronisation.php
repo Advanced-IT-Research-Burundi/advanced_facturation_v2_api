@@ -100,5 +100,39 @@ class StockSyncronisation{
         DB::commit();
     }
 
+
+    public function syncProducts(){
+        $syncMainApp = new SyncMainApp();
+        $maxId = TruckSyncroniser::where('model_name', 'Product')->latest()->first()->last_id ?? 0;
+        $products = $syncMainApp->get('/products_sync/' . $maxId);
+        dd($products);
+        DB::beginTransaction();
+        if($products["data"]){
+            $maxId = collect($products["data"])->max('id');
+            foreach($products["data"] as $product){
+                $product = Product::firstOrCreate(
+                [
+                    'parent_id' => $product['id'],
+                ],
+                [
+                    
+                    'name' => $product['name'],
+                    'location' => $product['location'],
+                    'parent_id' => $product['id'],
+                    'is_production' => $product['is_production'],
+                    'company_id' => $product['company_id'],
+                    'user_id' => $product['user_id'],
+                ]);
+            
+                dump( " Product : ", $product); 
+            }
+            TruckSyncroniser::create([
+                'model_name' => 'Product',
+                'last_id' => $maxId,
+            ]);
+        }
+        DB::commit();
+    }
+
     
 }
