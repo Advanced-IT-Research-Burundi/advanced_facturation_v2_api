@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 class StockMovementController extends Controller
 {
+
+    
     /**
      * Dashboard du stock - Retourne tout ce qui est nécessaire pour l'interface
      */
