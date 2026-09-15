@@ -110,21 +110,15 @@ class StockSyncronisation{
         if($products["data"]){
             $maxId = collect($products["data"])->max('id');
             foreach($products["data"] as $product){
-                $product = Product::firstOrCreate(
+                $p = Product::updateOrCreate(
                 [
                     'parent_id' => $product['id'],
                 ],
                 [
                     
-                    'name' => $product['name'],
-                    'location' => $product['location'],
-                    'parent_id' => $product['id'],
-                    'is_production' => $product['is_production'],
-                    'company_id' => $product['company_id'],
-                    'user_id' => $product['user_id'],
                 ]);
             
-                dump( " Product : ", $product); 
+                dump( " Product : ", $product->p); 
             }
             TruckSyncroniser::create([
                 'model_name' => 'Product',
