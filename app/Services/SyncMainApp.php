@@ -1,10 +1,15 @@
 <?php
 namespace App\Services;
 use App\Models\Customer;
+use Exception;
 use Illuminate\Support\Facades\Http;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\TruckSyncroniser;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+
+
 
 class SyncMainApp{
 
@@ -22,9 +27,18 @@ class SyncMainApp{
     }
     
     public function syncInvoices(){
-        $maxId = TruckSyncroniser::where('model_name', 'Invoice')->latest()->first()->last_id ?? 0;
-       $invoices = $this->get('/invoices_sync/'.$maxId);
 
+        try {
+            $maxId = TruckSyncroniser::where('model_name', 'Invoice')->latest()->first()->last_id ?? 0;
+            $invoices = $this->get('/invoices_sync/' . $maxId);
+        } catch( Exception $e){
+            Log::info($e->getMessage());
+            dump($e->getMessage());
+            return $e->getMessage();
+        }
+     
+        try {
+            DB::beginTransaction();
        if($invoices){
             $maxInvoicesId = collect($invoices)->pluck("id")->max();
             foreach ($invoices as $invoice) {
@@ -108,20 +122,46 @@ class SyncMainApp{
                         "user_id" => $invoiceItem['user_id'] ?? null,
                         
                     ]);
-
-                    // Client NAME
+                    // update product total quantity in stock
                 }
-               
+                $customer =   Customer::updateOrCreate([
+                        "customer_id" =>  $invoice['customer_id']
+                    ],[
+                        "customer_name" => $invoice['customer']['customer_name'],
+                        "type" => $invoice['customer']['type'],
+                        "customer_id" => $invoice['customer_id'],
+                        "customer_TIN" => $invoice['customer']['customer_TIN'],
+                        "customer_phone" => $invoice['customer']['customer_phone'],
+                        "customer_address" => $invoice['customer']['customer_address'],
+                        "vat_customer_payer" => $invoice['customer']['vat_customer_payer'],
+                        "company_id" => $invoice['customer']['company_id'],
+                        "user_id" => $invoice['customer']['user_id']
+                    ]);
 
-            }
-            TruckSyncroniser::updateOrCreate([
-                "model_name" => "Invoice",
-                "last_id" => $maxInvoicesId 
-            ],[
-                "model_name" => "Invoice",
+                $c->customer_id = $customer->id;
+                $c->save();
+                
+                TruckSyncroniser::updateOrCreate([
+                    "model_name" => "Invoice",
+                    "last_id" => $maxInvoicesId 
+                ],
+                [
+                    "model_name" => "Invoice",
                 "last_id" => $maxInvoicesId
             ]);
-       }    
+
+            Log::info("Invoice synced successfully with id: " . $c->id);
+            }
+           
+       }  
+       
+            DB::commit();
+        } catch (\Throwable $th) {
+            //throw $th;
+            DB::rollBack();
+            dump($th);
+            return $th->getMessage();
+        }
 
     }
 

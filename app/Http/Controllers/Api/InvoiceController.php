@@ -42,6 +42,7 @@ class InvoiceController extends Controller
         $newInvoices = Invoice::where('id', '>', $lastInvoinceID)
                         ->with('customer')
                         ->with('invoiceItems')
+                        ->whereHas('customer')
                         ->take(50)->get();
 
        
