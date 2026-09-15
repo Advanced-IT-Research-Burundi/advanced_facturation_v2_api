@@ -28,8 +28,8 @@ class SyncMainApp{
     }
 
     public function syncAll(){
-        $invoinceSyncronisation = new InvoinceSyncronisation();
-        $invoinceSyncronisation->syncInvoices();
+        // $invoinceSyncronisation = new InvoinceSyncronisation();
+        // $invoinceSyncronisation->syncInvoices();
         $stockSyncronisation = new StockSyncronisation();
         $stockSyncronisation->syncStockMovements();
     }
