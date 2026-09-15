@@ -94,8 +94,7 @@ class InvoinceSyncronisation{
                     "updated_at" => $invoice['updated_at']
                 ]);              
                 // Invoices Items 
-
-
+                
                 foreach($invoice['invoice_items'] as $invoiceItem){
                     InvoiceItem::create([
                         "invoice_id" => $c->id ,
@@ -141,7 +140,6 @@ class InvoinceSyncronisation{
                     "model_name" => "Invoice",
                 "last_id" => $maxInvoicesId
             ]);
-
             dump("Invoice synced successfully with id: " . $c->id);
             }
            
@@ -155,6 +153,8 @@ class InvoinceSyncronisation{
             return $th->getMessage();
         }
     }
+
+
 
 
     

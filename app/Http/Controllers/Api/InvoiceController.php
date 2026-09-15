@@ -255,7 +255,6 @@ class InvoiceController extends Controller
                 'invoice_currency' => $validated['invoice_currency'],
                 'payment_type' => $validated['payment_type'] ?? '1',
                 'payment_method_id' => $selectedPaymentMethod?->id,
-
                 'tp_type' => $company->tp_type ?? 'PERSONNE MORALE',
                 'tp_name' => $company->tp_name,
                 'tp_TIN' => $company->tp_TIN,
@@ -265,7 +264,6 @@ class InvoiceController extends Controller
                 'vat_taxpayer' => $company->vat_taxpayer,
                 'ct_taxpayer' => $company->ct_taxpayer ?? '0',
                 'tl_taxpayer' => $company->tl_taxpayer ?? '0',
-
                 'customer_name' => $customer->customer_name,
                 'customer_TIN' => $customer->customer_TIN,
                 'customer_address' => $customer->customer_address,
@@ -278,13 +276,10 @@ class InvoiceController extends Controller
                 'cancelled_invoice_ref' => $validated['reference_invoice_number'] ?? null,
                 'cn_motif' => $validated['avoir_reason'] ?? $validated['refund_reason'] ?? null,
                 'deposit_reference' => $validated['deposit_reference'] ?? null,
-
                 'obr_submission_status' => 'PENDING',
-
                 // Initialize payment status
                 'payment_status' => 'unpaid',
                 'total_paid' => 0,
-
                 'company_id' => $company->id,
                 'customer_id' => $customer->id,
                 'warehouse_id' => $validated['warehouse_id'] ?? null,
@@ -437,7 +432,7 @@ class InvoiceController extends Controller
 
                 foreach ($validated['items'] as $item) {
                     $itemCalculations = $this->calculateItemAmounts($item);
-
+                    
                     $invoice->invoiceItems()->create([
                         'item_designation' => $item['item_designation'],
                         'item_quantity' => $item['item_quantity'],
