@@ -30,6 +30,7 @@ class SyncMainApp{
     public function syncInvoices(){
         $invoinceSyncronisation = new InvoinceSyncronisation();
         $invoinceSyncronisation->syncInvoices();
+        
     }
 
     public function get($url,$params=null){
