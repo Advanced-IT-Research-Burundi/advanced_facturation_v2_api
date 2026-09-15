@@ -28,6 +28,7 @@ class Product extends Model
         'company_id',
         'product_unit_id',
         'product_category_id',
+        'id_libelle',
         'user_id',
         'code_product',
         'marque',
@@ -75,6 +76,7 @@ class Product extends Model
             'company_id' => 'integer',
             'product_unit_id' => 'integer',
             'product_category_id' => 'integer',
+            'id_libelle' => 'integer',
             'user_id' => 'integer',
             'date_expiration' => 'date',
             // Casts pharmaceutiques
@@ -104,6 +106,11 @@ class Product extends Model
     public function categoryProduct(): BelongsTo
     {
         return $this->belongsTo(CategoryProduct::class, 'product_category_id');
+    }
+
+    public function libelle(): BelongsTo
+    {
+        return $this->belongsTo(Libelle::class, 'id_libelle');
     }
 
     public function stockMovements(): HasMany

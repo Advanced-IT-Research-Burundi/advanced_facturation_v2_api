@@ -139,7 +139,7 @@ class ProductController extends Controller
         $stock_id = $request->stock_id ?? auth()->user()->warehouses?->first()?->id;
         $search = $request->search;
 
-        $query = WarehouseProduct::with(['warehouse', 'product.categoryProduct'])
+        $query = WarehouseProduct::with(['warehouse', 'product.categoryProduct', 'product.libelle'])
             ->where('warehouse_id', $stock_id);
 
         // Filtrer par recherche sur les produits
@@ -165,7 +165,7 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $perPage = max(1, min((int) $request->input('per_page', 15), 100));
-        $query = Product::with(['company', 'productUnit', 'categoryProduct', 'user']);
+        $query = Product::with(['company', 'productUnit', 'categoryProduct', 'libelle', 'user']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -196,6 +196,7 @@ class ProductController extends Controller
             // 'company_id' => 'required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
+            'id_libelle' => 'nullable|exists:libelles,id',
             'code_product' => 'nullable|string|max:255',
             'marque' => 'nullable|string|max:255',
             'quantite' => 'nullable|numeric|min:0',
@@ -228,7 +229,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit créé avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'libelle', 'user'])),
         ], Response::HTTP_CREATED);
     }
 
@@ -239,7 +240,7 @@ class ProductController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user', 'stockMovements', 'warehouseProducts'])),
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'libelle', 'user', 'stockMovements', 'warehouseProducts'])),
         ], Response::HTTP_OK);
     }
 
@@ -257,6 +258,7 @@ class ProductController extends Controller
             // 'company_id' => 'sometimes|required|exists:companies,id',
             'product_unit_id' => 'nullable|exists:product_units,id',
             'product_category_id' => 'nullable|exists:category_products,id',
+            'id_libelle' => 'nullable|exists:libelles,id',
             'code_product' => 'nullable|string|max:255',
             'marque' => 'nullable|string|max:255',
             'quantite' => 'nullable|numeric|min:0',
@@ -281,7 +283,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit mis à jour avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'libelle', 'user'])),
         ], Response::HTTP_OK);
     }
 
@@ -309,7 +311,7 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit restauré avec succès',
-            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'user'])),
+            'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'libelle', 'user'])),
         ], Response::HTTP_OK);
     }
 

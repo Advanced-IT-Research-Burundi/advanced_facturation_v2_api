@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\DepenseController;
 use App\Http\Controllers\Api\FourinsseurController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
+use App\Http\Controllers\Api\LibelleController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductUnitController;
@@ -69,6 +70,10 @@ Route::post('product-units/{id}/restore', [ProductUnitController::class, 'restor
 // Category Products
 Route::apiResource('category-products', CategoryProductController::class);
 Route::post('category-products/{id}/restore', [CategoryProductController::class, 'restore']);
+
+// Libelles
+Route::apiResource('libelles', LibelleController::class);
+Route::post('libelles/{id}/restore', [LibelleController::class, 'restore']);
 
 Route::post('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'addProduct']);
 Route::delete('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'removeProduct']);
