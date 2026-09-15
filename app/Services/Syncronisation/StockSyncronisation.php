@@ -20,6 +20,7 @@ class StockSyncronisation{
             $syncMainApp = new SyncMainApp();
             $maxId = TruckSyncroniser::where('model_name', 'StockMovement')->latest()->first()->last_id ?? 0;
             $stockMovements = $syncMainApp->get('/stock_movements_sync/' . $maxId);
+
             DB::beginTransaction();
             if($stockMovements["data"]){
                 $maxId = collect($stockMovements["data"])->max('id');
@@ -42,13 +43,13 @@ class StockSyncronisation{
                         'item_movement_date' => $stockMovement['item_movement_date'],
                         'obr_submission_status' => $stockMovement['obr_submission_status'],
                         'company_id' => $stockMovement['company_id'],
-                        "invoice_id"=>$stockMovement["invoice_id"] ?? "",
+                        "invoice_id"=>$stockMovement["invoice_id"],
                         'product_id' => $stockMovement['product_id'],
                         'warehouse_id' => $stockMovement['warehouse_id'],
                         'created_by' => $stockMovement['created_by'],
                         'user_id' => $stockMovement['user_id'],
                     ]);
-                    dump(  $stock->id); 
+                    dump(  $stock->id);
                 }
                 TruckSyncroniser::create([
                     'model_name' => 'StockMovement',
@@ -56,13 +57,13 @@ class StockSyncronisation{
                 ]);
             }
             DB::commit();
-        
+
         } catch (Exception $e) {
             DB::rollBack();
             dd($e);
             return $e->getMessage();
         }
-    
+
     }
 
     public function stockSync(){
@@ -70,7 +71,7 @@ class StockSyncronisation{
         $syncMainApp = new SyncMainApp();
         $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
         $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
-       
+
 
         DB::beginTransaction();
         if($stocks["data"]){
@@ -81,7 +82,7 @@ class StockSyncronisation{
                     'parent_id' => $stock['id'],
                 ],
                 [
-                    
+
                     'name' => $stock['name'],
                     'location' => $stock['location'],
                     'parent_id' => $stock['id'],
@@ -89,8 +90,8 @@ class StockSyncronisation{
                     'company_id' => $stock['company_id'],
                     'user_id' => $stock['user_id'],
                 ]);
-            
-                dump( " Stock : ", $stock); 
+
+                dump( " Stock : ", $stock);
             }
             TruckSyncroniser::create([
                 'model_name' => 'Stock',

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\Syncronisation\InvoinceSyncronisation;
 use App\Services\Syncronisation\StockSyncronisation;
+use App\Services\Syncronisation\WarehouseProductSyncronisation;
 
 
 class SyncMainApp{
@@ -34,6 +35,8 @@ class SyncMainApp{
         //$stockSyncronisation->syncStockMovements();
         $stockSyncronisation->stockSync();
 
+        $warehouseProductSyncronisation = new WarehouseProductSyncronisation();
+        $warehouseProductSyncronisation->syncWarehouseProducts();
     }
 
     public function get($url,$params=null){
@@ -49,10 +52,10 @@ class SyncMainApp{
         return false;
     }
 
-   
-    
 
 
 
-  
+
+
+
 }
