@@ -31,7 +31,9 @@ class SyncMainApp{
         // $invoinceSyncronisation = new InvoinceSyncronisation();
         // $invoinceSyncronisation->syncInvoices();
         $stockSyncronisation = new StockSyncronisation();
-        $stockSyncronisation->syncStockMovements();
+        //$stockSyncronisation->syncStockMovements();
+        $stockSyncronisation->stockSync();
+
     }
 
     public function get($url,$params=null){

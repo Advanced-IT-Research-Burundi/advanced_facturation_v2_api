@@ -70,6 +70,7 @@ class StockSyncronisation{
         $syncMainApp = new SyncMainApp();
         $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
         $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
+       
 
         DB::beginTransaction();
         if($stocks["data"]){
@@ -80,16 +81,16 @@ class StockSyncronisation{
                     'parent_id' => $stock['id'],
                 ],
                 [
+                    
                     'name' => $stock['name'],
                     'location' => $stock['location'],
-                    'description' => $stock['description'],
+                    'parent_id' => $stock['id'],
                     'is_production' => $stock['is_production'],
-                    'parent_id' => $stock['parent_id'],
                     'company_id' => $stock['company_id'],
                     'user_id' => $stock['user_id'],
                 ]);
             
-                dump( " Stock : ", $stock->id); 
+                dump( " Stock : ", $stock); 
             }
             TruckSyncroniser::create([
                 'model_name' => 'Stock',

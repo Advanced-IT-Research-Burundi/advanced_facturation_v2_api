@@ -9,7 +9,7 @@ class AppSyncroniserController extends Controller
 {
 
     public function syncWarehouses($max_id){
-        $warehouses = Warehouse::where('id', '>', $max_id)->take(100)->get();
+        $warehouses = Warehouse::where('id', '>', $max_id)->take(2)->get();
         return response()->json([
             'success' => true,
             'data' => $warehouses,

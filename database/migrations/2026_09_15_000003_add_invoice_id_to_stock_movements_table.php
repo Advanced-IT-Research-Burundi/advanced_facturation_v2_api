@@ -15,6 +15,14 @@ return new class extends Migration
                 ->constrained()
                 ->nullOnDelete();
         });
+
+        Schema::table('warehouses', function (Blueprint $table) {
+            $table->foreignId('parent_id')
+                ->nullable()
+                ->after('company_id')
+                ->constrained()
+                ->nullOnDelete();
+        });
     }
 
     public function down(): void
@@ -22,6 +30,11 @@ return new class extends Migration
         Schema::table('stock_movements', function (Blueprint $table) {
             $table->dropForeign(['invoice_id']);
             $table->dropColumn('invoice_id');
+        });
+
+        Schema::table('warehouses', function (Blueprint $table) {
+            $table->dropForeign(['parent_id']);
+            $table->dropColumn('parent_id');
         });
     }
 };
