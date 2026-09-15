@@ -35,6 +35,7 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained()->nullable();
             $table->foreignId('warehouse_id')->constrained()->nullable();
             $table->foreignId('invoice_id')->nullable()->constrained()->nullOnDelete();
+            $table->integer('parent_id')->nullable();
             $table->foreignId('created_by')->constrained('users', 'id')->nullable();
             $table->foreignId('user_id')->constrained()->nullable();
             $table->foreignId('created_by_id')->nullable();
