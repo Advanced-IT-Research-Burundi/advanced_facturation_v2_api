@@ -15,6 +15,8 @@ class Libelle extends Model
     protected $fillable = [
         'name',
         'description',
+        'price',
+        'tva',
         'company_id',
         'user_id',
     ];
@@ -23,6 +25,8 @@ class Libelle extends Model
     {
         return [
             'id' => 'integer',
+            'price' => 'decimal:2',
+            'tva' => 'decimal:2',
             'company_id' => 'integer',
             'user_id' => 'integer',
         ];

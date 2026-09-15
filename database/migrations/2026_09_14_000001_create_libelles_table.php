@@ -15,6 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->text('description')->nullable();
+            $table->decimal('price', 15, 2)->nullable();
+            $table->decimal('tva', 5, 2)->nullable();
             $table->integer('company_id');
             $table->foreignId('user_id');
             $table->timestamps();

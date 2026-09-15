@@ -21,7 +21,9 @@ class LibelleController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('price', 'like', "%{$search}%")
+                    ->orWhere('tva', 'like', "%{$search}%");
             });
         }
 
@@ -39,6 +41,8 @@ class LibelleController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'price' => 'nullable|numeric|min:0',
+            'tva' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $validated['user_id'] = auth()->id();
@@ -71,6 +75,8 @@ class LibelleController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
+            'price' => 'nullable|numeric|min:0',
+            'tva' => 'nullable|numeric|min:0|max:100',
             'company_id' => 'sometimes|required|exists:companies,id',
         ]);
 
