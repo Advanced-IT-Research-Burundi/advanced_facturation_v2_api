@@ -45,15 +45,38 @@ class SyncMainApp{
     }
 
     public function get($url,$params=null){
-        $currntUrl =  self::BASE_URL . $url;
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->getToken(),
-        ])->get( $currntUrl,$params);
+        $currentUrl = self::BASE_URL . $url;
+        $token = $this->getToken();
+
+        if (! $token) {
+            Log::warning('Synchronization request skipped: authentication failed.', [
+                'url' => $currentUrl,
+            ]);
+
+            return false;
+        }
+
+        try {
+            $response = Http::timeout(15)
+                ->withHeaders(['Authorization' => 'Bearer '.$token])
+                ->get($currentUrl, $params);
+        } catch (Exception $exception) {
+            Log::error('Synchronization request failed: '.$exception->getMessage(), [
+                'url' => $currentUrl,
+            ]);
+
+            return false;
+        }
 
         if($response->successful()) {
-            $response = $response->json();
-            return $response;
+            return $response->json();
         }
+
+        Log::warning('Synchronization endpoint returned an error.', [
+            'url' => $currentUrl,
+            'status' => $response->status(),
+        ]);
+
         return false;
     }
 

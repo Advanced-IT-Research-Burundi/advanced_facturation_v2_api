@@ -21,8 +21,17 @@ class StockSyncronisation{
             $maxId = TruckSyncroniser::where('model_name', 'StockMovement')->latest()->first()->last_id ?? 0;
             $stockMovements = $syncMainApp->get('/stock_movements_sync/' . $maxId);
 
+            if (! is_array($stockMovements)) {
+                Log::warning('Stock movement synchronization skipped: source endpoint returned no data.');
+
+                return [
+                    'success' => false,
+                    'total_synced' => 0,
+                ];
+            }
+
             DB::beginTransaction();
-            if($stockMovements["data"]){
+            if(! empty($stockMovements['data']) && is_array($stockMovements['data'])){
                 $maxId = collect($stockMovements["data"])->max('id');
                 foreach($stockMovements["data"] as $stockMovement){
                   $stock = StockMovement::firstOrCreate(
@@ -43,7 +52,7 @@ class StockSyncronisation{
                         'item_movement_date' => $stockMovement['item_movement_date'],
                         'obr_submission_status' => $stockMovement['obr_submission_status'],
                         'company_id' => $stockMovement['company_id'],
-                        "invoice_id"=>$stockMovement["invoice_id"],
+                        'invoice_id' => $stockMovement['invoice_id'] ?? null,
                         'product_id' => $stockMovement['product_id'],
                         'warehouse_id' => $stockMovement['warehouse_id'],
                         'created_by' => $stockMovement['created_by'],
@@ -58,9 +67,17 @@ class StockSyncronisation{
             }
             DB::commit();
 
+            return [
+                'success' => true,
+                'total_synced' => count($stockMovements['data'] ?? []),
+            ];
+
         } catch (Exception $e) {
-            DB::rollBack();
-            dd($e);
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::error('Stock movement synchronization failed: '.$e->getMessage());
+
             return $e->getMessage();
         }
 
@@ -72,9 +89,18 @@ class StockSyncronisation{
         $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
         $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
 
+        if (! is_array($stocks)) {
+            Log::warning('Warehouse synchronization skipped: source endpoint returned no data.');
+
+            return [
+                'success' => false,
+                'total_synced' => 0,
+            ];
+        }
+
 
         DB::beginTransaction();
-        if($stocks["data"]){
+        if(! empty($stocks['data']) && is_array($stocks['data'])){
             $maxId = collect($stocks["data"])->max('id');
             foreach($stocks["data"] as $stock){
                 $stock = Warehouse::firstOrCreate(
@@ -99,6 +125,11 @@ class StockSyncronisation{
             ]);
         }
         DB::commit();
+
+        return [
+            'success' => true,
+            'total_synced' => count($stocks['data'] ?? []),
+        ];
     }
 
 
