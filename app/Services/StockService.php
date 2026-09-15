@@ -61,6 +61,7 @@ class StockService
                     'price' => $item['item_price'],
                     'currency' => 'BIF',
                     'invoice_number' => $invoiceNumber,
+                    'invoice_id' => $invoiceId,
                     'warehouse_id' => $warehouseId,
                     'movement_type' => 'SN',
                 ]);
@@ -107,6 +108,7 @@ class StockService
             'item_movement_description' => "Vente - Facture {$data['invoice_number']}",
             'item_movement_date' => now(),
             'obr_submission_status' => 'PENDING',
+            'invoice_id' => $data['invoice_id'] ?? null,
             'company_id' => auth()->user()->company_id,
             'product_id' => $data['product']->id,
             'warehouse_id' => $data['warehouse_id'],
@@ -144,6 +146,7 @@ class StockService
                 'price' => $movement->item_purchase_or_sale_price,
                 'currency' => $movement->item_purchase_or_sale_currency,
                 'invoice_number' => $invoiceNumber,
+                'invoice_id' => $invoiceId,
                 'warehouse_id' => $movement->warehouse_id,
                 'movement_type' => 'RETOUR',
             ]);

@@ -36,6 +36,7 @@ class StockMovement extends Model
         'stock_movement_importation_id',
         'product_id',
         'warehouse_id',
+        'invoice_id',
         'user_id',
         'created_by',
         'created_by_id',
@@ -57,6 +58,7 @@ class StockMovement extends Model
             'company_id' => 'integer',
             'product_id' => 'integer',
             'warehouse_id' => 'integer',
+            'invoice_id' => 'integer',
             'created_by' => 'integer',
             'user_id' => 'integer',
             'created_by_id' => 'integer',
@@ -76,6 +78,11 @@ class StockMovement extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
     }
 
     public function createdBy(): BelongsTo

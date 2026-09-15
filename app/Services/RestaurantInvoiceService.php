@@ -144,7 +144,7 @@ class RestaurantInvoiceService
             }
 
             // Process stock movements - deduct stock and create movement records
-            $this->processStockMovements($allItems, $warehouseId, $invoice->invoice_number);
+            $this->processStockMovements($allItems, $warehouseId, $invoice->id, $invoice->invoice_number);
 
             $table->updateStatus();
 
@@ -180,7 +180,7 @@ class RestaurantInvoiceService
     /**
      * Process stock movements for all items
      */
-    private function processStockMovements(array $items, int $warehouseId, string $invoiceNumber): void
+    private function processStockMovements(array $items, int $warehouseId, int $invoiceId, string $invoiceNumber): void
     {
         foreach ($items as $item) {
             $product = $item['product'];
@@ -199,6 +199,7 @@ class RestaurantInvoiceService
                 'item_movement_description' => "Vente Restaurant - Facture {$invoiceNumber}",
                 'item_movement_date' => now(),
                 'obr_submission_status' => 'PENDING',
+                'invoice_id' => $invoiceId,
                 'company_id' => auth()->user()->company_id,
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouseId,
