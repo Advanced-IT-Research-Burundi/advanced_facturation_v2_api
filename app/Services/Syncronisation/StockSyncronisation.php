@@ -176,7 +176,7 @@ class StockSyncronisation{
                     'user_id' => $stock['user_id'],
                 ]);
 
-                dump( " Stock : ", $stock);
+                // dump( " Stock : ", $stock);
             }
             TruckSyncroniser::create([
                 'model_name' => 'Stock',

@@ -30,8 +30,6 @@ class SyncData extends Command
         $app = new SyncMainApp();
         $result = $app->syncAll();
 
-        $this->info('Synchronisation terminée.');
-        $this->line(json_encode($result, JSON_PRETTY_PRINT));
 
         return self::SUCCESS;
         }
