@@ -1,42 +1,42 @@
 <?php
 
 namespace App\Services;
-use App\Models\Customer;
-use Exception;
-use Illuminate\Support\Facades\Http;
-use App\Models\Invoice;
-use App\Models\InvoiceItem;
-use App\Models\TruckSyncroniser;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
+
+use App\Services\Syncronisation\CompanySyncronisation;
 use App\Services\Syncronisation\InvoinceSyncronisation;
-use App\Services\Syncronisation\StockSyncronisation;
-use App\Services\Syncronisation\WarehouseProductSyncronisation;
 use App\Services\Syncronisation\LibelleSyncronisation;
 use App\Services\Syncronisation\ProductSyncronisation;
+use App\Services\Syncronisation\StockSyncronisation;
 use App\Services\Syncronisation\UserSyncronisation;
+use App\Services\Syncronisation\WarehouseProductSyncronisation;
+use Exception;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
-
-class SyncMainApp{
-    private  $BASE_URL;
+class SyncMainApp
+{
+    private $BASE_URL;
 
     private static ?string $token = null;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->BASE_URL = env('APP_PARENT_URL', '');
     }
 
-    public function getToken(){
+    public function getToken()
+    {
         if (self::$token) {
             return self::$token;
         }
 
-        $response = Http::post( $this->BASE_URL . '/login', [
+        $response = Http::post($this->BASE_URL.'/login', [
             'email' => 'nijeanlionel@gmail.com',
-            'password' => 'Advanced2026'
+            'password' => 'Advanced2026',
         ]);
-        if($response->successful()) {
-            $response =  $response->json();
+        if ($response->successful()) {
+            $response = $response->json();
+
             return self::$token = $response['data']['access_token'] ?? null;
         }
 
@@ -47,16 +47,17 @@ class SyncMainApp{
         return false;
     }
 
-    public function syncAll(){
-        (new UserSyncronisation())->syncUsers();
-        (new LibelleSyncronisation())->syncLibelles();
-        (new ProductSyncronisation())->syncProducts();
-
-        $stockSyncronisation = new StockSyncronisation();
+    public function syncAll()
+    {
+        (new CompanySyncronisation)->syncCompanies();
+        (new UserSyncronisation)->syncUsers();
+        $stockSyncronisation = new StockSyncronisation;
         $stockSyncronisation->stockSync();
-        (new WarehouseProductSyncronisation())->syncWarehouseProducts();
+        (new WarehouseProductSyncronisation)->syncWarehouseProducts();
+        (new LibelleSyncronisation)->syncLibelles();
+        (new ProductSyncronisation)->syncProducts();
 
-        (new InvoinceSyncronisation())->syncInvoices();
+        (new InvoinceSyncronisation)->syncInvoices();
         $stockResult = $stockSyncronisation->syncStockMovements();
 
         Log::info('Stock movement synchronization completed.', [
@@ -68,8 +69,9 @@ class SyncMainApp{
         ];
     }
 
-    public function get($url,$params=null){
-        $currentUrl = $this->BASE_URL . $url;
+    public function get($url, $params = null)
+    {
+        $currentUrl = $this->BASE_URL.$url;
         $token = $this->getToken();
 
         if (! $token) {
@@ -92,7 +94,7 @@ class SyncMainApp{
             return false;
         }
 
-        if($response->successful()) {
+        if ($response->successful()) {
             return $response->json();
         }
 
@@ -103,11 +105,4 @@ class SyncMainApp{
 
         return false;
     }
-
-
-
-
-
-
-
 }

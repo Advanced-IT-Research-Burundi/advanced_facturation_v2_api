@@ -8,9 +8,18 @@ use App\Models\Warehouse;
 use App\Models\Libelle;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\Company;
 
 class AppSyncroniserController extends Controller
 {
+
+    public function syncCompanies($max_id){
+        $companies = Company::where('id', '>', $max_id)->take(2)->get();
+        return response()->json([
+            'success' => true,
+            'data' => $companies,
+        ]);
+    }
 
     public function syncWarehouses($max_id){
         $warehouses = Warehouse::where('id', '>', $max_id)->take(2)->get();

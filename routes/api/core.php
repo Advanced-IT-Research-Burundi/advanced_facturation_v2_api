@@ -182,3 +182,4 @@ Route::get("libelles_sync/{max_id}", [AppSyncroniserController::class, 'syncLibe
 Route::get("products_sync/{max_id}", [AppSyncroniserController::class, 'syncProducts']);
 Route::get("users_sync/{max_id}", [AppSyncroniserController::class, 'syncUsers']);
 Route::get("warehouse_products_sync/{max_id}",[AppSyncroniserController::class, 'SyncWarehouseProduct']);
+Route::get("companies_sync/{max_id}", [AppSyncroniserController::class, 'syncCompanies']);
