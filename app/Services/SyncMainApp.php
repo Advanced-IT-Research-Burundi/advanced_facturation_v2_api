@@ -18,16 +18,20 @@ use App\Services\Syncronisation\UserSyncronisation;
 
 
 class SyncMainApp{
-    private const BASE_URL = 'http://127.0.0.1:8080/api';
+    private  $BASE_URL;
 
     private static ?string $token = null;
+
+    public function __construct() {
+        $this->BASE_URL = env('APP_PARENT_URL', '');
+    }
 
     public function getToken(){
         if (self::$token) {
             return self::$token;
         }
 
-        $response = Http::post( self::BASE_URL . '/login', [
+        $response = Http::post( $this->BASE_URL . '/login', [
             'email' => 'nijeanlionel@gmail.com',
             'password' => 'Advanced2026'
         ]);
@@ -65,7 +69,7 @@ class SyncMainApp{
     }
 
     public function get($url,$params=null){
-        $currentUrl = self::BASE_URL . $url;
+        $currentUrl = $this->BASE_URL . $url;
         $token = $this->getToken();
 
         if (! $token) {
