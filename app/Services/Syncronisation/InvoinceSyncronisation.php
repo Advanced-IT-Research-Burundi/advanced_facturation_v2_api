@@ -26,8 +26,8 @@ class InvoinceSyncronisation{
             dump($e->getMessage());
             return $e->getMessage();
         }
-      
-     
+
+
         try {
             DB::beginTransaction();
        if($invoices){
@@ -37,7 +37,7 @@ class InvoinceSyncronisation{
                $c= Invoice::updateOrCreate([
                     'invoice_number'=> $invoice['invoice_number']
                 ],[
-                   
+
                     "invoice_number" => $invoice['invoice_number'],
                     "invoice_date" => $invoice['invoice_date'],
                     "invoice_type" => $invoice['invoice_type'],
@@ -92,9 +92,9 @@ class InvoinceSyncronisation{
                     "created_by_id" => $invoice['created_by_id'],
                     "created_at" => $invoice['created_at'],
                     "updated_at" => $invoice['updated_at']
-                ]);              
-                // Invoices Items 
-                
+                ]);
+                // Invoices Items
+
                 foreach($invoice['invoice_items'] as $invoiceItem){
                     InvoiceItem::create([
                         "invoice_id" => $c->id ,
@@ -111,7 +111,7 @@ class InvoinceSyncronisation{
                         "item_price_wvat" => $invoiceItem['item_price_wvat'],
                         "item_total_amount" => $invoiceItem['item_total_amount'],
                         "user_id" => $invoiceItem['user_id'] ?? null,
-                        
+
                     ]);
                     // update product total quantity in stock
                 }
@@ -131,10 +131,10 @@ class InvoinceSyncronisation{
 
                 $c->customer_id = $customer->id;
                 $c->save();
-                
+
                 TruckSyncroniser::updateOrCreate([
                     "model_name" => "Invoice",
-                    "last_id" => $maxInvoicesId 
+                    "last_id" => $maxInvoicesId
                 ],
                 [
                     "model_name" => "Invoice",
@@ -142,9 +142,9 @@ class InvoinceSyncronisation{
             ]);
             dump("Invoice synced successfully with id: " . $c->id);
             }
-           
-       }  
-       
+
+       }
+
             DB::commit();
         } catch (\Throwable $th) {
             //throw $th;
@@ -154,6 +154,6 @@ class InvoinceSyncronisation{
         }
     }
 
-    
-    
+
+
 }

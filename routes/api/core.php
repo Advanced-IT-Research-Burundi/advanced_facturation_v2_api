@@ -178,6 +178,7 @@ Route::get("invoices_sync/{max_id}", [InvoiceController::class, 'syncInvoices'])
 Route::get("stock_movements_sync/{max_id}", [AppSyncroniserController::class, 'syncStockMouvements']);
 
 Route::get("warehouses_sync/{max_id}", [AppSyncroniserController::class, 'syncWarehouses']);
-
+Route::get("libelles_sync/{max_id}", [AppSyncroniserController::class, 'syncLibelles']);
 Route::get("products_sync/{max_id}", [AppSyncroniserController::class, 'syncProducts']);
+Route::get("users_sync/{max_id}", [AppSyncroniserController::class, 'syncUsers']);
 Route::get("warehouse_products_sync/{max_id}",[AppSyncroniserController::class, 'SyncWarehouseProduct']);

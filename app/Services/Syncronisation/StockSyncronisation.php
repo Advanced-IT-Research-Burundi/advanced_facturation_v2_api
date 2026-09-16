@@ -11,6 +11,8 @@ use App\Services\SyncMainApp;
 use Exception;
 use App\Models\Product;
 use App\Models\Warehouse;
+use App\Models\User;
+use Illuminate\Database\QueryException;
 
 
 class StockSyncronisation{
@@ -21,15 +23,37 @@ class StockSyncronisation{
             $maxId = TruckSyncroniser::where('model_name', 'StockMovement')->latest()->first()->last_id ?? 0;
             $stockMovements = $syncMainApp->get('/stock_movements_sync/' . $maxId);
 
+            if (! is_array($stockMovements)) {
+                Log::warning('Stock movement synchronization skipped: source endpoint returned no data.');
+
+                return [
+                    'success' => false,
+                    'total_synced' => 0,
+                ];
+            }
+
+            $received = is_array($stockMovements['data'] ?? null)
+                ? count($stockMovements['data'])
+                : 0;
+            $created = 0;
+            $existing = 0;
+            $localUserId = User::query()->orderBy('id')->value('id');
+
+            if (! $localUserId) {
+                throw new Exception('Aucun utilisateur local disponible pour synchroniser les mouvements de stock.');
+            }
+
+            $resolveUserId = static function ($remoteUserId) use ($localUserId): int {
+                return $remoteUserId && User::whereKey($remoteUserId)->exists()
+                    ? (int) $remoteUserId
+                    : (int) $localUserId;
+            };
+
             DB::beginTransaction();
-            if($stockMovements["data"]){
+            if(! empty($stockMovements['data']) && is_array($stockMovements['data'])){
                 $maxId = collect($stockMovements["data"])->max('id');
                 foreach($stockMovements["data"] as $stockMovement){
-                  $stock = StockMovement::firstOrCreate(
-                    [
-                        'parent_id' => $stockMovement['id'],
-                    ],
-                    [
+                      $attributes = [
                         "parent_id" => $stockMovement['id'],
                         'item_code' => $stockMovement['item_code'],
                         "system_or_device_id" => $stockMovement["system_or_device_id"],
@@ -43,13 +67,27 @@ class StockSyncronisation{
                         'item_movement_date' => $stockMovement['item_movement_date'],
                         'obr_submission_status' => $stockMovement['obr_submission_status'],
                         'company_id' => $stockMovement['company_id'],
-                        "invoice_id"=>$stockMovement["invoice_id"],
+                        'invoice_id' => $stockMovement['invoice_id'] ?? null,
                         'product_id' => $stockMovement['product_id'],
                         'warehouse_id' => $stockMovement['warehouse_id'],
-                        'created_by' => $stockMovement['created_by'],
-                        'user_id' => $stockMovement['user_id'],
-                    ]);
-                    dump(  $stock->id);
+                        'created_by' => $resolveUserId($stockMovement['created_by'] ?? null),
+                        'user_id' => $resolveUserId($stockMovement['user_id'] ?? null),
+                    ];
+
+                      try {
+                          $stock = StockMovement::firstOrCreate(
+                              ['parent_id' => $stockMovement['id']],
+                              $attributes
+                          );
+                      } catch (QueryException $exception) {
+                          $this->refetchForeignKeyData($exception);
+
+                          $stock = StockMovement::firstOrCreate(
+                              ['parent_id' => $stockMovement['id']],
+                              $attributes
+                          );
+                      }
+                    $stock->wasRecentlyCreated ? $created++ : $existing++;
                 }
                 TruckSyncroniser::create([
                     'model_name' => 'StockMovement',
@@ -58,12 +96,50 @@ class StockSyncronisation{
             }
             DB::commit();
 
+            return [
+                'success' => true,
+                'received' => $received,
+                'created' => $created,
+                'already_present' => $existing,
+                'last_id' => $received > 0 ? $maxId : null,
+            ];
+
         } catch (Exception $e) {
-            DB::rollBack();
-            dd($e);
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::error('Stock movement synchronization failed: '.$e->getMessage());
+
             return $e->getMessage();
         }
 
+    }
+    private function refetchForeignKeyData(QueryException $exception): void
+    {
+        $message = $exception->getMessage();
+
+        Log::warning('Foreign key missing during stock movement synchronization; refetching dependency.', [
+            'error' => $message,
+        ]);
+
+        if (str_contains($message, 'created_by') || str_contains($message, 'user_id')) {
+            (new UserSyncronisation())->syncUsers();
+            return;
+        }
+
+        if (str_contains($message, 'product_id')) {
+            (new ProductSyncronisation())->syncProducts();
+            return;
+        }
+
+        if (str_contains($message, 'warehouse_id')) {
+            $this->stockSync();
+            return;
+        }
+
+        if (str_contains($message, 'invoice_id')) {
+            (new InvoinceSyncronisation())->syncInvoices();
+        }
     }
 
     public function stockSync(){
@@ -72,9 +148,18 @@ class StockSyncronisation{
         $maxId = TruckSyncroniser::where('model_name', 'Warehouse')->latest()->first()->last_id ?? 0;
         $stocks = $syncMainApp->get('/warehouses_sync/' . $maxId);
 
+        if (! is_array($stocks)) {
+            Log::warning('Warehouse synchronization skipped: source endpoint returned no data.');
+
+            return [
+                'success' => false,
+                'total_synced' => 0,
+            ];
+        }
+
 
         DB::beginTransaction();
-        if($stocks["data"]){
+        if(! empty($stocks['data']) && is_array($stocks['data'])){
             $maxId = collect($stocks["data"])->max('id');
             foreach($stocks["data"] as $stock){
                 $stock = Warehouse::firstOrCreate(
@@ -91,7 +176,7 @@ class StockSyncronisation{
                     'user_id' => $stock['user_id'],
                 ]);
 
-                dump( " Stock : ", $stock);
+                // dump( " Stock : ", $stock);
             }
             TruckSyncroniser::create([
                 'model_name' => 'Stock',
@@ -99,6 +184,11 @@ class StockSyncronisation{
             ]);
         }
         DB::commit();
+
+        return [
+            'success' => true,
+            'total_synced' => count($stocks['data'] ?? []),
+        ];
     }
 
 

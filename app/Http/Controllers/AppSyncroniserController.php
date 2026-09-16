@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
+use App\Models\Libelle;
 use App\Models\Product;
+use App\Models\User;
+
 class AppSyncroniserController extends Controller
 {
 
@@ -42,6 +45,23 @@ class AppSyncroniserController extends Controller
         return response()->json([
             'success' => true,
             'data' => $warehouseProducts,
+        ]);
+    }
+
+    public function syncLibelles($max_id){
+        return response()->json([
+            'success' => true,
+            'data' => Libelle::where('id', '>', $max_id)->take(100)->get(),
+        ]);
+    }
+
+    public function syncUsers($max_id){
+        return response()->json([
+            'success' => true,
+            'data' => User::where('id', '>', $max_id)
+                ->select(['id', 'name', 'email', 'company_id', 'user_id', 'is_server', 'server_code', 'created_at', 'updated_at'])
+                ->take(100)
+                ->get(),
         ]);
     }
 }
