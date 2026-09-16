@@ -30,7 +30,8 @@ class CompanySyncronisation
                 $synced = 0;
 
                 foreach ($companies as $remoteCompany) {
-                    Company::updateOrCreate(
+
+                    $c = Company::updateOrCreate(
                         ['id' => $remoteCompany['id']],
                         [
                             'name' => $remoteCompany['name'] ?? null,

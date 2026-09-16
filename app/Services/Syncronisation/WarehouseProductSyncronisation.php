@@ -2,7 +2,11 @@
 
 namespace App\Services\Syncronisation;
 
+use App\Models\Company;
+use App\Models\Product;
 use App\Models\TruckSyncroniser;
+use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
 use App\Services\SyncMainApp;
 use Exception;
@@ -13,7 +17,7 @@ class WarehouseProductSyncronisation
 {
     public function syncWarehouseProducts(): array|string
     {
-        $syncMainApp = new SyncMainApp();
+        $syncMainApp = new SyncMainApp;
         $lastId = TruckSyncroniser::where('model_name', 'WarehouseProduct')
             ->latest('id')
             ->value('last_id') ?? 0;
@@ -34,6 +38,24 @@ class WarehouseProductSyncronisation
             ];
         }
 
+        $localUserId = User::query()->orderBy('id')->value('id');
+
+        $resolveUserId = static function ($remoteUserId) use ($localUserId): ?int {
+            if (! $remoteUserId) {
+                return $localUserId;
+            }
+
+            return User::whereKey($remoteUserId)->exists()
+                ? (int) $remoteUserId
+                : $localUserId;
+        };
+
+        $resolveCompanyId = static function ($remoteCompanyId): ?int {
+            return $remoteCompanyId && Company::whereKey($remoteCompanyId)->exists()
+                ? (int) $remoteCompanyId
+                : null;
+        };
+
         DB::beginTransaction();
 
         try {
@@ -41,6 +63,18 @@ class WarehouseProductSyncronisation
             $synced = 0;
 
             foreach ($warehouseProducts as $warehouseProduct) {
+                $productExists = Product::whereKey($warehouseProduct['product_id'])->exists();
+                $warehouseExists = ! $warehouseProduct['warehouse_id'] || Warehouse::whereKey($warehouseProduct['warehouse_id'])->exists();
+
+                if (! $productExists || ! $warehouseExists) {
+                    Log::warning('WarehouseProduct sync skipped: missing product or warehouse.', [
+                        'product_id' => $warehouseProduct['product_id'],
+                        'warehouse_id' => $warehouseProduct['warehouse_id'] ?? null,
+                    ]);
+
+                    continue;
+                }
+
                 WarehouseProduct::updateOrCreate(
                     [
                         'product_id' => $warehouseProduct['product_id'],
@@ -48,13 +82,13 @@ class WarehouseProductSyncronisation
                         'production_status' => $warehouseProduct['production_status'] ?? 'RAW',
                     ],
                     [
-                        'company_id' => $warehouseProduct['company_id'] ?? null,
+                        'company_id' => $resolveCompanyId($warehouseProduct['company_id'] ?? null),
                         'quantity' => $warehouseProduct['quantity'],
                         'unit_price' => $warehouseProduct['unit_price'],
                         'price_promo' => $warehouseProduct['price_promo'] ?? null,
                         'currency' => $warehouseProduct['currency'] ?? null,
                         'last_stock_movement_id' => $warehouseProduct['last_stock_movement_id'] ?? null,
-                        'user_id' => $warehouseProduct['user_id'],
+                        'user_id' => $resolveUserId($warehouseProduct['user_id'] ?? null),
                         'created_at' => $warehouseProduct['created_at'] ?? now(),
                         'updated_at' => $warehouseProduct['updated_at'] ?? now(),
                     ]

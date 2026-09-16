@@ -2,9 +2,11 @@
 
 namespace App\Services\Syncronisation;
 
+use App\Models\Company;
 use App\Models\Libelle;
 use App\Models\Product;
 use App\Models\TruckSyncroniser;
+use App\Models\User;
 use App\Services\SyncMainApp;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -19,14 +21,32 @@ class ProductSyncronisation
             ->value('last_id') ?? 0;
 
         try {
-            $response = (new SyncMainApp())->get('/products_sync/'.$lastId);
+            $response = (new SyncMainApp)->get('/products_sync/'.$lastId);
             $products = $response['data'] ?? [];
 
             if ($products === []) {
                 return ['success' => true, 'total_synced' => 0];
             }
 
-            DB::transaction(function () use ($products, &$maxId) {
+            $localUserId = User::query()->orderBy('id')->value('id');
+
+            $resolveUserId = static function ($remoteUserId) use ($localUserId): ?int {
+                if (! $remoteUserId) {
+                    return $localUserId;
+                }
+
+                return User::whereKey($remoteUserId)->exists()
+                    ? (int) $remoteUserId
+                    : $localUserId;
+            };
+
+            $resolveCompanyId = static function ($remoteCompanyId): ?int {
+                return $remoteCompanyId && Company::whereKey($remoteCompanyId)->exists()
+                    ? (int) $remoteCompanyId
+                    : null;
+            };
+
+            DB::transaction(function () use ($products, &$maxId, $resolveUserId, $resolveCompanyId) {
                 $maxId = collect($products)->max('id');
 
                 foreach ($products as $product) {
@@ -44,11 +64,11 @@ class ProductSyncronisation
                             'item_measurement_unit' => $product['item_measurement_unit'],
                             'barcode' => $product['barcode'] ?? null,
                             'vat_rate' => $product['vat_rate'] ?? 0,
-                            'company_id' => $product['company_id'] ?? null,
+                            'company_id' => $resolveCompanyId($product['company_id'] ?? null),
                             'product_unit_id' => $product['product_unit_id'] ?? null,
                             'product_category_id' => $product['product_category_id'] ?? null,
                             'id_libelle' => $libelleId,
-                            'user_id' => $product['user_id'],
+                            'user_id' => $resolveUserId($product['user_id'] ?? null),
                             'code_product' => $product['code_product'] ?? null,
                             'marque' => $product['marque'] ?? null,
                             'quantite' => $product['quantite'] ?? 0,

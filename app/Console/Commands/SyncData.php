@@ -1,36 +1,29 @@
 <?php
 
 namespace App\Console\Commands;
+
 use App\Services\SyncMainApp;
 use Illuminate\Console\Command;
 
 class SyncData extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'app:sync-data';
 
     protected $aliases = ['app:sync'];
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Command description';
+    protected $description = 'Synchronise les données depuis le serveur principal';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
-        $app = new SyncMainApp();
+        $this->info('=== Démarrage de la synchronisation ===');
+        $this->newLine();
+
+        $app = new SyncMainApp($this->output);
         $result = $app->syncAll();
 
+        $this->newLine();
+        $this->info('=== Synchronisation terminée ===');
 
         return self::SUCCESS;
-        }
+    }
 }

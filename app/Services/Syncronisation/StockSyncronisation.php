@@ -49,10 +49,29 @@ class StockSyncronisation
                     : (int) $localUserId;
             };
 
+            $resolveCompanyId = static function ($remoteCompanyId): ?int {
+                return $remoteCompanyId && Company::whereKey($remoteCompanyId)->exists()
+                    ? (int) $remoteCompanyId
+                    : null;
+            };
+
             DB::beginTransaction();
             if (! empty($stockMovements['data']) && is_array($stockMovements['data'])) {
                 $maxId = collect($stockMovements['data'])->max('id');
                 foreach ($stockMovements['data'] as $stockMovement) {
+                    $productExists = ! $stockMovement['product_id'] || Product::whereKey($stockMovement['product_id'])->exists();
+                    $warehouseExists = ! $stockMovement['warehouse_id'] || Warehouse::whereKey($stockMovement['warehouse_id'])->exists();
+
+                    if (! $productExists || ! $warehouseExists) {
+                        Log::warning('StockMovement sync skipped: missing product or warehouse.', [
+                            'parent_id' => $stockMovement['id'],
+                            'product_id' => $stockMovement['product_id'],
+                            'warehouse_id' => $stockMovement['warehouse_id'],
+                        ]);
+
+                        continue;
+                    }
+
                     $attributes = [
                         'parent_id' => $stockMovement['id'],
                         'item_code' => $stockMovement['item_code'],
@@ -66,7 +85,7 @@ class StockSyncronisation
                         'item_movement_invoice_ref' => $stockMovement['item_movement_invoice_ref'],
                         'item_movement_date' => $stockMovement['item_movement_date'],
                         'obr_submission_status' => $stockMovement['obr_submission_status'],
-                        'company_id' => $stockMovement['company_id'],
+                        'company_id' => $resolveCompanyId($stockMovement['company_id'] ?? null),
                         'invoice_id' => $stockMovement['invoice_id'] ?? null,
                         'product_id' => $stockMovement['product_id'],
                         'warehouse_id' => $stockMovement['warehouse_id'],
