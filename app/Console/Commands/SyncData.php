@@ -17,10 +17,8 @@ class SyncData extends Command
     {
         $this->info('=== Démarrage de la synchronisation ===');
         $this->newLine();
-
         $app = new SyncMainApp($this->output);
         $result = $app->syncAll();
-
         $this->newLine();
         $this->info('=== Synchronisation terminée ===');
 
