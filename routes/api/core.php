@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ProductUnitController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RoleUserController;
 use App\Http\Controllers\Api\StockMovementController;
+use App\Http\Controllers\Api\SyncDataController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseProductController;
@@ -183,3 +184,7 @@ Route::get("products_sync/{max_id}", [AppSyncroniserController::class, 'syncProd
 Route::get("users_sync/{max_id}", [AppSyncroniserController::class, 'syncUsers']);
 Route::get("warehouse_products_sync/{max_id}",[AppSyncroniserController::class, 'SyncWarehouseProduct']);
 Route::get("companies_sync/{max_id}", [AppSyncroniserController::class, 'syncCompanies']);
+
+// Synchronisation avec le serveur principal (php artisan app:sync-data)
+Route::get('sync-data/last', [SyncDataController::class, 'last']);
+Route::post('sync-data/run', [SyncDataController::class, 'run']);
