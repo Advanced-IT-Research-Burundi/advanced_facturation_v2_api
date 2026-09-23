@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\SyncMainApp;
+use Http;
 use Illuminate\Console\Command;
 
 class SyncData extends Command

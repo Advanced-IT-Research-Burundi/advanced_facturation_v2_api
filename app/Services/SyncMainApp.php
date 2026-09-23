@@ -37,14 +37,17 @@ class SyncMainApp
         $this->log('Connexion au serveur parent...', 'comment');
 
         $response = Http::post($this->BASE_URL.'/login', [
-            'email' => 'nijeanlionel@gmail.com',
-            'password' => 'Advanced2026',
+            'email' => env('APP_PARRENT_EMAIL'),
+            'password' => env('APP_PARRENT_PASSWORD'),
         ]);
+       
+
+        
         if ($response->successful()) {
-            $response = $response->json();
+            $rep = json_decode($response->body());
             $this->log('Connexion réussie', 'info');
 
-            return self::$token = $response['data']['access_token'] ?? null;
+            return self::$token = $rep->data->access_token;
         }
 
         $this->log('Échec de connexion au serveur', 'error');
@@ -58,7 +61,6 @@ class SyncMainApp
     public function syncAll(): array
     {
         $results = [];
-
         // 1. Companies
         $this->log('[1/8] Synchronisation des Companies...', 'comment');
         $result = (new CompanySyncronisation)->syncCompanies();
@@ -148,7 +150,7 @@ class SyncMainApp
     {
         $currentUrl = $this->BASE_URL.$url;
         $token = $this->getToken();
-
+      
         if (! $token) {
             Log::warning('Synchronization request skipped: authentication failed.', [
                 'url' => $currentUrl,
