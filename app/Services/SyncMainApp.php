@@ -35,18 +35,15 @@ class SyncMainApp
         }
 
         $this->log('Connexion au serveur parent...', 'comment');
-
+        
         $response = Http::post($this->BASE_URL.'/login', [
             'email' => env('APP_PARRENT_EMAIL'),
             'password' => env('APP_PARRENT_PASSWORD'),
         ]);
        
-
-        
         if ($response->successful()) {
             $rep = json_decode($response->body());
             $this->log('Connexion réussie', 'info');
-
             return self::$token = $rep->data->access_token;
         }
 
