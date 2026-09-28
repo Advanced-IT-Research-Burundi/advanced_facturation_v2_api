@@ -24,6 +24,7 @@ class WarehouseProductSyncronisation
 
         try {
             $response = $syncMainApp->get('/warehouse_products_sync/'.$lastId);
+
         } catch (Exception $exception) {
             Log::error($exception->getMessage());
 
@@ -37,14 +38,11 @@ class WarehouseProductSyncronisation
                 'total_synced' => 0,
             ];
         }
-
         $localUserId = User::query()->orderBy('id')->value('id');
-
         $resolveUserId = static function ($remoteUserId) use ($localUserId): ?int {
             if (! $remoteUserId) {
                 return $localUserId;
             }
-
             return User::whereKey($remoteUserId)->exists()
                 ? (int) $remoteUserId
                 : $localUserId;
