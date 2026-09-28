@@ -158,8 +158,9 @@ Route::post('import/products/preview', [ImportExportController::class, 'previewP
 Route::post('import/products', [ImportExportController::class, 'importProducts']);
 
 // =============================================
-// ANNULATION DE FACTURES
+// VALIDATION & ANNULATION DE FACTURES
 // =============================================
+Route::post('invoices/{invoice}/validate', [InvoiceController::class, 'validateInvoice']);
 Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancelInvoice']);
 
 

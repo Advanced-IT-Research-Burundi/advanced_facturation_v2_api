@@ -64,6 +64,10 @@ class Invoice extends Model
         'created_by',
         'user_id',
         'created_by_id',
+        'status',
+        'is_validated',
+        'validated_at',
+        'validated_by',
         'payment_status',
         'total_paid',
         'due_date',
@@ -89,6 +93,9 @@ class Invoice extends Model
             'invoice_registered_date' => 'datetime',
             'obr_invoice_registered_date' => 'datetime',
             'obr_sent_at' => 'datetime',
+            'is_validated' => 'boolean',
+            'validated_at' => 'datetime',
+            'validated_by' => 'integer',
             'is_cancelled' => 'boolean',
             'cancelled_at' => 'datetime',
             'company_id' => 'integer',
@@ -110,10 +117,12 @@ class Invoice extends Model
     {
         static::created(function ($invoice) {
            // $invoice->invoice_number = self::getInvoiceNumber($invoice->id);
-            $obr = new ObrService();
-            $invoice->electronic_signature = $obr->generateInvoiceIdentifier( $invoice->invoice_number, $invoice->invoice_date);
-            $invoice->obr_submission_status = 'PENDING';
-            $invoice->saveQuietly();
+            if ($invoice->is_validated) {
+                $obr = new ObrService();
+                $invoice->electronic_signature = $obr->generateInvoiceIdentifier($invoice->invoice_number, $invoice->invoice_date);
+                $invoice->obr_submission_status = 'PENDING';
+                $invoice->saveQuietly();
+            }
         });
     }
 
@@ -135,6 +144,11 @@ class Invoice extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function validatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validated_by');
     }
 
     public function user(): BelongsTo

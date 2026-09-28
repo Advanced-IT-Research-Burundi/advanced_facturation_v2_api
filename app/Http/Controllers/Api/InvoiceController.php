@@ -97,6 +97,21 @@ class InvoiceController extends Controller
             $query->where('obr_submission_status', $request->obr_status);
         }
 
+        // Filtre par statut de validation
+        if ($request->has('validation_status') && $request->validation_status !== 'all') {
+            if ($request->validation_status === 'validated') {
+                $query->where('is_validated', true);
+            } elseif (in_array($request->validation_status, ['draft', 'non_valide', 'unvalidated'], true)) {
+                $query->where('is_validated', false);
+            }
+        } elseif ($request->has('status') && $request->status !== 'all') {
+            if ($request->status === 'validated') {
+                $query->where('is_validated', true);
+            } elseif (in_array($request->status, ['draft', 'non_valide'], true)) {
+                $query->where('is_validated', false);
+            }
+        }
+
         // Filtre par statut de paiement
         if ($request->has('payment_status') && $request->payment_status !== 'all') {
             $query->where('payment_status', $request->payment_status);
@@ -145,6 +160,8 @@ class InvoiceController extends Controller
             'avoir_reason' => 'nullable|string',
             'refund_reason' => 'nullable|string',
             'deposit_reference' => 'nullable|string',
+            'status' => 'sometimes|string|in:draft,validated,non_valide',
+            'is_validated' => 'sometimes|boolean',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:products,id',
             'items.*.warehouse_product_id' => 'nullable|exists:warehouse_products,id',
@@ -156,8 +173,16 @@ class InvoiceController extends Controller
             'items.*.item_tl' => 'nullable|numeric|min:0',
         ]);
 
+        $isValidated = true;
+        if (isset($validated['status']) && in_array($validated['status'], ['draft', 'non_valide'], true)) {
+            $isValidated = false;
+        } elseif (isset($validated['is_validated'])) {
+            $isValidated = (bool) $validated['is_validated'];
+        }
+
         if (
-            $validated['invoice_action'] === 'POS'
+            $isValidated
+            && $validated['invoice_action'] === 'POS'
             && $validated['invoice_type'] === 'FN'
             && ! in_array($validated['payment_type'], ['1', '2', '3', '4'], true)
         ) {
@@ -195,8 +220,8 @@ class InvoiceController extends Controller
         try {
             DB::beginTransaction();
 
-            // Vérifier le stock uniquement si c'est une vente POS ET une facture réelle (FN)
-            if ($validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
+            // Vérifier le stock uniquement si la facture est validée immédiatement, c'est une vente POS ET une facture réelle (FN)
+            if ($isValidated && $validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
                 $stockCheck = $this->stockService->checkStockAvailability(
                     $validated['items'],
                     $validated['warehouse_id'] ?? null
@@ -214,9 +239,7 @@ class InvoiceController extends Controller
             $customer = Customer::findOrFail($validated['customer_id']);
             $company = auth()->user()->company;
 
-            // Check if company is null and handle it (fallback or error)
             if (! $company) {
-                // For POS, we might need a default company or just return error
                 return response()->json([
                     'success' => false,
                     'message' => 'L\'utilisateur n\'est associé à aucune entreprise configurée.',
@@ -227,7 +250,8 @@ class InvoiceController extends Controller
             $cashRegister = null;
 
             if (
-                $validated['invoice_action'] === 'POS'
+                $isValidated
+                && $validated['invoice_action'] === 'POS'
                 && $validated['invoice_type'] === 'FN'
                 && $validated['payment_type'] === '1'
             ) {
@@ -271,6 +295,10 @@ class InvoiceController extends Controller
                 'invoice_amount_nvat' => $totals['total_ht'],
                 'invoice_vat_amount' => $totals['total_vat'],
                 'invoice_total_amount' => $totals['total_ttc'],
+                'status' => $isValidated ? 'validated' : 'draft',
+                'is_validated' => $isValidated,
+                'validated_at' => $isValidated ? now() : null,
+                'validated_by' => $isValidated ? auth()->id() : null,
                 // Références pour avoir et remboursement
                 'reference_invoice_id' => $validated['reference_invoice_id'] ?? null,
                 'cancelled_invoice_ref' => $validated['reference_invoice_number'] ?? null,
@@ -314,7 +342,7 @@ class InvoiceController extends Controller
             }
 
             $stockMovements = null;
-            if ($validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
+            if ($isValidated && $validated['invoice_action'] === 'POS' && $validated['invoice_type'] === 'FN') {
                 $stockMovements = $this->stockService->processSaleStockMovement(
                     $validated['items'],
                     $invoice->id,
@@ -324,7 +352,8 @@ class InvoiceController extends Controller
             }
 
             if (
-                $validated['invoice_action'] === 'POS'
+                $isValidated
+                && $validated['invoice_action'] === 'POS'
                 && $validated['invoice_type'] === 'FN'
                 && in_array($validated['payment_type'], ['1', '2'], true)
             ) {
@@ -356,20 +385,28 @@ class InvoiceController extends Controller
                         'created_by' => auth()->id(),
                     ]);
                 }
+
+                $invoice->payment_status = 'paid';
+                $invoice->total_paid = $invoice->invoice_total_amount;
+                $invoice->saveQuietly();
             }
 
             DB::commit();
 
             $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product']);
-            $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
+
+            $obrResult = null;
+            if ($isValidated) {
+                $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => $obrResult
-                    ? 'Facture créée avec succès. Envoi OBR direct traité.'
-                    : 'Facture créée avec succès. En attente d\'envoi OBR.',
+                'message' => $isValidated
+                    ? ($obrResult ? 'Facture créée et validée avec succès. Envoi OBR traité.' : 'Facture créée et validée avec succès.')
+                    : 'Facture enregistrée en brouillon (non validée).',
                 'data' => [
-                    'invoice' => $invoice->fresh(['customer', 'paymentMethod', 'invoiceItems']),
+                    'invoice' => $invoice->fresh(['customer', 'paymentMethod', 'invoiceItems.product']),
                     'stock_movements' => $stockMovements,
                     'obr_result' => $obrResult,
                 ],
@@ -392,35 +429,66 @@ class InvoiceController extends Controller
     {
         return response()->json([
             'success' => true,
-            // Les détails de facture sont utilisés par l'impression et les avoirs.
-            // Les mouvements de stock ne sont pas nécessaires ici et certaines
-            // installations historiques ne possèdent pas leur clé invoice_id.
-            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product', 'payments', 'latestObrLog']),
+            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product.libelle', 'payments', 'latestObrLog', 'validatedBy']),
         ], Response::HTTP_OK);
     }
 
     /**
-     * Update the specified invoice.
+     * Update the specified invoice (Drafts can be modified freely; validated invoices cannot be altered directly if sent to OBR).
      */
     public function update(Request $request, Invoice $invoice)
     {
+        if ($invoice->is_cancelled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de modifier une facture annulée.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($invoice->is_validated && in_array($invoice->obr_submission_status, ['ACCEPTED', 'SENT'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Une facture validée et transmise à l\'OBR ne peut plus être modifiée directement (veuillez utiliser une facture d\'avoir ou l\'annuler).',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
         $validated = $request->validate([
             'invoice_date' => 'sometimes|date',
             'invoice_type' => 'sometimes|string',
             'invoice_currency' => 'sometimes|string|max:3',
             'customer_id' => 'sometimes|exists:customers,id',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
+            'payment_type' => 'sometimes|string|max:50',
+            'payment_method_id' => 'nullable|integer|exists:payment_methods,id',
             'items' => 'sometimes|array|min:1',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.warehouse_product_id' => 'nullable|exists:warehouse_products,id',
             'items.*.item_designation' => 'required_with:items|string',
             'items.*.item_quantity' => 'required_with:items|numeric|min:0.01',
             'items.*.item_price' => 'required_with:items|numeric|min:0',
             'items.*.vat' => 'required_with:items|numeric|min:0',
+            'items.*.item_ct' => 'nullable|numeric|min:0',
+            'items.*.item_tl' => 'nullable|numeric|min:0',
         ]);
 
         DB::transaction(function () use ($invoice, $validated) {
+            if (isset($validated['customer_id'])) {
+                $customer = Customer::find($validated['customer_id']);
+                if ($customer) {
+                    $invoice->customer_id = $customer->id;
+                    $invoice->customer_name = $customer->customer_name;
+                    $invoice->customer_TIN = $customer->customer_TIN;
+                    $invoice->customer_address = $customer->customer_address;
+                    $invoice->vat_customer_payer = $customer->vat_customer_payer;
+                }
+            }
+
             $invoice->update(collect($validated)->only([
                 'invoice_currency',
-                'customer_id',
                 'invoice_type',
+                'warehouse_id',
+                'payment_type',
+                'payment_method_id',
             ])->toArray());
 
             if (isset($validated['items'])) {
@@ -451,11 +519,9 @@ class InvoiceController extends Controller
 
                     $total_amount_nvat += $itemCalculations['price_nvat'] * $item['item_quantity'];
                     $total_vat_amount += $itemCalculations['vat_amount'] * $item['item_quantity'];
-                    // Note: total_amount in calculations is line total TTC
                     $total_amount += $itemCalculations['total_amount'];
                 }
 
-                // Update invoice totals
                 $invoice->update([
                     'invoice_amount_nvat' => $total_amount_nvat,
                     'invoice_vat_amount' => $total_vat_amount,
@@ -466,9 +532,223 @@ class InvoiceController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Invoice updated successfully',
-            'data' => $invoice->load(['company', 'customer', 'invoiceItems']),
+            'message' => 'Facture mise à jour avec succès.',
+            'data' => $invoice->load(['company', 'customer', 'invoiceItems.product', 'paymentMethod']),
         ], Response::HTTP_OK);
+    }
+
+    /**
+     * Valider et émettre une facture (Brouillon -> Validée)
+     */
+    public function validateInvoice(Request $request, Invoice $invoice)
+    {
+        if ($invoice->is_cancelled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de valider une facture annulée.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($invoice->is_validated) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette facture est déjà validée.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $validated = $request->validate([
+            'customer_id' => 'sometimes|exists:customers,id',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
+            'payment_type' => 'sometimes|string|max:50',
+            'payment_method_id' => 'nullable|integer|exists:payment_methods,id',
+            'invoice_currency' => 'sometimes|string|max:3',
+            'items' => 'sometimes|array|min:1',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.warehouse_product_id' => 'nullable|exists:warehouse_products,id',
+            'items.*.item_designation' => 'required_with:items|string|max:255',
+            'items.*.item_quantity' => 'required_with:items|numeric|min:0.01',
+            'items.*.item_price' => 'required_with:items|numeric',
+            'items.*.vat' => 'required_with:items|numeric|min:0|max:100',
+            'items.*.item_ct' => 'nullable|numeric|min:0',
+            'items.*.item_tl' => 'nullable|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $company = auth()->user()->company;
+            if (! $company) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'L\'utilisateur n\'est associé à aucune entreprise configurée.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            // 1. Mettre à jour les données client / paiement si fournies
+            if (isset($validated['customer_id'])) {
+                $customer = Customer::findOrFail($validated['customer_id']);
+                $invoice->customer_id = $customer->id;
+                $invoice->customer_name = $customer->customer_name;
+                $invoice->customer_TIN = $customer->customer_TIN;
+                $invoice->customer_address = $customer->customer_address;
+                $invoice->vat_customer_payer = $customer->vat_customer_payer;
+            }
+
+            if (isset($validated['warehouse_id'])) {
+                $invoice->warehouse_id = $validated['warehouse_id'];
+            }
+            if (isset($validated['payment_type'])) {
+                $invoice->payment_type = $validated['payment_type'];
+            }
+            if (isset($validated['payment_method_id'])) {
+                $invoice->payment_method_id = $validated['payment_method_id'];
+            }
+            if (isset($validated['invoice_currency'])) {
+                $invoice->invoice_currency = $validated['invoice_currency'];
+            }
+
+            // 2. Mettre à jour les items si fournis
+            if (isset($validated['items'])) {
+                $invoice->invoiceItems()->delete();
+
+                foreach ($validated['items'] as $item) {
+                    $itemCalculations = $this->calculateItemAmounts($item);
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'item_designation' => $item['item_designation'],
+                        'item_quantity' => $item['item_quantity'],
+                        'item_price' => $item['item_price'],
+                        'item_ct' => $item['item_ct'] ?? 0,
+                        'item_tl' => $item['item_tl'] ?? 0,
+                        'item_ott_tax' => 0,
+                        'item_tsce_tax' => 0,
+                        'item_price_nvat' => $itemCalculations['price_nvat'],
+                        'vat' => $item['vat'],
+                        'item_price_wvat' => $itemCalculations['price_wvat'],
+                        'item_total_amount' => $itemCalculations['total_amount'],
+                        'product_id' => $item['product_id'] ?? null,
+                        'user_id' => auth()->id(),
+                    ]);
+                }
+
+                $totals = $this->calculateTotals($validated['items']);
+                $invoice->invoice_amount_nvat = $totals['total_ht'];
+                $invoice->invoice_vat_amount = $totals['total_vat'];
+                $invoice->invoice_total_amount = $totals['total_ttc'];
+            }
+
+            // 3. Vérification & Sortie de stock
+            $itemsForStock = isset($validated['items'])
+                ? $validated['items']
+                : $invoice->invoiceItems->map(fn ($item) => [
+                    'product_id' => $item->product_id,
+                    'warehouse_product_id' => null,
+                    'item_designation' => $item->item_designation,
+                    'item_quantity' => $item->item_quantity,
+                    'item_price' => $item->item_price,
+                    'vat' => $item->vat,
+                ])->toArray();
+
+            $warehouseId = $invoice->warehouse_id;
+
+            if ($invoice->invoice_type === 'FN') {
+                $stockCheck = $this->stockService->checkStockAvailability($itemsForStock, $warehouseId);
+                if ($stockCheck['has_error']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stock insuffisant pour certains articles lors de la validation.',
+                        'stock_details' => $stockCheck['items'],
+                    ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+            }
+
+            $stockMovements = null;
+            if ($invoice->invoice_type === 'FN') {
+                $stockMovements = $this->stockService->processSaleStockMovement(
+                    $itemsForStock,
+                    $invoice->id,
+                    $invoice->invoice_number,
+                    $warehouseId
+                );
+            }
+
+            // 4. Enregistrement Paiement & Caisse si payé
+            if ($invoice->invoice_type === 'FN' && in_array($invoice->payment_type, ['1', '2'], true)) {
+                $paymentMethod = $invoice->payment_type === '1' ? 'cash' : 'bank_transfer';
+
+                $cashRegister = null;
+                if ($invoice->payment_type === '1') {
+                    $cashRegister = CashRegister::where('company_id', $company->id)
+                        ->where('status', 'open')
+                        ->whereNull('hotel_section')
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                $payment = Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'amount' => $invoice->invoice_total_amount,
+                    'payment_date' => now(),
+                    'payment_method' => $paymentMethod,
+                    'reference' => $invoice->invoice_number,
+                    'note' => 'Paiement enregistré lors de la validation de la facture.',
+                    'created_by' => auth()->id(),
+                    'company_id' => $company->id,
+                ]);
+
+                if ($invoice->payment_type === '1' && $cashRegister) {
+                    CashMovement::create([
+                        'cash_register_id' => $cashRegister->id,
+                        'invoice_id' => $invoice->id,
+                        'payment_id' => $payment->id,
+                        'type' => 'income',
+                        'amount' => $payment->amount,
+                        'description' => "Validation facture #{$invoice->invoice_number}",
+                        'reference' => $invoice->invoice_number,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                $invoice->payment_status = 'paid';
+                $invoice->total_paid = $invoice->invoice_total_amount;
+            }
+
+            // 5. Signature OBR et validation
+            $obr = new ObrService();
+            $invoice->electronic_signature = $obr->generateInvoiceIdentifier($invoice->invoice_number, $invoice->invoice_date);
+            $invoice->obr_submission_status = 'PENDING';
+            $invoice->is_validated = true;
+            $invoice->status = 'validated';
+            $invoice->validated_at = now();
+            $invoice->validated_by = auth()->id();
+            $invoice->save();
+
+            DB::commit();
+
+            $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product', 'payments']);
+            $obrResult = $this->obrService->sendInvoiceIfSuperAdmin($invoice, $request->user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Facture validée avec succès.',
+                'data' => [
+                    'invoice' => $invoice->fresh(['customer', 'paymentMethod', 'invoiceItems.product', 'payments']),
+                    'stock_movements' => $stockMovements,
+                    'obr_result' => $obrResult,
+                ],
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Erreur lors de la validation de la facture #{$invoice->id}: " . $e->getMessage(), [
+                'exception' => $e,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la validation de la facture: ' . $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
