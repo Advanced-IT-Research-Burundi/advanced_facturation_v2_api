@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\MouvementStockImportation;
 use App\Models\StockMovement;
+use App\Services\ReviewInvoice;
 use Illuminate\Console\Command;
 use App\Services\ObrService;
 use App\Models\Invoice;
@@ -30,10 +31,20 @@ class ObrSyncCommand extends Command
     public function handle()
     {
         // Syncronisa ama  invoinces
-        $this->syncStocks();
-        $this->syncInvoice();
-        $this->syncroniseImportation();
+        //$this->corrigeFacture();
+        // $this->syncStocks();
+         $this->syncInvoice();
+        // $this->syncroniseImportation();
     }
+
+    public function corrigeFacture() {
+        $invoinces = Invoice::all();
+        foreach ($invoinces as $invoice) {
+          $v =  ReviewInvoice::review($invoice->id);
+            dump($v);
+        }
+    }
+    
 
     public function syncroniseImportation(){
         $stocksLines = MouvementStockImportation::where('is_sent_to_obr', 0)
@@ -57,10 +68,13 @@ class ObrSyncCommand extends Command
     }
 
     public function syncInvoice(){
+
+        
          $invoices = Invoice::with(['company', 'invoiceItems'])
         ->where('obr_submission_status', '=', 'PENDING')
-        ->latest()->get();
-
+        ->where('is_validated','=', 1)
+        ->latest()
+        ->get();
         foreach ($invoices as $invoice) {
             $obrService = new ObrService();
             $result = $obrService->addInvoice($invoice);

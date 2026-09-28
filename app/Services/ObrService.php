@@ -362,7 +362,7 @@ class ObrService
             'invoice_type' => $invoice->invoice_type ?? 'FN',
             'tp_type' => $company->tp_type ?? '2',
             'tp_name' => $company->name ?? '',
-            'tp_TIN' => $company->tp_TIN ?? '',
+            'tp_TIN' => $invoice->tp_TIN ?? '',
             'tp_trade_number' => $company->tp_trade_number ?? '',
             'tp_postal_number' => $company->tp_postal_number ?? '',
             'tp_phone_number' => $company->phone ?? '',

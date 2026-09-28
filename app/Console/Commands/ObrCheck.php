@@ -31,10 +31,10 @@ class ObrCheck extends Command
      */
     public function handle()
     {
-        // $SyncMainApp = new SyncMainApp();
-        // $token = $SyncMainApp->getToken();
-        // dd($token);
-        $this->initStockMouvement();
+        $SyncMainApp = new SyncMainApp();
+        $token = $SyncMainApp->getToken();
+        dd($token);
+       // $this->initStockMouvement();
     }
 
     public function initStockMouvement(){
