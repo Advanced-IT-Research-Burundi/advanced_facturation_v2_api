@@ -31,9 +31,9 @@ class ObrSyncCommand extends Command
     public function handle()
     {
         // Syncronisa ama  invoinces
-        //$this->corrigeFacture();
+        $this->corrigeFacture();
         // $this->syncStocks();
-         $this->syncInvoice();
+         //$this->syncInvoice();
         // $this->syncroniseImportation();
     }
 
@@ -68,8 +68,6 @@ class ObrSyncCommand extends Command
     }
 
     public function syncInvoice(){
-
-        
          $invoices = Invoice::with(['company', 'invoiceItems'])
         ->where('obr_submission_status', '=', 'PENDING')
         ->where('is_validated','=', 1)

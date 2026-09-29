@@ -29,9 +29,9 @@ class SeedDefaultConfig extends Command
         //
         $this->info('info');
         $configs = [
-            "OBR_USERNAME" => "ws400078253401046",
-            "OBR_PASSWORD" => 'kN66hYB$',
-            "OBR_NIF"=> "4000782534",
+            "OBR_USERNAME" => "",
+            "OBR_PASSWORD" => '',
+            "OBR_NIF"=> "",
             "OBR_PROD_URL" => "https://ebms.obr.gov.bi:8443/ebms_api/",
             "OBR_TEST_URL" =>"https://ebms.obr.gov.bi:9443/ebms_api/",
             "OBR_MODE_TEST" => 1,

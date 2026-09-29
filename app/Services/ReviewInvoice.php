@@ -16,7 +16,6 @@ class ReviewInvoice {
         // check Electronique Signature
         $obr = new ObrService();
         $signature = $obr->generateInvoiceIdentifier($invoice->invoice_number, $invoice->invoice_date);
-
         $invoice->electronic_signature = $signature;
         $invoice->tp_TIN = AppConfig::getConfigKey('OBR_NIF');
         
