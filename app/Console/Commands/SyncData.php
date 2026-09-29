@@ -21,7 +21,7 @@ class SyncData extends Command
     {
         $this->info('=== Démarrage de la synchronisation ===');
         $this->newLine();
-         $this->corrigeFacture();
+        // $this->corrigeFacture();
         $app = new SyncMainApp($this->output);
         $result = $app->syncAll();
         $this->newLine();
@@ -34,7 +34,7 @@ class SyncData extends Command
         $invoinces = Invoice::all();
         foreach ($invoinces as $invoice) {
           $v =  ReviewInvoice::review($invoice->id);
-            dump($v);
+          //  dump($v->id);
         }
     }
 }
