@@ -119,7 +119,7 @@ class Invoice extends Model
            // $invoice->invoice_number = self::getInvoiceNumber($invoice->id);
             if ($invoice->is_validated) {
                 $obr = new ObrService();
-                $invoice->electronic_signature = $obr->generateInvoiceIdentifier($invoice->invoice_number, $invoice->invoice_date);
+                $invoice->electronic_signature = $obr->generateInvoiceIdentifier(self::getInvoiceNumber($invoice->id), $invoice->invoice_date);
                 $invoice->obr_submission_status = 'PENDING';
                 $invoice->saveQuietly();
             }
