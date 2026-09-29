@@ -31,19 +31,13 @@ class ObrSyncCommand extends Command
     public function handle()
     {
         // Syncronisa ama  invoinces
-        $this->corrigeFacture();
+       
         // $this->syncStocks();
-         //$this->syncInvoice();
+        $this->syncInvoice();
         // $this->syncroniseImportation();
     }
 
-    public function corrigeFacture() {
-        $invoinces = Invoice::all();
-        foreach ($invoinces as $invoice) {
-          $v =  ReviewInvoice::review($invoice->id);
-            dump($v);
-        }
-    }
+   
     
 
     public function syncroniseImportation(){
