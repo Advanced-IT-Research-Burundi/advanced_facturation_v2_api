@@ -68,7 +68,10 @@ class ObrSyncCommand extends Command
        // ->where('is_validated','=', 1)
         ->latest()
         ->get();
+
+       
         foreach ($invoices as $invoice) {
+             ReviewInvoice::review($invoice->id);
             $obrService = new ObrService();
             $result = $obrService->addInvoice($invoice);
            dump( $result );
