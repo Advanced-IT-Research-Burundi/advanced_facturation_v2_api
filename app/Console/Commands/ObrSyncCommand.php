@@ -32,9 +32,9 @@ class ObrSyncCommand extends Command
     {
         // Syncronisa ama  invoinces
        
-        // $this->syncStocks();
+         $this->syncStocks();
         $this->syncInvoice();
-        // $this->syncroniseImportation();
+       $this->syncroniseImportation();
     }
 
    
@@ -62,9 +62,10 @@ class ObrSyncCommand extends Command
     }
 
     public function syncInvoice(){
+
          $invoices = Invoice::with(['company', 'invoiceItems'])
         ->where('obr_submission_status', '=', 'PENDING')
-        ->where('is_validated','=', 1)
+       // ->where('is_validated','=', 1)
         ->latest()
         ->get();
         foreach ($invoices as $invoice) {
