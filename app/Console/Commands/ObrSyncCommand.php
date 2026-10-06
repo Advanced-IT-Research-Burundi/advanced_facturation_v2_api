@@ -71,9 +71,9 @@ class ObrSyncCommand extends Command
 
        
         foreach ($invoices as $invoice) {
-             ReviewInvoice::review($invoice->id);
+           $validatedInvoice =  ReviewInvoice::review($invoice->id);
             $obrService = new ObrService();
-            $result = $obrService->addInvoice($invoice);
+            $result = $obrService->addInvoice($validatedInvoice);
            dump( $result );
         }
     }
