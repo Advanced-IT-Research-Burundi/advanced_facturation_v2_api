@@ -20,6 +20,7 @@ class RemplacerFacturesSansTva extends Command
         {--limit= : Nombre maximum de factures à traiter}
         {--taux=18 : Taux de TVA à appliquer}
         {--motif= : Motif d\'annulation envoyé à l\'OBR (par défaut : ReviewInvoice::MOTIF_REMPLACEMENT_TVA)}
+        {--supprimer-copies : Supprime les copies de remplacement pas encore envoyées à l\'OBR (les factures d\'origine restent annulées et seront recréées au prochain lancement)}
         {--dry-run : Affiche les factures et les montants sans rien modifier}
         {--force : Ne pas demander de confirmation}';
 
@@ -37,6 +38,11 @@ class RemplacerFacturesSansTva extends Command
     {
         $motif = $this->option('motif') ?: ReviewInvoice::MOTIF_REMPLACEMENT_TVA;
         $taux = (float) $this->option('taux');
+
+        if ($this->option('supprimer-copies')) {
+            return $this->supprimerCopies($motif);
+        }
+
         $factures = ReviewInvoice::facturesARemplacer($this->option('invoice'), $motif)
             ->when($this->option('company'), fn (Builder $q, $companyId) => $q->where('company_id', $companyId))
             ->when($this->option('limit'), fn (Builder $q, $limit) => $q->limit((int) $limit))
@@ -92,5 +98,46 @@ class RemplacerFacturesSansTva extends Command
         $this->info("Terminé : {$succes} remplacée(s), {$echecs} échec(s). Lancez app:obr-sync-command pour envoyer les nouvelles factures à l'OBR.");
 
         return $echecs > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    private function supprimerCopies(string $motif): int
+    {
+        $copies = ReviewInvoice::copiesDeRemplacement($motif)
+            ->when($this->option('company'), fn ($c, $companyId) => $c->where('company_id', (int) $companyId));
+
+        if ($copies->isEmpty()) {
+            $this->info('Aucune copie de remplacement à supprimer.');
+
+            return self::SUCCESS;
+        }
+
+        $this->table(
+            ['ID', 'N° copie', 'Remplace', 'Date', 'Total TTC', 'TVA', 'Statut OBR'],
+            $copies->map(fn (Invoice $copie) => [
+                $copie->id,
+                $copie->invoice_number,
+                $copie->facture_remplacee,
+                $copie->invoice_date,
+                number_format((float) $copie->invoice_total_amount, 2, '.', ' '),
+                number_format((float) $copie->invoice_vat_amount, 2, '.', ' '),
+                $copie->obr_submission_status,
+            ])
+        );
+        $this->info("{$copies->count()} copie(s) de remplacement trouvée(s).");
+
+        if ($this->option('dry-run')) {
+            $this->warn('Mode --dry-run : rien n\'a été modifié.');
+
+            return self::SUCCESS;
+        }
+
+        if (! $this->option('force') && ! $this->confirm("Supprimer ces {$copies->count()} copie(s) et leurs lignes ?")) {
+            return self::FAILURE;
+        }
+
+        $supprimees = ReviewInvoice::supprimerCopiesDeRemplacement($copies);
+        $this->info("{$supprimees} copie(s) supprimée(s) (soft delete).");
+
+        return self::SUCCESS;
     }
 }

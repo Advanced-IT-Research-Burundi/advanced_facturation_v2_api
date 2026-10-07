@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Models\AppConfig;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\ObrLog;
 use App\Models\Product;
 use App\Models\Scopes\CompanyScope;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ReviewInvoice
@@ -24,13 +26,13 @@ class ReviewInvoice
      */
     public static function facturesARemplacer(array $numeros = [], string $motif = self::MOTIF_REMPLACEMENT_TVA): Builder
     {
-        $dejaRemplacees = Invoice::query()->whereNotNull('cancelled_invoice_ref')->select('cancelled_invoice_ref');
+        $dejaRemplacees = Invoice::query()->whereNotNull('old_invoice_reference')->select('old_invoice_reference');
         $dejaAnnulee = fn (Builder $q) => $q->where('is_cancelled', true)->where('cancel_reason', $motif);
 
         return Invoice::query()
             ->where('invoice_type', 'FN')
-            ->whereNull('cancelled_invoice_ref')
-            ->whereNotIn('invoice_number', $dejaRemplacees)
+            ->whereNull('old_invoice_reference')
+            ->whereNotIn('id', $dejaRemplacees)
             ->when(
                 $numeros,
                 fn (Builder $q) => $q->whereIn('invoice_number', $numeros)->where(fn (Builder $q) => $q
@@ -176,7 +178,7 @@ class ReviewInvoice
     /**
      * Remplace une facture envoyée à l'OBR sans TVA : annulation chez l'OBR (sans retour de stock,
      * la marchandise ayant bien été vendue), puis création d'une copie avec un nouveau numéro, la même date,
-     * cancelled_invoice_ref = numéro de la facture annulée et la TVA extraite du prix TTC.
+     * old_invoice_reference = id de la facture annulée et la TVA extraite du prix TTC.
      * La nouvelle facture est mise en PENDING : app:obr-sync-command l'enverra à l'OBR.
      * Peut être relancée sans risque : une facture déjà annulée mais pas encore remplacée est simplement recréée.
      *
@@ -188,7 +190,7 @@ class ReviewInvoice
             $invoice = Invoice::findOrFail($invoice);
         }
 
-        $remplacementExistant = Invoice::where('cancelled_invoice_ref', $invoice->invoice_number)->first();
+        $remplacementExistant = Invoice::where('old_invoice_reference', $invoice->id)->first();
         if ($remplacementExistant) {
             return ['success' => false, 'message' => "Déjà remplacée par la facture {$remplacementExistant->invoice_number}"];
         }
@@ -222,7 +224,7 @@ class ReviewInvoice
             $nouvelleFacture->invoice_date = $invoice->invoice_date;
             $nouvelleFacture->is_cancelled = false;
             $nouvelleFacture->obr_submission_status = 'PENDING';
-            $nouvelleFacture->cancelled_invoice_ref = $invoice->invoice_number;
+            $nouvelleFacture->old_invoice_reference = $invoice->id;
             $nouvelleFacture->save();
 
             $nouvelleFacture->invoice_number = Invoice::getInvoiceNumber($nouvelleFacture->id);
@@ -246,6 +248,67 @@ class ReviewInvoice
             'message' => "Facture {$invoice->invoice_number} remplacée par {$nouvelleFacture->invoice_number}",
             'data' => ['ancienne' => $invoice->fresh(), 'nouvelle' => $nouvelleFacture],
         ];
+    }
+
+    /**
+     * Copies créées par remplacerFacture pour les factures annulées avec ce motif, encore jamais envoyées à l'OBR (PENDING).
+     * Une copie est reconnue par old_invoice_reference, ou à défaut (copies créées avant ce champ) par
+     * la même entreprise, le même client, la même date et le même total TTC qu'une seule facture annulée, avec un id plus grand.
+     *
+     * @return Collection<int, Invoice> copies, avec l'attribut facture_remplacee = numéro de la facture d'origine
+     */
+    public static function copiesDeRemplacement(string $motif = self::MOTIF_REMPLACEMENT_TVA): Collection
+    {
+        $originaux = Invoice::query()->where('is_cancelled', true)->where('cancel_reason', $motif)->get();
+        if ($originaux->isEmpty()) {
+            return new Collection;
+        }
+
+        $cle = fn (Invoice $facture) => implode('|', [
+            $facture->company_id,
+            $facture->customer_id,
+            $facture->invoice_date?->format('Y-m-d H:i:s'),
+            $facture->invoice_total_amount,
+        ]);
+        $candidats = Invoice::query()
+            ->where('invoice_type', 'FN')
+            ->where('is_cancelled', false)
+            ->where('obr_submission_status', 'PENDING')
+            ->where('id', '>', $originaux->min('id'))
+            ->get();
+        $candidatsParCle = $candidats->groupBy($cle);
+
+        $copies = new Collection;
+        foreach ($originaux as $original) {
+            $copie = $candidats->firstWhere('old_invoice_reference', (string) $original->id);
+            if (! $copie) {
+                $memes = $candidatsParCle->get($cle($original), collect())
+                    ->filter(fn (Invoice $c) => $c->id > $original->id && $c->old_invoice_reference === null);
+                $copie = $memes->count() === 1 ? $memes->first() : null;
+            }
+            if ($copie && ! $copies->contains('id', $copie->id)) {
+                $copie->setAttribute('facture_remplacee', $original->invoice_number);
+                $copies->push($copie);
+            }
+        }
+
+        return $copies;
+    }
+
+    /**
+     * Supprime (soft delete) les copies de remplacement et leurs lignes, pour pouvoir recréer les factures d'origine.
+     *
+     * @param  Collection<int, Invoice>  $copies
+     */
+    public static function supprimerCopiesDeRemplacement(Collection $copies): int
+    {
+        $ids = $copies->pluck('id');
+
+        return DB::transaction(function () use ($ids) {
+            InvoiceItem::whereIn('invoice_id', $ids)->delete();
+
+            return Invoice::whereIn('id', $ids)->where('obr_submission_status', 'PENDING')->delete();
+        });
     }
 
     /**

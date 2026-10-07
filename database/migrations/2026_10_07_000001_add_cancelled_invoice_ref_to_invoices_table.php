@@ -24,7 +24,8 @@ return new class extends Migration
     {
         Schema::table('invoices', function (Blueprint $table) {
             $table->dropIndex(['cancelled_invoice_ref']);
-            $table->dropColumn('cancelled_invoice_ref');
+            $table->dropIndex(['old_invoice_reference']);
+            $table->dropColumn(['cancelled_invoice_ref', 'old_invoice_reference']);
         });
     }
 };
