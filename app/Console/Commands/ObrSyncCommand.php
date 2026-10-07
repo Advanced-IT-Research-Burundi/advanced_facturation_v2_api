@@ -2,12 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\MouvementStockImportation;
-use App\Models\StockMovement;
-use App\Services\ReviewInvoice;
+use App\Services\ObrSynchronisation;
 use Illuminate\Console\Command;
-use App\Services\ObrService;
-use App\Models\Invoice;
 
 class ObrSyncCommand extends Command
 {
@@ -23,59 +19,27 @@ class ObrSyncCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = "Envoie à l'OBR les mouvements de stock, factures et importations en attente";
 
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(ObrSynchronisation $synchronisation): int
     {
-        // Syncronisa ama  invoinces
-       
-        $this->syncStocks();
-        $this->syncInvoice();
-        $this->syncroniseImportation();
-    }
+        $resultats = $synchronisation->toutSynchroniser();
 
-   
-    
-
-    public function syncroniseImportation(){
-        $stocksLines = MouvementStockImportation::where('is_sent_to_obr', 0)
-            ->get();
-            foreach ($stocksLines as $stockLine) {
-                $obrService = new ObrService();
-                $result = $obrService->addStockMovementImportation($stockLine);
-               dump( $result );
-            }
-    }
-
-    public function syncStocks()
-    {
-        $stoksMouvements = StockMovement::where('obr_submission_status', '=', 'PENDING')->latest()->get();
-        foreach ($stoksMouvements as $stock){
-            $obrService = new ObrService();
-            $result = $obrService->addStockMovement($stock);
-           dump( $result );
+        foreach ($resultats['details'] as $detail) {
+            $statut = $detail['success'] ? '<info>OK</info>' : '<error>ERREUR</error>';
+            $this->line("{$statut} {$detail['type']} {$detail['reference']} : {$detail['message']}");
         }
-      
+
+        $this->table(
+            ['Type', 'Total', 'Envoyés', 'Erreurs'],
+            collect($resultats)->only(['stocks', 'factures', 'importations'])
+                ->map(fn ($r, $type) => [$type, $r['total'], $r['success'], $r['failed']])
+                ->values()
+        );
+
+        return self::SUCCESS;
     }
-
-    public function syncInvoice(){
-
-         $invoices = Invoice::with(['company', 'invoiceItems'])
-        ->where('obr_submission_status', '=', 'PENDING')
-       // ->where('is_validated','=', 1)
-        ->latest()
-        ->get();
-
-       
-        foreach ($invoices as $invoice) {
-           $validatedInvoice =  ReviewInvoice::review($invoice->id);
-            $obrService = new ObrService();
-            $result = $obrService->addInvoice($validatedInvoice);
-           dump( $result );
-        }
-    }
-    
 }

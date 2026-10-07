@@ -9,6 +9,7 @@ use App\Models\AppConfig;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
+use App\Services\ReviewInvoice;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Picqer\Barcode\BarcodeGeneratorSVG;
@@ -312,6 +313,24 @@ class ProductController extends Controller
             'success' => true,
             'message' => 'Produit restauré avec succès',
             'data' => new ProductResource($product->load(['company', 'productUnit', 'categoryProduct', 'libelle', 'user'])),
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Passer les produits sans TVA à 18% en gardant le même prix TTC (le prix devient HTVA).
+     */
+    public function applyVat(Request $request)
+    {
+        $validated = $request->validate([
+            'taux' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $resultat = ReviewInvoice::appliquerTVAProduits(auth()->user()->company_id, (float) ($validated['taux'] ?? 18));
+
+        return response()->json([
+            'success' => true,
+            'message' => "TVA appliquée sur {$resultat['produits']} produit(s)",
+            'data' => $resultat,
         ], Response::HTTP_OK);
     }
 

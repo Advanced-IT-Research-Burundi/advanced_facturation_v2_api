@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
 use App\Http\Controllers\Api\FourinsseurController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\ObrSyncController;
+use App\Http\Controllers\Api\TvaCorrectionController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LibelleController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
@@ -62,6 +64,7 @@ Route::post('users/{id}/restore', [UserController::class, 'restore']);
 // Route spécifique pour les produits pharmaceutiques (DOIT être avant apiResource)
 Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
 
+Route::post('products/apply-vat', [ProductController::class, 'applyVat']);
 Route::apiResource('products', ProductController::class);
 Route::post('products/{id}/restore', [ProductController::class, 'restore']);
 
@@ -97,8 +100,11 @@ Route::get('checkTIN/{tp_TIN}', [CustomerController::class, 'checkTin']);
 
 // Invoices
 Route::post('invoices/sync-obr', [InvoiceController::class, 'syncPendingInvoices']);
+Route::post('obr/sync-all', [ObrSyncController::class, 'syncAll']);
 Route::get('invoices/obr-stats', [InvoiceController::class, 'obrStats']);
 Route::get('invoices/obr-monitor', [InvoiceController::class, 'obrInvoices']);
+Route::get('invoices/tva-correction', [TvaCorrectionController::class, 'index']);
+Route::post('invoices/{invoice}/replace-vat', [TvaCorrectionController::class, 'replace']);
 Route::apiResource('invoices', InvoiceController::class);
 Route::post('invoices/{id}/restore', [InvoiceController::class, 'restore']);
 Route::post('invoices/{invoice}/resend-obr', [InvoiceController::class, 'resendToObr']);
