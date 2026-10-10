@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WarehouseProduct extends Model
 {
-    use HasFactory, SoftDeletes, HasCompanyId;
+    use HasCompanyId, HasFactory, SoftDeletes;
 
     protected $appends = [
         'alert_threshold',
@@ -45,12 +45,63 @@ class WarehouseProduct extends Model
         ];
     }
 
-    public function product(): BelongsTo {
+    /**
+     * Le prix unitaire du stock et products.price restent identiques :
+     * - un stock sans prix reprend le prix du produit ;
+     * - un nouveau prix saisi sur un stock devient le prix du produit
+     *   et de tous ses autres stocks.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (WarehouseProduct $warehouseProduct): void {
+            if ((float) $warehouseProduct->unit_price > 0) {
+                return;
+            }
+
+            $productPrice = (float) $warehouseProduct->product?->price;
+
+            if ($productPrice > 0) {
+                $warehouseProduct->unit_price = $productPrice;
+            }
+        });
+
+        static::saved(function (WarehouseProduct $warehouseProduct): void {
+            if (! $warehouseProduct->wasRecentlyCreated && ! $warehouseProduct->wasChanged('unit_price')) {
+                return;
+            }
+
+            $product = $warehouseProduct->product;
+            $unitPrice = (float) $warehouseProduct->unit_price;
+
+            if (! $product || $unitPrice <= 0 || (float) $product->price === $unitPrice) {
+                return;
+            }
+
+            $product->price = $unitPrice;
+            $product->price_ttc = round($unitPrice * (1 + (float) $product->vat_rate / 100), 2);
+            $product->saveQuietly();
+
+            static::query()
+                ->where('product_id', $product->id)
+                ->whereKeyNot($warehouseProduct->getKey())
+                ->update(['unit_price' => $unitPrice]);
+        });
+    }
+
+    public function product(): BelongsTo
+    {
         return $this->belongsTo(Product::class, 'product_id');
     }
 
-    public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
-    public function user(): BelongsTo { return $this->belongsTo(User::class); }
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function lastStockMovement(): BelongsTo
     {

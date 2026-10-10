@@ -11,10 +11,9 @@ use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
 use App\Http\Controllers\Api\FourinsseurController;
 use App\Http\Controllers\Api\InvoiceController;
-use App\Http\Controllers\Api\ObrSyncController;
-use App\Http\Controllers\Api\TvaCorrectionController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\LibelleController;
+use App\Http\Controllers\Api\ObrSyncController;
 use App\Http\Controllers\Api\PharmaceuticalDashboardController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductUnitController;
@@ -22,12 +21,13 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RoleUserController;
 use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\SyncDataController;
+use App\Http\Controllers\Api\TvaCorrectionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseProductController;
+use App\Http\Controllers\AppSyncroniserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AppSyncroniserController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -65,6 +65,8 @@ Route::post('users/{id}/restore', [UserController::class, 'restore']);
 Route::get('products/pharmaceutical', [PharmaceuticalDashboardController::class, 'products']);
 
 Route::post('products/apply-vat', [ProductController::class, 'applyVat']);
+Route::get('products/price-revision', [ProductController::class, 'priceRevisionPreview']);
+Route::post('products/price-revision', [ProductController::class, 'priceRevisionApply']);
 Route::apiResource('products', ProductController::class);
 Route::post('products/{id}/restore', [ProductController::class, 'restore']);
 
@@ -181,15 +183,15 @@ Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
 // Fourinsseurs
 Route::apiResource('fournisseurs', FourinsseurController::class);
 
-Route::get("invoices_sync/{max_id}", [InvoiceController::class, 'syncInvoices']);
-Route::get("stock_movements_sync/{max_id}", [AppSyncroniserController::class, 'syncStockMouvements']);
+Route::get('invoices_sync/{max_id}', [InvoiceController::class, 'syncInvoices']);
+Route::get('stock_movements_sync/{max_id}', [AppSyncroniserController::class, 'syncStockMouvements']);
 
-Route::get("warehouses_sync/{max_id}", [AppSyncroniserController::class, 'syncWarehouses']);
-Route::get("libelles_sync/{max_id}", [AppSyncroniserController::class, 'syncLibelles']);
-Route::get("products_sync/{max_id}", [AppSyncroniserController::class, 'syncProducts']);
-Route::get("users_sync/{max_id}", [AppSyncroniserController::class, 'syncUsers']);
-Route::get("warehouse_products_sync/{max_id}",[AppSyncroniserController::class, 'SyncWarehouseProduct']);
-Route::get("companies_sync/{max_id}", [AppSyncroniserController::class, 'syncCompanies']);
+Route::get('warehouses_sync/{max_id}', [AppSyncroniserController::class, 'syncWarehouses']);
+Route::get('libelles_sync/{max_id}', [AppSyncroniserController::class, 'syncLibelles']);
+Route::get('products_sync/{max_id}', [AppSyncroniserController::class, 'syncProducts']);
+Route::get('users_sync/{max_id}', [AppSyncroniserController::class, 'syncUsers']);
+Route::get('warehouse_products_sync/{max_id}', [AppSyncroniserController::class, 'SyncWarehouseProduct']);
+Route::get('companies_sync/{max_id}', [AppSyncroniserController::class, 'syncCompanies']);
 
 // Synchronisation avec le serveur principal (php artisan app:sync-data)
 Route::get('sync-data/last', [SyncDataController::class, 'last']);

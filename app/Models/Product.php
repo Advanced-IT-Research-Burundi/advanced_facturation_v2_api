@@ -88,11 +88,29 @@ class Product extends Model
         ];
     }
 
+    /**
+     * Le prix du produit et le prix unitaire de ses stocks (warehouse_products)
+     * restent identiques : toute modification de products.price est propagée.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (Product $product): void {
+            if (! $product->wasChanged('price') || $product->price === null) {
+                return;
+            }
+
+            $product->warehouseProducts()
+                ->where(function ($query) use ($product): void {
+                    $query->whereNull('unit_price')->orWhere('unit_price', '!=', $product->price);
+                })
+                ->update(['unit_price' => $product->price]);
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
     }
-  
 
     public function user(): BelongsTo
     {

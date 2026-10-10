@@ -6,120 +6,117 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\WarehouseProductResource;
 use App\Models\AppConfig;
+use App\Models\MouvementStockImportation;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
 use App\Services\ReviewInvoice;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Picqer\Barcode\BarcodeGeneratorSVG;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
-use App\Models\MouvementStockImportation;
-use Illuminate\Support\Facades\DB;
-use Exception;
 
 class ProductController extends Controller
 {
-
     public function productstMovements(Request $request)
     {
         $request->validate([
-        'item_code' => 'required',
-        'item_designation' => 'required|string',
-        'item_quantity' => 'required|numeric',
-        'item_measurement_unit' => 'required|string',
-        'item_cost_price' => 'required|numeric',
-        'item_cost_price_currency' => 'required|string',
-        'item_movement_type' => 'required|string',
-        'item_movement_date' => 'required|date_format:Y-m-d H:i:s',
-        'reference_dmc' => 'required|string',
-        'rubrique_tarifaire' => 'required|string',
-        'nombre_par_paquet' => 'required|numeric',
-        'description_paquet' => 'required|string',
-    ]); 
-    // Product for the current Id
-    // Augmenter le stock 
-    //"product_id": 26
+            'item_code' => 'required',
+            'item_designation' => 'required|string',
+            'item_quantity' => 'required|numeric',
+            'item_measurement_unit' => 'required|string',
+            'item_cost_price' => 'required|numeric',
+            'item_cost_price_currency' => 'required|string',
+            'item_movement_type' => 'required|string',
+            'item_movement_date' => 'required|date_format:Y-m-d H:i:s',
+            'reference_dmc' => 'required|string',
+            'rubrique_tarifaire' => 'required|string',
+            'nombre_par_paquet' => 'required|numeric',
+            'description_paquet' => 'required|string',
+        ]);
+        // Product for the current Id
+        // Augmenter le stock
+        // "product_id": 26
 
-    try{
-        DB::beginTransaction();
-    
-    $product = WarehouseProduct::where("warehouse_id", 1)
-    ->where('product_id', $request->product_id)->firstOrFail();
+        try {
+            DB::beginTransaction();
 
-    $product->quantity = $product->quantity + $request->item_quantity;
-    $product->save();
+            $product = WarehouseProduct::where('warehouse_id', 1)
+                ->where('product_id', $request->product_id)->firstOrFail();
 
-    $mouvement = MouvementStockImportation::create([
-        'warehouse_id' => $product->warehouse_id,
-        'product_id' => $product->product_id,
-        'reference_dmc' => $request->reference_dmc,
-        'rubrique_tarifaire' => $request->rubrique_tarifaire,
-        'nombre_par_paquet' => $request->nombre_par_paquet,
-        'description_paquet' => $request->description_paquet,
-        'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
-        'item_code' => $request->item_code,
-        'item_designation' => $request->item_designation,
-        'item_quantity' => $request->item_quantity,
-        'item_measurement_unit' => $request->item_measurement_unit,
-        'item_cost_price' => $request->item_cost_price,
-        'item_cost_price_currency' => $request->item_cost_price_currency,
-        'item_movement_type' => $request->item_movement_type,
-        'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
-        'item_movement_description' => $request->item_movement_description,
-        'item_movement_date' => $request->item_movement_date,
-        'item_product_name' => $request->description_article,
-        
-        'is_sent_to_obr' => 0,
-        'obr_status' => '',
-        'obr_message' => '',
-    ]);
+            $product->quantity = $product->quantity + $request->item_quantity;
+            $product->save();
 
-    StockMovement::create([
-        'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
-        'item_code' => $request->item_code,
-        'item_designation' => $request->item_designation,
-        'item_quantity' => $request->item_quantity,
-        'stock_movement_importation_id' => $mouvement->id,
-        'item_measurement_unit' => $request->item_measurement_unit,
-        'item_purchase_or_sale_price' => $request->item_cost_price,
-        'item_purchase_or_sale_currency' => $request->item_cost_price_currency,
-        'item_movement_type' => $request->item_movement_type,
-        'item_cost_price' => $request->item_cost_price,
-        'item_cost_price_currency' => $request->item_cost_price_currency,
-        'is_production' => 1,
-        'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
-        'item_movement_description' => $request->item_movement_description,
-        'item_movement_date' => $request->item_movement_date,
-        'obr_submission_status' => 'PENDING', 
-        'user_id' => auth()->user()->id,
-        'created_by' => auth()->user()->id,
-        'obr_sent_at' => null,
-        'company_id' => $product->company_id,
-        'product_id' => $product->product_id,
-        'warehouse_id' => $product->warehouse_id,
-    ]);
-    
-    DB::commit();
+            $mouvement = MouvementStockImportation::create([
+                'warehouse_id' => $product->warehouse_id,
+                'product_id' => $product->product_id,
+                'reference_dmc' => $request->reference_dmc,
+                'rubrique_tarifaire' => $request->rubrique_tarifaire,
+                'nombre_par_paquet' => $request->nombre_par_paquet,
+                'description_paquet' => $request->description_paquet,
+                'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
+                'item_code' => $request->item_code,
+                'item_designation' => $request->item_designation,
+                'item_quantity' => $request->item_quantity,
+                'item_measurement_unit' => $request->item_measurement_unit,
+                'item_cost_price' => $request->item_cost_price,
+                'item_cost_price_currency' => $request->item_cost_price_currency,
+                'item_movement_type' => $request->item_movement_type,
+                'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
+                'item_movement_description' => $request->item_movement_description,
+                'item_movement_date' => $request->item_movement_date,
+                'item_product_name' => $request->description_article,
 
-        return response()->json([
+                'is_sent_to_obr' => 0,
+                'obr_status' => '',
+                'obr_message' => '',
+            ]);
+
+            StockMovement::create([
+                'system_or_device_id' => AppConfig::getConfigKey('OBR_USERNAME'),
+                'item_code' => $request->item_code,
+                'item_designation' => $request->item_designation,
+                'item_quantity' => $request->item_quantity,
+                'stock_movement_importation_id' => $mouvement->id,
+                'item_measurement_unit' => $request->item_measurement_unit,
+                'item_purchase_or_sale_price' => $request->item_cost_price,
+                'item_purchase_or_sale_currency' => $request->item_cost_price_currency,
+                'item_movement_type' => $request->item_movement_type,
+                'item_cost_price' => $request->item_cost_price,
+                'item_cost_price_currency' => $request->item_cost_price_currency,
+                'is_production' => 1,
+                'item_movement_invoice_ref' => $request->item_movement_invoice_ref,
+                'item_movement_description' => $request->item_movement_description,
+                'item_movement_date' => $request->item_movement_date,
+                'obr_submission_status' => 'PENDING',
+                'user_id' => auth()->user()->id,
+                'created_by' => auth()->user()->id,
+                'obr_sent_at' => null,
+                'company_id' => $product->company_id,
+                'product_id' => $product->product_id,
+                'warehouse_id' => $product->warehouse_id,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
                 'success' => true,
                 'message' => 'Stock added successfully',
-            ], Response::HTTP_OK);     
-        }catch(Exception $e){
+            ], Response::HTTP_OK);
+        } catch (Exception $e) {
             DB::rollBack();
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-    
-
-
-  
 
     }
-    
+
     public function search(Request $request)
     {
         $search = $request->search;
@@ -219,7 +216,26 @@ class ProductController extends Controller
 
         $validated['user_id'] = auth()->id();
         try {
-            $product = Product::create(attributes: $validated);
+            $product = DB::transaction(function () use ($validated) {
+                $product = Product::create(attributes: $validated);
+
+                $defaultWarehouse = Warehouse::query()->oldest('id')->first();
+
+                if ($defaultWarehouse) {
+                    WarehouseProduct::firstOrCreate(
+                        ['warehouse_id' => $defaultWarehouse->id, 'product_id' => $product->id, 'production_status' => 'RAW'],
+                        [
+                            'quantity' => 0,
+                            'unit_price' => $product->price ?? 0,
+                            'price_promo' => $product->price_promo,
+                            'currency' => 'BIF',
+                            'user_id' => auth()->id(),
+                        ],
+                    );
+                }
+
+                return $product;
+            });
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -332,6 +348,137 @@ class ProductController extends Controller
             'message' => "TVA appliquée sur {$resultat['produits']} produit(s)",
             'data' => $resultat,
         ], Response::HTTP_OK);
+    }
+
+    /**
+     * Aperçu de la révision des prix. Le prix du produit fait référence ;
+     * le prix du stock n'est repris que si le produit n'a pas de prix.
+     */
+    public function priceRevisionPreview()
+    {
+        $revision = $this->buildPriceRevision();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'entrepot' => $revision['warehouse']?->only(['id', 'name']),
+                'produits' => $revision['changes']->map(fn (array $change) => [
+                    'id' => $change['product']->id,
+                    'item_code' => $change['product']->item_code,
+                    'item_designation' => $change['product']->item_designation,
+                    'vat_rate' => (float) $change['product']->vat_rate,
+                    'price' => round((float) $change['product']->price, 2),
+                    'stock_prices' => $change['stock_prices'],
+                    'reference_price' => $change['reference_price'],
+                    'source' => $change['source'],
+                    'missing_in_warehouse' => $change['missing_in_warehouse'],
+                ])->values(),
+                'sans_prix' => $revision['without_price']->map(fn (Product $product) => $product->only(['id', 'item_code', 'item_designation']))->values(),
+            ],
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Applique la révision : prix produit (ou à défaut prix stock) sur le produit
+     * et tous ses stocks, et ajout dans l'entrepôt par défaut des produits absents.
+     */
+    public function priceRevisionApply()
+    {
+        $revision = $this->buildPriceRevision();
+        $warehouse = $revision['warehouse'];
+        $prixRevises = 0;
+        $ajoutes = 0;
+
+        DB::transaction(function () use ($revision, $warehouse, &$prixRevises, &$ajoutes): void {
+            foreach ($revision['changes'] as $change) {
+                $product = $change['product'];
+                $referencePrice = $change['reference_price'];
+
+                if ($change['source'] === 'stock') {
+                    $product->price = $referencePrice;
+                    $product->price_ttc = round($referencePrice * (1 + (float) $product->vat_rate / 100), 2);
+                    $product->save();
+                    $prixRevises++;
+                } elseif ($change['stock_prices'] !== [] && collect($change['stock_prices'])->contains(fn (float $price) => $price !== $referencePrice)) {
+                    $product->warehouseProducts()->update(['unit_price' => $referencePrice]);
+                    $prixRevises++;
+                }
+
+                if ($change['missing_in_warehouse'] && $warehouse) {
+                    WarehouseProduct::create([
+                        'warehouse_id' => $warehouse->id,
+                        'product_id' => $product->id,
+                        'quantity' => 0,
+                        'unit_price' => $referencePrice,
+                        'price_promo' => $product->price_promo,
+                        'currency' => 'BIF',
+                        'user_id' => auth()->id(),
+                    ]);
+                    $ajoutes++;
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Prix révisé sur {$prixRevises} produit(s), {$ajoutes} produit(s) ajouté(s) dans ".($warehouse->name ?? 'le stock par défaut'),
+            'data' => ['prix_revises' => $prixRevises, 'ajoutes' => $ajoutes],
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Calcule, pour chaque produit, le prix de référence et ce qui doit changer.
+     *
+     * @return array{
+     *     warehouse: ?Warehouse,
+     *     changes: \Illuminate\Support\Collection<int, array{product: Product, stock_prices: array<int, float>, reference_price: float, source: string, missing_in_warehouse: bool}>,
+     *     without_price: \Illuminate\Support\Collection<int, Product>
+     * }
+     */
+    private function buildPriceRevision(): array
+    {
+        $warehouse = Warehouse::query()->oldest('id')->first();
+
+        $products = Product::query()
+            ->with(['warehouseProducts' => fn ($query) => $query->latest('updated_at')])
+            ->orderBy('item_designation')
+            ->get();
+
+        $changes = collect();
+        $withoutPrice = collect();
+
+        foreach ($products as $product) {
+            $productPrice = round((float) $product->price, 2);
+            $stockPrices = $product->warehouseProducts
+                ->map(fn (WarehouseProduct $stock) => round((float) $stock->unit_price, 2))
+                ->values()
+                ->all();
+            $latestStockPrice = collect($stockPrices)->first(fn (float $price) => $price > 0) ?? 0.0;
+
+            $source = $productPrice > 0 ? 'produit' : ($latestStockPrice > 0 ? 'stock' : null);
+            $referencePrice = $source === 'produit' ? $productPrice : $latestStockPrice;
+
+            if ($source === null) {
+                $withoutPrice->push($product);
+            }
+
+            $missingInWarehouse = $warehouse !== null
+                && ! $product->warehouseProducts->contains('warehouse_id', $warehouse->id);
+            $priceDiffers = $source === 'stock'
+                || ($source === 'produit' && collect($stockPrices)->contains(fn (float $price) => $price !== $referencePrice));
+
+            if ($priceDiffers || $missingInWarehouse) {
+                $changes->push([
+                    'product' => $product,
+                    'stock_prices' => $stockPrices,
+                    'reference_price' => $referencePrice,
+                    'source' => $source ?? 'aucun',
+                    'missing_in_warehouse' => $missingInWarehouse,
+                ]);
+            }
+        }
+
+        return ['warehouse' => $warehouse, 'changes' => $changes, 'without_price' => $withoutPrice];
     }
 
     public function generatebarcode(Request $request, Product $product)
