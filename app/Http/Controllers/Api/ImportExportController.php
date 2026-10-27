@@ -144,19 +144,23 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
 
     public function query()
     {
-        $query = Product::with(['categoryProduct', 'productUnit']);
+        $query = Product::with(['categoryProduct', 'productUnit', 'libelle']);
 
         // Filtres optionnels
-        if ($this->request->has('category_id')) {
+        if ($this->request->filled('category_id')) {
             $query->where('category_product_id', $this->request->category_id);
         }
 
-        if ($this->request->has('search')) {
+        if ($this->request->filled('search')) {
             $search = $this->request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('item_designation', 'like', "%{$search}%")
                     ->orWhere('code_product', 'like', "%{$search}%");
             });
+        }
+
+        if ($this->request->boolean('without_libelle')) {
+            $query->whereNull('id_libelle');
         }
 
         return $query->orderBy('item_designation');
@@ -181,6 +185,7 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
             $product->price_promo ?? 0,
             $product->vat_rate ?? 0,
             $product->categoryProduct?->name ?? '',
+            $product->libelle?->name ?? '',
             $product->description ?? '',
         ];
     }
@@ -215,7 +220,8 @@ class ProductDataExport implements \Maatwebsite\Excel\Concerns\FromQuery, \Maatw
             'I' => 15,
             'J' => 12,
             'K' => 20,
-            'L' => 40,
+            'L' => 20,
+            'M' => 40,
         ];
     }
 }

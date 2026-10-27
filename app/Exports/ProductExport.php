@@ -22,6 +22,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
         'Prix Promo',
         'Taux TVA (%)',
         'Catégorie',
+        'Libellé',
         'Description',
     ];
 
@@ -44,6 +45,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
                 1200,
                 18,
                 'Catégorie 1',
+                'Libellé exemple',
                 'Description du produit exemple',
             ],
             [
@@ -58,6 +60,7 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
                 2500,
                 18,
                 'Catégorie 2',
+                '',
                 'Autre description',
             ],
         ];
@@ -108,7 +111,8 @@ class ProductExport implements FromArray, WithHeadings, WithStyles, WithColumnWi
             'I' => 15,  // Prix Promo
             'J' => 12,  // Taux TVA
             'K' => 20,  // Catégorie
-            'L' => 40,  // Description
+            'L' => 20,  // Libellé
+            'M' => 40,  // Description
         ];
     }
 }
