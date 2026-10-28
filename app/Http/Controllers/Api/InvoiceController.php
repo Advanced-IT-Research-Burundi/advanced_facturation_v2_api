@@ -82,7 +82,7 @@ class InvoiceController extends Controller
     {
         $perPage = max(1, min((int) $request->input('per_page', 15), 100));
 
-        $query = Invoice::with(['company', 'customer', 'paymentMethod'])
+        $query = Invoice::with(['company', 'customer', 'paymentMethod', 'user'])
             ->withCount('invoiceItems')
             ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
@@ -429,7 +429,7 @@ class InvoiceController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product.libelle', 'payments', 'latestObrLog', 'validatedBy']),
+            'data' => $invoice->load(['company', 'customer', 'paymentMethod', 'invoiceItems.product.libelle', 'payments', 'latestObrLog', 'validatedBy', 'user']),
         ], Response::HTTP_OK);
     }
 
