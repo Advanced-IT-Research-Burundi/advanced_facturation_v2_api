@@ -81,7 +81,7 @@ class DashboardController extends Controller
         $recentInvoices = Invoice::where('company_id', $companyId)
             ->with('customer:id,customer_name')
             ->orderBy('created_at', 'desc')
-            ->take(5)
+            ->take(min((int) $request->get('limit', 5), 200))
             ->get()
             ->map(function ($invoice) {
                 return [
