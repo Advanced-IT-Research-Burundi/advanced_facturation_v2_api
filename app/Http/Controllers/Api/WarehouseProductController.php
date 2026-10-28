@@ -237,6 +237,7 @@ class WarehouseProductController extends Controller
                 'quantity' => 'sometimes|numeric|min:0',
                 'unit_price' => 'sometimes|numeric|min:0',
                 'price_promo' => 'sometimes|nullable|numeric|min:0',
+                'purchase_price' => 'sometimes|nullable|numeric|min:0',
                 'currency' => 'sometimes|string|max:10',
                 'user_id' => 'sometimes|integer|exists:users,id',
                 'last_stock_movement_id' => 'sometimes|nullable|integer|exists:stock_movements,id',

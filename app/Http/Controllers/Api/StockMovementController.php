@@ -34,7 +34,7 @@ class StockMovementController extends Controller
         ])
             ->where('warehouse_id', $warehouseId)
             ->where('quantity', '>=', 0)
-            ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'price_promo', 'currency', 'last_stock_movement_id')
+            ->select('id', 'product_id', 'warehouse_id', 'quantity', 'unit_price', 'purchase_price', 'price_promo', 'currency', 'last_stock_movement_id')
             ->orderBy('updated_at', 'desc')
             ->get();
 
@@ -147,7 +147,11 @@ class StockMovementController extends Controller
             ]);
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
-            $stock->unit_price = $request->unit_price;
+            // Le prix d'entrée est un prix d'achat : il ne remplace pas le prix de vente
+            $stock->purchase_price = $request->unit_price;
+            if (! $stock->exists || $stock->unit_price === null) {
+                $stock->unit_price = $request->unit_price;
+            }
             $stock->currency = $request->currency;
             $stock->last_stock_movement_id = $movement->id;
             $stock->user_id = Auth::id();
@@ -313,7 +317,11 @@ class StockMovementController extends Controller
                 ]);
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
-                $stock->unit_price = $item['unit_price'];
+                // Le prix d'entrée est un prix d'achat : il ne remplace pas le prix de vente
+                $stock->purchase_price = $item['unit_price'];
+                if (! $stock->exists || $stock->unit_price === null) {
+                    $stock->unit_price = $item['unit_price'];
+                }
                 $stock->currency = $item['currency'];
                 $stock->last_stock_movement_id = $movement->id;
                 $stock->user_id = Auth::id();

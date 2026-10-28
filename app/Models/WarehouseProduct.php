@@ -23,6 +23,7 @@ class WarehouseProduct extends Model
         'company_id',
         'quantity',
         'unit_price',
+        'purchase_price',
         'price_promo',
         'currency',
         'production_status',
