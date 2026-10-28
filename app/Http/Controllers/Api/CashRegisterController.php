@@ -18,6 +18,11 @@ class CashRegisterController extends Controller
         $user = $request->user();
         $companyId = $user->company_id;
 
+        // L'historique des caisses est réservé à l'accès complet (hors caisses hôtel)
+        if (! $request->filled('hotel_section') && ! $this->hasFullCashAccess($user)) {
+            return $this->noFullAccessResponse();
+        }
+
         $query = CashRegister::with(['openedBy', 'closedBy', 'warehouse'])
             ->where('company_id', $companyId);
 
@@ -53,16 +58,16 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $hotelSection = $request->input('hotel_section');
-        $isAdmin = $this->isAdminUser($user);
+        $isAdmin = $this->hasFullCashAccess($user, $hotelSection);
 
         $query = CashRegister::with([
-                'openedBy',
-                'warehouse',
-                'movements' => function ($query) use ($isAdmin, $user) {
-                    $query->with('createdBy')
-                        ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
-                },
-            ])
+            'openedBy',
+            'warehouse',
+            'movements' => function ($query) use ($isAdmin, $user) {
+                $query->with('createdBy')
+                    ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
+            },
+        ])
             ->where('company_id', $user->company_id)
             ->where('status', 'open');
 
@@ -79,6 +84,28 @@ class CashRegisterController extends Controller
                 'success' => true,
                 'data' => null,
                 'message' => 'Aucune caisse ouverte',
+            ]);
+        }
+
+        if (! $isAdmin && ! $hotelSection) {
+            // Sans accès complet : uniquement les montants de sa propre caisse
+            $ownMovements = $register->movements()->where('created_by', $user->id);
+            $income = (clone $ownMovements)->where('type', 'income')->sum('amount');
+            $expense = (clone $ownMovements)->where('type', 'expense')->sum('amount');
+            $adjustment = (clone $ownMovements)->where('type', 'adjustment')->sum('amount');
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'register' => $register->makeHidden(['opening_balance', 'expected_balance', 'closing_balance', 'difference']),
+                    'summary' => [
+                        'opening_balance' => 0,
+                        'total_income' => $income,
+                        'total_expense' => $expense,
+                        'expected_balance' => $income - $expense + $adjustment,
+                        'transaction_count' => (clone $ownMovements)->count(),
+                    ],
+                ],
             ]);
         }
 
@@ -112,6 +139,10 @@ class CashRegisterController extends Controller
         ]);
 
         $user = $request->user();
+
+        if (! $request->filled('hotel_section') && ! $this->hasFullCashAccess($user)) {
+            return $this->noFullAccessResponse();
+        }
 
         return DB::transaction(function () use ($request, $user) {
             $existingOpen = CashRegister::where('company_id', $user->company_id)
@@ -164,6 +195,10 @@ class CashRegisterController extends Controller
             ->where('status', 'open')
             ->findOrFail($id);
 
+        if (! $register->hotel_section && ! $this->hasFullCashAccess($user)) {
+            return $this->noFullAccessResponse();
+        }
+
         $expectedBalance = $register->calculateExpectedBalance();
         $difference = $request->closing_balance - $expectedBalance;
 
@@ -202,19 +237,23 @@ class CashRegisterController extends Controller
     public function show(Request $request, $id)
     {
         $user = $request->user();
-        $isAdmin = $this->isAdminUser($user);
+        $isAdmin = $this->hasFullCashAccess($user);
 
         $register = CashRegister::with([
-                'openedBy',
-                'closedBy',
-                'warehouse',
-                'movements' => function ($query) use ($isAdmin, $user) {
-                    $query->with('createdBy')
-                        ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
-                },
-            ])
+            'openedBy',
+            'closedBy',
+            'warehouse',
+            'movements' => function ($query) use ($isAdmin, $user) {
+                $query->with('createdBy')
+                    ->when(! $isAdmin, fn ($q) => $q->where('created_by', $user->id));
+            },
+        ])
             ->where('company_id', $user->company_id)
             ->findOrFail($id);
+
+        if (! $register->hotel_section && ! $this->hasFullCashAccess($user)) {
+            return $this->noFullAccessResponse();
+        }
 
         $income = $register->movements()->where('type', 'income')->sum('amount');
         $expense = $register->movements()->where('type', 'expense')->sum('amount');
@@ -269,7 +308,7 @@ class CashRegisterController extends Controller
     {
         $user = $request->user();
         $register = CashRegister::where('company_id', $user->company_id)->findOrFail($id);
-        $isAdmin = $this->isAdminUser($user);
+        $isAdmin = $this->hasFullCashAccess($user, $register->hotel_section);
         $perPage = max(1, min((int) $request->get('per_page', 50), 100));
 
         $movements = CashMovement::with(['createdBy', 'invoice', 'payment'])
@@ -290,7 +329,7 @@ class CashRegisterController extends Controller
         $date = $request->get('date', Carbon::today()->format('Y-m-d'));
         $dayStart = Carbon::parse($date)->startOfDay();
         $dayEnd = Carbon::parse($date)->endOfDay();
-        $isAdmin = $this->isAdminUser($user);
+        $isAdmin = $this->hasFullCashAccess($user, $request->input('hotel_section'));
         $selectedUserId = $request->input('user_id');
         $filteredUserId = null;
 
@@ -383,10 +422,10 @@ class CashRegisterController extends Controller
             ->values();
 
         $recentMovements = CashMovement::with([
-                'createdBy:id,name,email',
-                'cashRegister:id,opened_by,opened_at,status',
-                'cashRegister.openedBy:id,name',
-            ])
+            'createdBy:id,name,email',
+            'cashRegister:id,opened_by,opened_at,status',
+            'cashRegister.openedBy:id,name',
+        ])
             ->whereIn('cash_register_id', $companyRegisters)
             ->whereBetween('created_at', [$dayStart, $dayEnd])
             ->when(! is_null($filteredUserId), fn ($query) => $query->where('created_by', $filteredUserId))
@@ -400,16 +439,16 @@ class CashRegisterController extends Controller
                 'date' => $date,
                 'filtered_user_id' => $filteredUserId,
                 'can_filter_users' => $isAdmin,
-                'registers_count' => $registers->count(),
-                'registers' => $registers,
+                'registers_count' => $isAdmin ? $registers->count() : 0,
+                'registers' => $isAdmin ? $registers : [],
                 'summary' => [
-                    'total_opening' => $totalOpening,
+                    'total_opening' => $isAdmin ? $totalOpening : 0,
                     'total_income' => $totalIncome,
                     'total_expense' => $totalExpense,
                     'total_adjustment' => $totalAdjustment,
                     'net_amount' => $totalIncome - $totalExpense + $totalAdjustment,
-                    'total_closing' => $totalClosing,
-                    'total_difference' => $totalDifference,
+                    'total_closing' => $isAdmin ? $totalClosing : 0,
+                    'total_difference' => $isAdmin ? $totalDifference : 0,
                     'total_transactions' => $userSummaries->sum('transaction_count'),
                 ],
                 'user_summaries' => $userSummaries,
@@ -528,6 +567,30 @@ class CashRegisterController extends Controller
                 'movements' => $paginatedMovements,
             ],
         ]);
+    }
+
+    /**
+     * Accès complet à la caisse principale : admin ou permission "finance".
+     * Les caisses hôtel gardent la règle admin uniquement.
+     */
+    private function hasFullCashAccess(User $user, ?string $hotelSection = null): bool
+    {
+        if ($this->isAdminUser($user)) {
+            return true;
+        }
+        if ($hotelSection !== null && $hotelSection !== '' && $hotelSection !== 'null') {
+            return false;
+        }
+
+        return $user->roles->contains(fn ($role) => in_array('finance', $role->permissions ?? []));
+    }
+
+    private function noFullAccessResponse()
+    {
+        return response()->json([
+            'success' => false,
+            'message' => "Vous n'avez pas l'accès complet à la gestion de caisse.",
+        ], 403);
     }
 
     private function isAdminUser(User $user): bool

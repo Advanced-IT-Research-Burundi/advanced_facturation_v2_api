@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\BankDepositController;
 use App\Http\Controllers\Api\CashRegisterController;
+use App\Http\Controllers\Api\CashTransferController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\CustomerReminderController;
 use App\Http\Controllers\Api\ExpirationAlertController;
@@ -108,6 +109,14 @@ Route::get('invoices/{invoice}/payments', [PaymentController::class, 'invoicePay
 Route::apiResource('payments', PaymentController::class)->except(['update']);
 
 // Cash Register (Caisse journalière)
+// Transferts entre caisses utilisateurs (journalier)
+Route::get('cash-transfers', [CashTransferController::class, 'index']);
+Route::get('cash-transfers/recipients', [CashTransferController::class, 'recipients']);
+Route::get('cash-transfers/available/{userId}', [CashTransferController::class, 'available']);
+Route::post('cash-transfers', [CashTransferController::class, 'store']);
+Route::post('cash-transfers/{id}/accept', [CashTransferController::class, 'accept']);
+Route::post('cash-transfers/{id}/reject', [CashTransferController::class, 'reject']);
+Route::post('cash-transfers/{id}/cancel', [CashTransferController::class, 'cancel']);
 Route::get('cash-registers/current', [CashRegisterController::class, 'current']);
 Route::get('cash-registers/daily-summary', [CashRegisterController::class, 'dailySummary']);
 Route::post('cash-registers/open', [CashRegisterController::class, 'open']);
