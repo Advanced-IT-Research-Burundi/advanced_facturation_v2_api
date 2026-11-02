@@ -32,27 +32,26 @@ class InvoiceController extends Controller
         $this->stockService = $stockService;
         $this->obrService = $obrService;
     }
-    
+
     /**
      * Display a listing of invoices.
      */
-
-    public function syncInvoices($lastInvoinceID){
+    public function syncInvoices($lastInvoinceID)
+    {
 
         $newInvoices = Invoice::where('id', '>', $lastInvoinceID)
-                        ->with('customer')
-                        ->with('invoiceItems')
-                        ->whereHas('customer')
-                        ->take(50)->get();
-
-       
+            ->with('customer')
+            ->with('invoiceItems')
+            ->whereHas('customer')
+            ->take(50)->get();
 
         return response()->json($newInvoices, Response::HTTP_OK);
 
     }
 
-    public function getDmcItems($reference_dmc){
-        try{
+    public function getDmcItems($reference_dmc)
+    {
+        try {
             $dmcItems = $this->obrService->getDmcItems($reference_dmc);
 
             return response()->json([
@@ -60,24 +59,26 @@ class InvoiceController extends Controller
                 'data' => $dmcItems,
                 'message' => 'Articles DMC récupérés avec succès',
             ], Response::HTTP_OK);
-        }catch(ValidationException $exception) {
+        } catch (ValidationException $exception) {
             return response()->json([
                 'success' => false,
                 'data' => $exception->errors(),
                 'message' => 'Validation error',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
-        } catch(\Exception $exception) {
-            Log::error("[OBR:getDmcItems] - Erreur inattendue lors de la récupération des articles DMC : " . $exception->getMessage(), [
+        } catch (\Exception $exception) {
+            Log::error('[OBR:getDmcItems] - Erreur inattendue lors de la récupération des articles DMC : '.$exception->getMessage(), [
                 'error_code' => 'ERR_OBR_GET_DMC_ITEMS_INTERNAL',
                 'reference_dmc' => $request->reference_dmc ?? 'N/A',
                 'exception' => (string) $exception,
             ]);
+
             return $this->error('Une erreur inattendue s\'est produite lors de la récupération des articles DMC.',
                 'ERR_OBR_GET_DMC_ITEMS_INTERNAL',
                 Response::HTTP_INTERNAL_SERVER_ERROR
             );
         }
     }
+
     public function index(Request $request)
     {
         $perPage = max(1, min((int) $request->input('per_page', 15), 100));
@@ -86,6 +87,11 @@ class InvoiceController extends Controller
             ->withCount('invoiceItems')
             ->withSum('payments', 'amount')
             ->orderBy('created_at', 'desc');
+
+        // Inclure les articles vendus (utilisé par le journal des ventes)
+        if ($request->boolean('with_items')) {
+            $query->with('invoiceItems.product:id,item_designation');
+        }
 
         // Filtre par type de facture
         if ($request->has('invoice_type') && $request->invoice_type !== 'all') {
@@ -417,7 +423,7 @@ class InvoiceController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la création de la facture ' . $e->getMessage(),
+                'message' => 'Erreur lors de la création de la facture '.$e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -500,7 +506,7 @@ class InvoiceController extends Controller
 
                 foreach ($validated['items'] as $item) {
                     $itemCalculations = $this->calculateItemAmounts($item);
-                    
+
                     $invoice->invoiceItems()->create([
                         'item_designation' => $item['item_designation'],
                         'item_quantity' => $item['item_quantity'],
@@ -655,6 +661,7 @@ class InvoiceController extends Controller
                 $stockCheck = $this->stockService->checkStockAvailability($itemsForStock, $warehouseId);
                 if ($stockCheck['has_error']) {
                     DB::rollBack();
+
                     return response()->json([
                         'success' => false,
                         'message' => 'Stock insuffisant pour certains articles lors de la validation.',
@@ -715,7 +722,7 @@ class InvoiceController extends Controller
             }
 
             // 5. Signature OBR et validation
-            $obr = new ObrService();
+            $obr = new ObrService;
             $invoice->electronic_signature = $obr->generateInvoiceIdentifier($invoice->invoice_number, $invoice->invoice_date);
             $invoice->obr_submission_status = 'PENDING';
             $invoice->is_validated = true;
@@ -741,12 +748,13 @@ class InvoiceController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Erreur lors de la validation de la facture #{$invoice->id}: " . $e->getMessage(), [
+            Log::error("Erreur lors de la validation de la facture #{$invoice->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la validation de la facture: ' . $e->getMessage(),
+                'message' => 'Erreur lors de la validation de la facture: '.$e->getMessage(),
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
