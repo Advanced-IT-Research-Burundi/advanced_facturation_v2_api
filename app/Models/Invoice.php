@@ -212,6 +212,19 @@ class Invoice extends Model
     }
 
     /**
+     * Section de caisse hôtel de la facture (null : caisse principale).
+     */
+    public function cashRegisterSection(): ?string
+    {
+        return match (true) {
+            $this->hotelReservation()->exists() => 'rooms',
+            $this->hotelReceptionBooking()->exists() => 'reception',
+            $this->hotelConferenceBooking()->exists() => 'conference',
+            default => null,
+        };
+    }
+
+    /**
      * Générer le numéro de facture à partir de l'ID (format OBR demo).
      * Compteur global séquentiel, 6 chiffres zero-padded.
      */

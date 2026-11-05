@@ -75,6 +75,21 @@ class PaymentController extends Controller
                     'message' => "Le montant du paiement ({$request->amount}) dépasse le montant restant ({$remainingAmount})",
                 ], 422);
             }
+
+            $openRegister = null;
+            if ($request->payment_method === 'cash') {
+                $openRegister = CashRegister::openForInvoice($invoice);
+
+                if (! $openRegister) {
+                    DB::rollBack();
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Ouvrez la caisse avant d\'enregistrer un paiement en espèces.',
+                    ], 422);
+                }
+            }
+
             $payment = Payment::create([
                 'invoice_id' => $invoice->id,
                 'amount' => $request->amount,
@@ -97,24 +112,18 @@ class PaymentController extends Controller
                 $hotelReservation->saveQuietly();
             }
 
-            // Add to cash register if it's a cash payment and there's an open register
-            if ($request->payment_method === 'cash') {
-                $openRegister = CashRegister::where('company_id', $user->company_id)
-                    ->where('status', 'open')
-                    ->first();
-
-                if ($openRegister) {
-                    CashMovement::create([
-                        'cash_register_id' => $openRegister->id,
-                        'invoice_id' => $invoice->id,
-                        'payment_id' => $payment->id,
-                        'type' => 'income',
-                        'amount' => $payment->amount,
-                        'description' => "Paiement facture #{$invoice->invoice_number}",
-                        'reference' => $payment->reference,
-                        'created_by' => $user->id,
-                    ]);
-                }
+            // Add to cash register if it's a cash payment
+            if ($openRegister) {
+                CashMovement::create([
+                    'cash_register_id' => $openRegister->id,
+                    'invoice_id' => $invoice->id,
+                    'payment_id' => $payment->id,
+                    'type' => 'income',
+                    'amount' => $payment->amount,
+                    'description' => "Paiement facture #{$invoice->invoice_number}",
+                    'reference' => $payment->reference,
+                    'created_by' => $user->id,
+                ]);
             }
 
             DB::commit();

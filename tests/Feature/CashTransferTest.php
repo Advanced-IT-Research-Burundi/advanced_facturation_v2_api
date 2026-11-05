@@ -6,6 +6,7 @@ use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\CashTransfer;
 use App\Models\Company;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -99,6 +100,22 @@ class CashTransferTest extends TestCase
         ])->json('data.id');
 
         $this->postJson("/api/cash-transfers/{$transferId}/accept")->assertStatus(403);
+    }
+
+    public function test_full_access_user_cannot_transfer_from_another_users_cash(): void
+    {
+        $financeUser = User::factory()->create(['company_id' => $this->company->id]);
+        $financeUser->roles()->attach(Role::factory()->create(['permissions' => ['finance']]));
+
+        $this->actingAs($financeUser);
+
+        $this->postJson('/api/cash-transfers', [
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->recipient->id,
+            'amount' => 100,
+        ])->assertStatus(403);
+
+        $this->assertSame(0, CashTransfer::count());
     }
 
     public function test_non_admin_cannot_transfer_from_another_users_cash(): void

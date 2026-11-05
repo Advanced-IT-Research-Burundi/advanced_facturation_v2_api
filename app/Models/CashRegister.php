@@ -76,4 +76,22 @@ class CashRegister extends Model
     {
         return $this->status === 'open';
     }
+
+    /**
+     * Caisse ouverte qui doit recevoir l'encaissement d'une facture.
+     */
+    public static function openForInvoice(Invoice $invoice): ?self
+    {
+        $hotelSection = $invoice->cashRegisterSection();
+
+        return self::where('company_id', $invoice->company_id)
+            ->where('status', 'open')
+            ->when(
+                $hotelSection,
+                fn ($query) => $query->where('hotel_section', $hotelSection),
+                fn ($query) => $query->whereNull('hotel_section')
+            )
+            ->lockForUpdate()
+            ->first();
+    }
 }

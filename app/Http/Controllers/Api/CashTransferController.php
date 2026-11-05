@@ -97,7 +97,7 @@ class CashTransferController extends Controller
         $user = $request->user();
         $companyId = $user->company_id;
 
-        if ((int) $request->from_user_id !== $user->id && ! $this->isAdminUser($user)) {
+        if ((int) $request->from_user_id !== $user->id) {
             return $this->error('Vous ne pouvez transférer que depuis votre propre caisse.', 403);
         }
 

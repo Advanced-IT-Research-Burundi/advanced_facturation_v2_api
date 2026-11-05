@@ -686,11 +686,16 @@ class InvoiceController extends Controller
 
                 $cashRegister = null;
                 if ($invoice->payment_type === '1') {
-                    $cashRegister = CashRegister::where('company_id', $company->id)
-                        ->where('status', 'open')
-                        ->whereNull('hotel_section')
-                        ->lockForUpdate()
-                        ->first();
+                    $cashRegister = CashRegister::openForInvoice($invoice);
+
+                    if (! $cashRegister) {
+                        DB::rollBack();
+
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Ouvrez la caisse avant de valider une facture payée en espèces.',
+                        ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                    }
                 }
 
                 $payment = Payment::create([

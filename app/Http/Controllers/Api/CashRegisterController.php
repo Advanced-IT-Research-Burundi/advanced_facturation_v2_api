@@ -284,24 +284,39 @@ class CashRegisterController extends Controller
         ]);
 
         $user = $request->user();
-        $register = CashRegister::where('company_id', $user->company_id)
-            ->where('status', 'open')
-            ->findOrFail($id);
 
-        $movement = CashMovement::create([
-            'cash_register_id' => $register->id,
-            'type' => $request->type,
-            'amount' => $request->amount,
-            'description' => $request->description,
-            'reference' => $request->reference,
-            'created_by' => $user->id,
-        ]);
+        return DB::transaction(function () use ($request, $user, $id) {
+            $register = CashRegister::where('company_id', $user->company_id)
+                ->where('status', 'open')
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Mouvement enregistré',
-            'data' => $movement->load('createdBy'),
-        ], 201);
+            if (! $this->canAddMovement($user, $register, $request->type)) {
+                return $this->noFullAccessResponse();
+            }
+
+            if ($request->type === 'expense' && (float) $request->amount > $register->calculateExpectedBalance()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Le montant de la sortie dépasse le solde actuel de la caisse.',
+                ], 422);
+            }
+
+            $movement = CashMovement::create([
+                'cash_register_id' => $register->id,
+                'type' => $request->type,
+                'amount' => $request->amount,
+                'description' => $request->description,
+                'reference' => $request->reference,
+                'created_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Mouvement enregistré',
+                'data' => $movement->load('createdBy'),
+            ], 201);
+        });
     }
 
     public function movements(Request $request, $id)
@@ -583,6 +598,29 @@ class CashRegisterController extends Controller
         }
 
         return $user->roles->contains(fn ($role) => in_array('finance', $role->permissions ?? []));
+    }
+
+    /**
+     * Caisse principale : accès complet requis.
+     * Caisses hôtel : les rôles de prise de commande ne peuvent enregistrer que des entrées.
+     */
+    private function canAddMovement(User $user, CashRegister $register, string $type): bool
+    {
+        if (! $register->hotel_section) {
+            return $this->hasFullCashAccess($user);
+        }
+
+        if ($this->isAdminUser($user)) {
+            return true;
+        }
+
+        $allowedPermissions = $type === 'income'
+            ? ['hotel_rooms', 'hotel_bar', 'hotel_bar_order']
+            : ['hotel_rooms', 'hotel_bar'];
+
+        return $user->roles->contains(
+            fn ($role) => array_intersect($allowedPermissions, $role->permissions ?? []) !== []
+        );
     }
 
     private function noFullAccessResponse()
