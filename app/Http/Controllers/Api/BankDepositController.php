@@ -143,6 +143,7 @@ class BankDepositController extends Controller
             ->where('invoice_identifier', 'POS')
             ->where('is_cancelled', false);
         $expensesQuery = Depense::where('company_id', $user->company_id)
+            ->approved()
             ->whereNull('hotel_section');
 
         if ($request->filled('start_date')) {

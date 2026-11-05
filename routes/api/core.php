@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepenseCategoryController;
 use App\Http\Controllers\Api\DepenseController;
+use App\Http\Controllers\Api\ExpenseFundController;
 use App\Http\Controllers\Api\FourinsseurController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
@@ -179,6 +180,12 @@ Route::post('depense-categories/{id}/restore', [DepenseCategoryController::class
 Route::apiResource('depenses', DepenseController::class);
 Route::get('depenses/{depense}/justification', [DepenseController::class, 'justification']);
 Route::post('depenses/{id}/restore', [DepenseController::class, 'restore']);
+Route::post('depenses/{depense}/approve', [DepenseController::class, 'approve']);
+Route::post('depenses/{depense}/reject', [DepenseController::class, 'reject']);
+
+// Caisse des dépenses
+Route::get('expense-fund', [ExpenseFundController::class, 'index']);
+Route::post('expense-fund/deposits', [ExpenseFundController::class, 'deposit']);
 
 // Fourinsseurs
 Route::apiResource('fournisseurs', FourinsseurController::class);

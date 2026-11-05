@@ -163,6 +163,7 @@ Route::apiResource('activity-logs', ActivityLogController::class)->only(['index'
 // =============================================
 Route::get('export/products-template', [ImportExportController::class, 'downloadProductTemplate']);
 Route::get('export/products', [ImportExportController::class, 'exportProducts']);
+Route::get('export/sales', [ImportExportController::class, 'exportSales']);
 Route::post('import/products/preview', [ImportExportController::class, 'previewProductImport']);
 Route::post('import/products', [ImportExportController::class, 'importProducts']);
 

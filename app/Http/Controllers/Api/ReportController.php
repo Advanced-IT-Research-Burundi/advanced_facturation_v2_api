@@ -749,7 +749,10 @@ class ReportController extends Controller
      */
     private function getDepensesQuery(int $companyId, ?string $hotelSection): \Illuminate\Database\Eloquent\Builder
     {
-        $query = Depense::where('company_id', $companyId);
+        // Seules les dépenses validées et payées par une caisse de vente entrent dans ce solde
+        $query = Depense::where('company_id', $companyId)
+            ->approved()
+            ->whereDoesntHave('expenseFundMovement');
 
         if ($hotelSection && $hotelSection !== 'all') {
             if ($hotelSection === 'general') {

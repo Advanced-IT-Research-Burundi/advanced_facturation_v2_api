@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CompanyFactory extends Factory
@@ -14,9 +13,9 @@ class CompanyFactory extends Factory
     {
         return [
             'name' => fake()->name(),
-            'tp_type' => fake()->word(),
+            'tp_type' => fake()->randomElement(['1', '2']),
             'tp_name' => fake()->word(),
-            'tp_TIN' => fake()->word(),
+            'tp_TIN' => fake()->unique()->numerify('##########'),
             'tp_trade_number' => fake()->word(),
             'tp_postal_number' => fake()->word(),
             'tp_phone_number' => fake()->word(),
@@ -26,7 +25,7 @@ class CompanyFactory extends Factory
             'tp_address_avenue' => fake()->word(),
             'tp_address_rue' => fake()->word(),
             'tp_address_number' => fake()->word(),
-            'tp_fiscal_center' => fake()->word(),
+            'tp_fiscal_center' => fake()->randomElement(['DPMC', 'DMC', 'DGC']),
             'tp_activity_sector' => fake()->word(),
             'tp_legal_form' => fake()->word(),
             'vat_taxpayer' => fake()->word(),
@@ -34,7 +33,7 @@ class CompanyFactory extends Factory
             'tl_taxpayer' => fake()->word(),
             'system_or_device_id' => fake()->word(),
             'default_currency' => fake()->word(),
-            'user_id' => User::factory(),
+            'user_id' => null,
         ];
     }
 }

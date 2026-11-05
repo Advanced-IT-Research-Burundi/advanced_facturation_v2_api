@@ -114,6 +114,20 @@ class User extends Authenticatable
     /**
      * Check if user has a specific role
      */
+    /**
+     * Administrateur de l'entreprise (même règle que l'accès à la caisse).
+     */
+    public function isAdministrator(): bool
+    {
+        return $this->roles->contains(function ($role) {
+            $name = strtolower($role->name ?? '');
+            $label = strtolower($role->label ?? '');
+
+            return in_array($name, ['admin', 'super_admin'])
+                || in_array($label, ['administrateur', 'super administrateur']);
+        });
+    }
+
     public function hasRole($role)
     {
         $roles = $this->roles->pluck('name')

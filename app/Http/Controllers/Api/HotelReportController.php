@@ -239,7 +239,7 @@ class HotelReportController extends Controller
 
     private function expenseStats(int $companyId, ?Carbon $start, ?Carbon $end): array
     {
-        $query = Depense::where('company_id', $companyId);
+        $query = Depense::where('company_id', $companyId)->approved();
 
         if ($start && $end) {
             $query->whereBetween('created_at', [$start, $end]);

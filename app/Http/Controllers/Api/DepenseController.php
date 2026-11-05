@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\Company;
 use App\Models\Depense;
+use App\Models\ExpenseFundMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,7 @@ class DepenseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Depense::with(['depenseCategory', 'company', 'user'])
+        $query = Depense::with(['depenseCategory', 'company', 'user', 'validatedBy:id,name'])
             ->where('company_id', auth()->user()->company_id);
 
         if ($request->filled('hotel_section')) {
@@ -29,6 +31,10 @@ class DepenseController extends Controller
 
         if ($request->filled('category_id')) {
             $query->where('depense_category_id', $request->category_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
         }
 
         if ($request->filled('search')) {
@@ -45,7 +51,8 @@ class DepenseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $query->latest()->paginate(15),
+            'data' => (clone $query)->latest()->paginate(15),
+            'total_approved' => (float) (clone $query)->approved()->sum('montant'),
         ], Response::HTTP_OK);
     }
 
@@ -71,6 +78,18 @@ class DepenseController extends Controller
             $validated['justification_file'] = $file->getClientOriginalName();
             $validated['justification_data'] = base64_encode(file_get_contents($file->getRealPath()));
             $validated['justification_mime'] = $file->getMimeType();
+        }
+
+        // Hors hôtel, aucun argent ne bouge avant la validation par un administrateur
+        if (! $isHotelSection) {
+            $validated['status'] = Depense::STATUS_PENDING;
+            $depense = Depense::create($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense enregistrée, en attente de validation',
+                'data' => $depense->load(['depenseCategory', 'company', 'user']),
+            ], Response::HTTP_CREATED);
         }
 
         return DB::transaction(function () use ($validated) {
@@ -115,6 +134,15 @@ class DepenseController extends Controller
             abort(403);
         }
 
+        if (! $depense->hotel_section) {
+            if (! $this->isAuthorOrAdmin($depense)) {
+                return $this->errorResponse('Seul son auteur ou un administrateur peut modifier cette dépense.', Response::HTTP_FORBIDDEN);
+            }
+            if ($depense->status !== Depense::STATUS_PENDING) {
+                return $this->errorResponse('Seule une dépense en attente peut être modifiée.', Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'montant' => 'sometimes|required|numeric|min:0.01',
@@ -127,6 +155,16 @@ class DepenseController extends Controller
             $validated['justification_file'] = $file->getClientOriginalName();
             $validated['justification_data'] = base64_encode(file_get_contents($file->getRealPath()));
             $validated['justification_mime'] = $file->getMimeType();
+        }
+
+        if (! $depense->hotel_section) {
+            $depense->update($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense mise à jour',
+                'data' => $depense->load(['depenseCategory', 'company', 'user']),
+            ], Response::HTTP_OK);
         }
 
         return DB::transaction(function () use ($depense, $validated) {
@@ -199,8 +237,18 @@ class DepenseController extends Controller
             abort(403);
         }
 
+        if (! $depense->hotel_section) {
+            $canDelete = auth()->user()->isAdministrator()
+                || ($depense->user_id === auth()->id() && $depense->status !== Depense::STATUS_APPROVED);
+
+            if (! $canDelete) {
+                return $this->errorResponse("Vous n'avez pas le droit de supprimer cette dépense.", Response::HTTP_FORBIDDEN);
+            }
+        }
+
         DB::transaction(function () use ($depense) {
             CashMovement::where('depense_id', $depense->id)->delete();
+            ExpenseFundMovement::where('depense_id', $depense->id)->delete();
             $depense->delete();
         });
 
@@ -215,6 +263,29 @@ class DepenseController extends Controller
         $depense = Depense::withTrashed()
             ->where('company_id', auth()->user()->company_id)
             ->findOrFail($id);
+
+        if (! $depense->hotel_section) {
+            if (! auth()->user()->isAdministrator()) {
+                return $this->errorResponse('Réservé aux administrateurs.', Response::HTTP_FORBIDDEN);
+            }
+            if (! $depense->trashed()) {
+                return $this->errorResponse("Cette dépense n'est pas supprimée.", Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            $depense->restore();
+            $depense->update([
+                'status' => Depense::STATUS_PENDING,
+                'validated_by' => null,
+                'validated_at' => null,
+                'rejection_reason' => null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense restaurée, en attente de validation',
+                'data' => $depense,
+            ], Response::HTTP_OK);
+        }
 
         return DB::transaction(function () use ($depense) {
             $register = $this->openRegisterForSection($depense->hotel_section);
@@ -236,6 +307,87 @@ class DepenseController extends Controller
                 'success' => true,
                 'message' => 'Dépense restaurée et retirée de la caisse',
                 'data' => $depense->load('cashMovement'),
+            ], Response::HTTP_OK);
+        });
+    }
+
+    /**
+     * L'administrateur valide la dépense : le montant sort de la caisse des dépenses.
+     * La validation est refusée si le solde de cette caisse est insuffisant.
+     */
+    public function approve(Depense $depense)
+    {
+        $user = auth()->user();
+
+        return DB::transaction(function () use ($depense, $user) {
+            // Verrouiller l'entreprise pour que deux validations simultanées ne dépensent pas le même solde
+            Company::whereKey($user->company_id)->lockForUpdate()->first();
+
+            $depense = Depense::whereKey($depense->id)->lockForUpdate()->firstOrFail();
+
+            if ($response = $this->denyDecision($depense)) {
+                return $response;
+            }
+
+            $balance = ExpenseFundMovement::balanceForCompany($depense->company_id);
+            if ($depense->montant > $balance) {
+                return $this->errorResponse(
+                    'Solde insuffisant dans la caisse des dépenses (disponible : '.number_format($balance, 2, ',', ' ').' FBU, demandé : '.number_format($depense->montant, 2, ',', ' ').' FBU).',
+                    Response::HTTP_UNPROCESSABLE_ENTITY
+                );
+            }
+
+            $depense->update([
+                'status' => Depense::STATUS_APPROVED,
+                'validated_by' => $user->id,
+                'validated_at' => now(),
+            ]);
+
+            ExpenseFundMovement::create([
+                'company_id' => $depense->company_id,
+                'depense_id' => $depense->id,
+                'type' => ExpenseFundMovement::TYPE_EXPENSE,
+                'amount' => $depense->montant,
+                'description' => $depense->name,
+                'created_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense validée et retirée de la caisse des dépenses',
+                'data' => $depense->load(['depenseCategory', 'user', 'validatedBy:id,name']),
+                'fund_balance' => ExpenseFundMovement::balanceForCompany($depense->company_id),
+            ], Response::HTTP_OK);
+        });
+    }
+
+    /**
+     * L'administrateur refuse la dépense : aucun argent ne bouge.
+     */
+    public function reject(Request $request, Depense $depense)
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'nullable|string|max:255',
+        ]);
+
+        return DB::transaction(function () use ($depense, $validated) {
+            $depense = Depense::whereKey($depense->id)->lockForUpdate()->firstOrFail();
+
+            if ($response = $this->denyDecision($depense)) {
+                return $response;
+            }
+
+            $depense->update([
+                'status' => Depense::STATUS_REJECTED,
+                'validated_by' => auth()->id(),
+                'validated_at' => now(),
+                'rejection_reason' => $validated['rejection_reason'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Dépense refusée',
+                'data' => $depense->load(['depenseCategory', 'user', 'validatedBy:id,name']),
             ], Response::HTTP_OK);
         });
     }
@@ -281,6 +433,34 @@ class DepenseController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    private function denyDecision(Depense $depense)
+    {
+        if ($depense->company_id !== auth()->user()->company_id) {
+            abort(403);
+        }
+        if (! auth()->user()->isAdministrator()) {
+            return $this->errorResponse('Seul un administrateur peut valider ou refuser une dépense.', Response::HTTP_FORBIDDEN);
+        }
+        if ($depense->status !== Depense::STATUS_PENDING) {
+            return $this->errorResponse("Cette dépense n'est plus en attente.", Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return null;
+    }
+
+    private function isAuthorOrAdmin(Depense $depense): bool
+    {
+        return $depense->user_id === auth()->id() || auth()->user()->isAdministrator();
+    }
+
+    private function errorResponse(string $message, int $status)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+        ], $status);
     }
 
     private function openRegisterForSection(?string $hotelSection): CashRegister

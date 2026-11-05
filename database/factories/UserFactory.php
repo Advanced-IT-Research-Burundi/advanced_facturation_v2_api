@@ -3,8 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Company;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class UserFactory extends Factory
@@ -18,9 +16,8 @@ class UserFactory extends Factory
             'name' => fake()->name(),
             'email' => fake()->safeEmail(),
             'password' => fake()->password(),
-            'role_id' => Role::factory(),
             'company_id' => Company::factory(),
-            'user_id' => User::factory(),
+            'user_id' => null,
         ];
     }
 }

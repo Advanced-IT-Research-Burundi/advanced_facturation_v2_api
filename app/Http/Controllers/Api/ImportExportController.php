@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exports\ProductExport;
+use App\Exports\SalesExport;
 use App\Http\Controllers\Controller;
 use App\Imports\ProductImport;
 use App\Models\Product;
@@ -127,6 +128,35 @@ class ImportExportController extends Controller
 
         // Créer un export avec les données réelles
         return Excel::download(new ProductDataExport($request), $filename);
+    }
+
+    /**
+     * Exporter les ventes d'une période vers Excel
+     */
+    public function exportSales(Request $request)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+            'include_unvalidated' => 'sometimes|boolean',
+        ]);
+
+        $export = new SalesExport(
+            $validated['start_date'],
+            $validated['end_date'],
+            $request->boolean('include_unvalidated'),
+        );
+
+        if (! $export->query()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aucune vente trouvée sur cette période',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        $filename = "ventes_{$validated['start_date']}_au_{$validated['end_date']}.xlsx";
+
+        return Excel::download($export, $filename);
     }
 }
 

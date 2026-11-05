@@ -43,7 +43,7 @@ class InvoiceFactory extends Factory
             'obr_response_message' => fake()->text(),
             'company_id' => Company::factory(),
             'customer_id' => Customer::factory(),
-            'created_by' => User::factory()->create()->created_by,
+            'created_by' => User::factory(),
             'user_id' => User::factory(),
             'created_by_id' => User::factory(),
         ];
