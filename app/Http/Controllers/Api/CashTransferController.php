@@ -71,6 +71,10 @@ class CashTransferController extends Controller
         $user = $request->user();
         $fromUser = User::where('company_id', $user->company_id)->findOrFail($userId);
 
+        if ($fromUser->id !== $user->id && ! $this->isAdminUser($user)) {
+            return $this->error('Vous ne pouvez consulter que votre propre caisse.', 403);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -217,22 +221,27 @@ class CashTransferController extends Controller
     public function reject(Request $request, $id)
     {
         $user = $request->user();
-        $transfer = CashTransfer::where('company_id', $user->company_id)->findOrFail($id);
 
-        if ($check = $this->checkPendingForRecipient($transfer, $user)) {
-            return $check;
-        }
+        return DB::transaction(function () use ($user, $id) {
+            $transfer = CashTransfer::where('company_id', $user->company_id)
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        $transfer->update([
-            'status' => 'rejected',
-            'validated_by' => $user->id,
-            'validated_at' => now(),
-        ]);
+            if ($check = $this->checkPendingForRecipient($transfer, $user)) {
+                return $check;
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Transfert refusé',
-        ]);
+            $transfer->update([
+                'status' => 'rejected',
+                'validated_by' => $user->id,
+                'validated_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfert refusé',
+            ]);
+        });
     }
 
     /**
@@ -241,21 +250,26 @@ class CashTransferController extends Controller
     public function cancel(Request $request, $id)
     {
         $user = $request->user();
-        $transfer = CashTransfer::where('company_id', $user->company_id)->findOrFail($id);
 
-        if ($transfer->from_user_id !== $user->id && ! $this->isAdminUser($user)) {
-            return $this->error('Seul l\'expéditeur peut annuler ce transfert.', 403);
-        }
-        if ($transfer->status !== 'pending') {
-            return $this->error('Ce transfert n\'est plus en attente.', 422);
-        }
+        return DB::transaction(function () use ($user, $id) {
+            $transfer = CashTransfer::where('company_id', $user->company_id)
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        $transfer->update(['status' => 'cancelled']);
+            if ($transfer->from_user_id !== $user->id && ! $this->isAdminUser($user)) {
+                return $this->error('Seul l\'expéditeur peut annuler ce transfert.', 403);
+            }
+            if ($transfer->status !== 'pending') {
+                return $this->error('Ce transfert n\'est plus en attente.', 422);
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Transfert annulé',
-        ]);
+            $transfer->update(['status' => 'cancelled']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transfert annulé',
+            ]);
+        });
     }
 
     private function checkPendingForRecipient(CashTransfer $transfer, User $user)

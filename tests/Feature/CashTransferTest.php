@@ -157,4 +157,67 @@ class CashTransferTest extends TestCase
         $this->postJson("/api/cash-transfers/{$transferId}/cancel")->assertOk();
         $this->assertSame('cancelled', CashTransfer::find($transferId)->status);
     }
+
+    public function test_accepted_transfer_cannot_be_cancelled_or_rejected(): void
+    {
+        $this->actingAs($this->sender);
+        $transferId = $this->postJson('/api/cash-transfers', [
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->recipient->id,
+            'amount' => 100,
+        ])->json('data.id');
+
+        $this->actingAs($this->recipient);
+        $this->postJson("/api/cash-transfers/{$transferId}/accept")->assertOk();
+        $this->postJson("/api/cash-transfers/{$transferId}/reject")->assertStatus(422);
+
+        $this->actingAs($this->sender);
+        $this->postJson("/api/cash-transfers/{$transferId}/cancel")->assertStatus(422);
+
+        $this->assertSame('accepted', CashTransfer::find($transferId)->status);
+    }
+
+    public function test_recipient_can_reject_pending_transfer(): void
+    {
+        $this->actingAs($this->sender);
+        $transferId = $this->postJson('/api/cash-transfers', [
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->recipient->id,
+            'amount' => 100,
+        ])->json('data.id');
+
+        $this->actingAs($this->recipient);
+        $this->postJson("/api/cash-transfers/{$transferId}/reject")->assertOk();
+
+        $this->assertSame('rejected', CashTransfer::find($transferId)->status);
+        $this->assertSame(0, CashMovement::where('type', 'adjustment')->count());
+    }
+
+    public function test_user_can_read_own_available_amount(): void
+    {
+        $this->actingAs($this->sender);
+
+        $this->getJson("/api/cash-transfers/available/{$this->sender->id}")
+            ->assertOk()
+            ->assertJsonPath('data.available', 1000);
+    }
+
+    public function test_non_admin_cannot_read_another_users_available_amount(): void
+    {
+        $this->actingAs($this->recipient);
+
+        $this->getJson("/api/cash-transfers/available/{$this->sender->id}")->assertStatus(403);
+    }
+
+    public function test_full_access_user_can_read_another_users_available_amount(): void
+    {
+        $financeUser = User::factory()->create(['company_id' => $this->company->id]);
+        $financeUser->roles()->attach(Role::factory()->create(['permissions' => ['finance']]));
+
+        $this->actingAs($financeUser);
+
+        $this->getJson("/api/cash-transfers/available/{$this->sender->id}")
+            ->assertOk()
+            ->assertJsonPath('data.available', 1000);
+    }
 }
