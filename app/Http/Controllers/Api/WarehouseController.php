@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\BulkWarehouseProductsRequest;
 use App\Http\Resources\UserWarehouseResource;
 use App\Http\Resources\WarehouseResource;
 use App\Models\Product;
 use App\Models\UserWarehouse;
 use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class WarehouseController extends Controller
 {
@@ -158,6 +161,83 @@ class WarehouseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Produit retiré de l\'entrepôt avec succès.',
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Ajoute une liste de produits à l'entrepôt avec une quantité initiale de 0.
+     */
+    public function bulkAddProducts(BulkWarehouseProductsRequest $request, int $id): JsonResponse
+    {
+        $warehouse = Warehouse::findOrFail($id);
+        $productIds = collect($request->validated('product_ids'));
+
+        $existingProductIds = WarehouseProduct::where('warehouse_id', $warehouse->id)
+            ->whereIn('product_id', $productIds)
+            ->pluck('product_id');
+
+        $products = Product::whereIn('id', $productIds->diff($existingProductIds))->get();
+
+        DB::transaction(function () use ($products, $warehouse) {
+            foreach ($products as $product) {
+                $warehouseProduct = WarehouseProduct::withTrashed()->firstOrNew([
+                    'warehouse_id' => $warehouse->id,
+                    'product_id' => $product->id,
+                    'production_status' => 'RAW',
+                ]);
+
+                $warehouseProduct->fill([
+                    'company_id' => $warehouse->company_id,
+                    'quantity' => 0,
+                    'unit_price' => $product->price ?? 0,
+                    'price_promo' => $product->price_promo ?? 0,
+                    'currency' => 'BIF',
+                    'user_id' => auth()->id(),
+                ]);
+                $warehouseProduct->deleted_at = null;
+                $warehouseProduct->save();
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$products->count()} produit(s) ajouté(s) à l'entrepôt.",
+            'data' => [
+                'added' => $products->count(),
+                'skipped' => $existingProductIds->count(),
+            ],
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Retire une liste de produits de l'entrepôt. Les produits avec un stock non nul sont conservés.
+     */
+    public function bulkRemoveProducts(BulkWarehouseProductsRequest $request, int $id): JsonResponse
+    {
+        $warehouse = Warehouse::findOrFail($id);
+
+        $warehouseProducts = WarehouseProduct::with('product')
+            ->where('warehouse_id', $warehouse->id)
+            ->whereIn('product_id', $request->validated('product_ids'))
+            ->get();
+
+        [$withStock, $removable] = $warehouseProducts->partition(fn (WarehouseProduct $warehouseProduct) => $warehouseProduct->quantity > 0);
+
+        DB::transaction(function () use ($removable) {
+            $removable->each(fn (WarehouseProduct $warehouseProduct) => $warehouseProduct->delete());
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$removable->count()} produit(s) retiré(s) de l'entrepôt.",
+            'data' => [
+                'removed' => $removable->count(),
+                'skipped_with_stock' => $withStock->map(fn (WarehouseProduct $warehouseProduct) => [
+                    'product_id' => $warehouseProduct->product_id,
+                    'item_designation' => $warehouseProduct->product?->item_designation,
+                    'quantity' => (float) $warehouseProduct->quantity,
+                ])->values(),
+            ],
         ], Response::HTTP_OK);
     }
 

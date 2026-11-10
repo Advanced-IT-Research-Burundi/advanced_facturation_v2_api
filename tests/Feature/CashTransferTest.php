@@ -73,6 +73,32 @@ class CashTransferTest extends TestCase
         $this->assertEquals(1000, $this->register->fresh()->calculateExpectedBalance());
     }
 
+    public function test_pending_transfer_is_deducted_from_sender_displayed_amount(): void
+    {
+        $this->actingAs($this->sender);
+        $transferId = $this->postJson('/api/cash-transfers', [
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->recipient->id,
+            'amount' => 400,
+        ])->json('data.id');
+
+        $this->getJson('/api/cash-registers/daily-summary?hotel_section=null')
+            ->assertJsonPath('data.user_summaries.0.pending_out', 400)
+            ->assertJsonPath('data.user_summaries.0.net_amount', 600);
+
+        $this->getJson('/api/cash-registers/current')
+            ->assertJsonPath('data.summary.pending_out', 400)
+            ->assertJsonPath('data.summary.expected_balance', 600);
+
+        $this->assertEquals(1000, $this->register->fresh()->calculateExpectedBalance());
+
+        $this->postJson("/api/cash-transfers/{$transferId}/cancel")->assertOk();
+
+        $this->getJson('/api/cash-registers/daily-summary?hotel_section=null')
+            ->assertJsonPath('data.user_summaries.0.pending_out', 0)
+            ->assertJsonPath('data.user_summaries.0.net_amount', 1000);
+    }
+
     public function test_cannot_transfer_more_than_available(): void
     {
         $this->actingAs($this->sender);

@@ -15,6 +15,7 @@ use App\Services\ReviewInvoice;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Picqer\Barcode\BarcodeGeneratorSVG;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -138,7 +139,8 @@ class ProductController extends Controller
         $search = $request->search;
 
         $query = WarehouseProduct::with(['warehouse', 'product.categoryProduct', 'product.libelle'])
-            ->where('warehouse_id', $stock_id);
+            ->where('warehouse_id', $stock_id)
+            ->where('quantity', '>', 0);
 
         // Filtrer par recherche sur les produits
         if ($search) {
@@ -236,7 +238,7 @@ class ProductController extends Controller
 
                 return $product;
             });
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la création du produit',
@@ -431,8 +433,8 @@ class ProductController extends Controller
      *
      * @return array{
      *     warehouse: ?Warehouse,
-     *     changes: \Illuminate\Support\Collection<int, array{product: Product, stock_prices: array<int, float>, reference_price: float, source: string, missing_in_warehouse: bool}>,
-     *     without_price: \Illuminate\Support\Collection<int, Product>
+     *     changes: Collection<int, array{product: Product, stock_prices: array<int, float>, reference_price: float, source: string, missing_in_warehouse: bool}>,
+     *     without_price: Collection<int, Product>
      * }
      */
     private function buildPriceRevision(): array
@@ -501,7 +503,7 @@ class ProductController extends Controller
             $svg = $generator->getBarcode($content, $barcodeType);
 
             return response($svg)->header('Content-Type', 'image/svg+xml');
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate barcode: '.$e->getMessage(),
@@ -522,7 +524,7 @@ class ProductController extends Controller
                 ->generate($content);
 
             return response($qrCode)->header('Content-Type', 'image/svg+xml');
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate QR code: '.$e->getMessage(),

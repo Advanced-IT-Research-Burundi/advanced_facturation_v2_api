@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
+use App\Models\CashTransfer;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class CashRegisterController extends Controller
@@ -93,6 +95,7 @@ class CashRegisterController extends Controller
             $income = (clone $ownMovements)->where('type', 'income')->sum('amount');
             $expense = (clone $ownMovements)->where('type', 'expense')->sum('amount');
             $adjustment = (clone $ownMovements)->where('type', 'adjustment')->sum('amount');
+            $pendingOut = (float) $this->pendingOutgoingByUser($user->company_id, Carbon::today()->format('Y-m-d'))->get($user->id, 0);
 
             return response()->json([
                 'success' => true,
@@ -102,7 +105,8 @@ class CashRegisterController extends Controller
                         'opening_balance' => 0,
                         'total_income' => $income,
                         'total_expense' => $expense,
-                        'expected_balance' => $income - $expense + $adjustment,
+                        'expected_balance' => $income - $expense + $adjustment - $pendingOut,
+                        'pending_out' => $pendingOut,
                         'transaction_count' => (clone $ownMovements)->count(),
                     ],
                 ],
@@ -400,6 +404,11 @@ class CashRegisterController extends Controller
         $totalExpense = (float) ($movementSummary->total_expense ?? 0);
         $totalAdjustment = (float) ($movementSummary->total_adjustment ?? 0);
 
+        // Les transferts en attente ne concernent que la caisse principale
+        $pendingOutByUser = in_array($request->input('hotel_section'), [null, 'null', ''], true)
+            ? $this->pendingOutgoingByUser($user->company_id, $date)
+            : collect();
+
         $userSummaries = CashMovement::with('createdBy:id,name,email')
             ->whereIn('cash_register_id', $companyRegisters)
             ->whereBetween('created_at', [$dayStart, $dayEnd])
@@ -415,11 +424,12 @@ class CashRegisterController extends Controller
             ->groupBy('created_by')
             ->orderByDesc(DB::raw("COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0)"))
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($pendingOutByUser) {
                 $totalIncome = (float) ($row->total_income ?? 0);
                 $totalExpense = (float) ($row->total_expense ?? 0);
                 $totalAdjustment = (float) ($row->total_adjustment ?? 0);
                 $netAmount = $totalIncome - $totalExpense + $totalAdjustment;
+                $pendingOut = (float) $pendingOutByUser->get($row->created_by, 0);
 
                 return [
                     'user_id' => $row->created_by,
@@ -429,7 +439,8 @@ class CashRegisterController extends Controller
                     'total_income' => $totalIncome,
                     'total_expense' => $totalExpense,
                     'total_adjustment' => $totalAdjustment,
-                    'net_amount' => $netAmount,
+                    'pending_out' => $pendingOut,
+                    'net_amount' => $netAmount - $pendingOut,
                     'cash_amount' => $netAmount,
                     'latest_transaction_at' => $row->latest_transaction_at,
                 ];
@@ -604,6 +615,23 @@ class CashRegisterController extends Controller
      * Caisse principale : accès complet requis.
      * Caisses hôtel : les rôles de prise de commande ne peuvent enregistrer que des entrées.
      */
+    /**
+     * Montants réservés par les transferts en attente, par expéditeur (expirés après leur journée)
+     */
+    private function pendingOutgoingByUser(int $companyId, string $date): Collection
+    {
+        if (! Carbon::parse($date)->isToday()) {
+            return collect();
+        }
+
+        return CashTransfer::where('company_id', $companyId)
+            ->where('status', 'pending')
+            ->whereDate('transfer_date', $date)
+            ->selectRaw('from_user_id, SUM(amount) as total')
+            ->groupBy('from_user_id')
+            ->pluck('total', 'from_user_id');
+    }
+
     private function canAddMovement(User $user, CashRegister $register, string $type): bool
     {
         if (! $register->hotel_section) {

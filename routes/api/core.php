@@ -83,6 +83,8 @@ Route::post('category-products/{id}/restore', [CategoryProductController::class,
 Route::apiResource('libelles', LibelleController::class);
 Route::post('libelles/{id}/restore', [LibelleController::class, 'restore']);
 
+Route::post('warehouses/{id}/products/bulk-add', [WarehouseController::class, 'bulkAddProducts']);
+Route::post('warehouses/{id}/products/bulk-remove', [WarehouseController::class, 'bulkRemoveProducts']);
 Route::post('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'addProduct']);
 Route::delete('warehouses/{id}/products/{product_id}', [WarehouseController::class, 'removeProduct']);
 
