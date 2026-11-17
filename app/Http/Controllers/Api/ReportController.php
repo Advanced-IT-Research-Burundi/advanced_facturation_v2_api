@@ -10,9 +10,12 @@ use App\Models\HotelConferenceBooking;
 use App\Models\HotelReceptionBooking;
 use App\Models\HotelReservation;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\PaymentMethod;
 use App\Models\StockMovement;
 use App\Models\WarehouseProduct;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -92,6 +95,39 @@ class ReportController extends Controller
                 });
         }
 
+        // Montants encaissés par jour et par moyen de paiement (Espèces, Bancobu, Lumicash...)
+        $paymentRows = (clone $query)
+            ->where(function ($q) {
+                $q->where('is_cancelled', false)->orWhereNull('is_cancelled');
+            })
+            ->selectRaw('DATE(created_at) as date, payment_type, payment_method_id, SUM(invoice_total_amount) as total')
+            ->groupBy('date', 'payment_type', 'payment_method_id')
+            ->orderBy('date')
+            ->get();
+
+        $paymentMethodNames = PaymentMethod::withTrashed()
+            ->whereIn('id', $paymentRows->pluck('payment_method_id')->filter()->unique())
+            ->pluck('name', 'id');
+
+        $paymentTypeLabels = [
+            '1' => 'Espèces',
+            '2' => 'Banque (non précisée)',
+            '3' => 'À crédit',
+            '4' => 'Autres (non précisé)',
+        ];
+
+        $dailyPayments = $paymentRows->map(function ($row) use ($paymentMethodNames, $paymentTypeLabels) {
+            $methodName = $row->payment_method_id ? $paymentMethodNames->get($row->payment_method_id) : null;
+            $key = $row->payment_method_id ? 'method_'.$row->payment_method_id : 'type_'.($row->payment_type ?? '1');
+
+            return [
+                'date' => $row->date,
+                'key' => $key,
+                'label' => $methodName ?? $paymentTypeLabels[$row->payment_type ?? '1'] ?? 'Autre',
+                'total' => (float) $row->total,
+            ];
+        })->values();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -103,8 +139,281 @@ class ReportController extends Controller
                 'daily_sales' => $dailySales,
                 'sales_by_user' => $salesByUser,
                 'sales_by_warehouse' => $salesByWarehouse,
+                'daily_payments' => $dailyPayments,
             ],
         ]);
+    }
+
+    /**
+     * Montants encaissés par moyen de paiement (journal des ventes)
+     */
+    public function paymentsByMethod(Request $request)
+    {
+        $query = Invoice::query()
+            ->where('company_id', $request->user()->company_id)
+            ->where('invoice_type', 'FN')
+            ->where(function ($q) {
+                $q->where('is_cancelled', false)->orWhereNull('is_cancelled');
+            });
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('invoice_date', '>=', $request->start_date);
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('invoice_date', '<=', $request->end_date);
+        }
+
+        $rows = $query
+            ->selectRaw('payment_type, payment_method_id, COUNT(*) as invoices_count, SUM(invoice_total_amount) as total')
+            ->groupBy('payment_type', 'payment_method_id')
+            ->get();
+
+        $paymentMethods = PaymentMethod::withTrashed()
+            ->whereIn('id', $rows->pluck('payment_method_id')->filter()->unique())
+            ->get(['id', 'name', 'method_type'])
+            ->keyBy('id');
+
+        $typeLabels = ['1' => 'Espèces', '2' => 'Banque', '3' => 'À crédit', '4' => 'Autres'];
+
+        $data = $rows->map(function ($row) use ($paymentMethods, $typeLabels) {
+            $paymentType = $row->payment_type ?? '1';
+            $method = $row->payment_method_id ? $paymentMethods->get($row->payment_method_id) : null;
+
+            return [
+                'payment_type' => $paymentType,
+                'payment_type_label' => $typeLabels[$paymentType] ?? 'Autre',
+                'payment_method_id' => $method?->id,
+                'payment_method_name' => $method?->name,
+                'invoices_count' => (int) $row->invoices_count,
+                'total' => (float) $row->total,
+            ];
+        })->sortBy([['payment_type', 'asc'], ['payment_method_name', 'asc']])->values();
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Bénéfice des ventes : par produit, par période ou par vente.
+     * Le prix d'achat est figé sur la ligne de facture au moment de la vente ;
+     * les anciennes factures retombent sur le stock de l'entrepôt.
+     */
+    public function profit(Request $request)
+    {
+        $query = InvoiceItem::query()
+            ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
+            ->leftJoin('products', 'invoice_items.product_id', '=', 'products.id')
+            ->where('invoices.company_id', $request->user()->company_id)
+            ->where('invoices.invoice_type', 'FN')
+            ->where(function ($q) {
+                $q->where('invoices.is_cancelled', false)->orWhereNull('invoices.is_cancelled');
+            })
+            ->whereNotNull('invoice_items.product_id');
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('invoices.invoice_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('invoices.invoice_date', '<=', $request->end_date);
+        }
+        if ($request->filled('product_id')) {
+            $query->where('invoice_items.product_id', $request->product_id);
+        }
+        if ($request->filled('invoice_id')) {
+            $query->where('invoices.id', $request->invoice_id);
+        }
+        if ($request->filled('warehouse_id')) {
+            $query->where('invoices.warehouse_id', $request->warehouse_id);
+        }
+
+        $rows = $query->select([
+            'invoice_items.product_id',
+            'invoice_items.item_designation',
+            'invoice_items.item_quantity',
+            'invoice_items.item_price_nvat',
+            'invoices.id as invoice_id',
+            'invoices.invoice_number',
+            'invoices.invoice_date',
+            'invoices.customer_name',
+            'products.item_code as product_code',
+        ])->selectRaw(
+            'COALESCE(invoice_items.purchase_price, (
+                SELECT wp.purchase_price FROM warehouse_products wp
+                WHERE wp.product_id = invoice_items.product_id
+                  AND wp.warehouse_id = invoices.warehouse_id
+                LIMIT 1
+            ), 0) as unit_cost'
+        )->orderBy('invoices.invoice_date')->get();
+
+        // Dépenses de la période (même convention que le solde de caisse : approuvées).
+        // Seuls les filtres de dates s'appliquent aux dépenses, pas le produit/facture.
+        $expensesQuery = $this->getDepensesQuery((int) $request->user()->company_id, null);
+
+        if ($request->filled('start_date')) {
+            $expensesQuery->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $expensesQuery->whereDate('created_at', '<=', $request->end_date);
+        }
+
+        $expenses = $expensesQuery
+            ->with('depenseCategory:id,name')
+            ->select('id', 'name', 'montant', 'depense_category_id', 'created_at')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $expensesTotal = (float) $expenses->sum('montant');
+        $expensesByCategory = $expenses
+            ->groupBy(fn ($expense) => $expense->depenseCategory?->name ?? 'Non catégorisé')
+            ->map(fn ($group, $category) => [
+                'category' => $category,
+                'count' => $group->count(),
+                'total' => round((float) $group->sum('montant'), 2),
+            ])
+            ->sortByDesc('total')
+            ->values();
+        $expensesByPeriod = $expenses
+            ->groupBy(fn ($expense) => Carbon::parse($expense->created_at)->toDateString())
+            ->map(fn ($group, $date) => [
+                'date' => $date,
+                'total' => round((float) $group->sum('montant'), 2),
+            ])
+            ->sortBy('date')
+            ->values();
+        $expenseItems = $expenses->map(fn ($expense) => [
+            'id' => $expense->id,
+            'date' => Carbon::parse($expense->created_at)->toDateString(),
+            'name' => $expense->name,
+            'category' => $expense->depenseCategory?->name ?? 'Non catégorisé',
+            'montant' => round((float) $expense->montant, 2),
+        ])->values();
+
+        $byProduct = [];
+        $byPeriod = [];
+        $bySale = [];
+        $invoiceIds = [];
+        $revenueTotal = 0.0;
+        $costTotal = 0.0;
+        $quantityTotal = 0.0;
+
+        foreach ($rows as $row) {
+            $quantity = (float) $row->item_quantity;
+            $revenue = (float) $row->item_price_nvat * $quantity;
+            $cost = (float) $row->unit_cost * $quantity;
+            $profit = $revenue - $cost;
+            $date = $row->invoice_date
+                ? Carbon::parse($row->invoice_date)->toDateString()
+                : 'inconnue';
+
+            $revenueTotal += $revenue;
+            $costTotal += $cost;
+            $quantityTotal += $quantity;
+            $invoiceIds[$row->invoice_id] = true;
+
+            $productKey = (int) $row->product_id;
+            if (! isset($byProduct[$productKey])) {
+                $byProduct[$productKey] = [
+                    'product_id' => $productKey,
+                    'product_code' => $row->product_code,
+                    'designation' => $row->item_designation,
+                    'quantity' => 0.0,
+                    'revenue' => 0.0,
+                    'cost' => 0.0,
+                    'profit' => 0.0,
+                ];
+            }
+            $byProduct[$productKey]['quantity'] += $quantity;
+            $byProduct[$productKey]['revenue'] += $revenue;
+            $byProduct[$productKey]['cost'] += $cost;
+            $byProduct[$productKey]['profit'] += $profit;
+
+            if (! isset($byPeriod[$date])) {
+                $byPeriod[$date] = [
+                    'date' => $date,
+                    'quantity' => 0.0,
+                    'revenue' => 0.0,
+                    'cost' => 0.0,
+                    'profit' => 0.0,
+                ];
+            }
+            $byPeriod[$date]['quantity'] += $quantity;
+            $byPeriod[$date]['revenue'] += $revenue;
+            $byPeriod[$date]['cost'] += $cost;
+            $byPeriod[$date]['profit'] += $profit;
+
+            $saleKey = (int) $row->invoice_id;
+            if (! isset($bySale[$saleKey])) {
+                $bySale[$saleKey] = [
+                    'invoice_id' => $saleKey,
+                    'invoice_number' => $row->invoice_number,
+                    'invoice_date' => $date,
+                    'customer_name' => $row->customer_name,
+                    'quantity' => 0.0,
+                    'revenue' => 0.0,
+                    'cost' => 0.0,
+                    'profit' => 0.0,
+                ];
+            }
+            $bySale[$saleKey]['quantity'] += $quantity;
+            $bySale[$saleKey]['revenue'] += $revenue;
+            $bySale[$saleKey]['cost'] += $cost;
+            $bySale[$saleKey]['profit'] += $profit;
+        }
+
+        $finalize = function (array $group): array {
+            return array_map(function (array $item): array {
+                $item['quantity'] = round($item['quantity'], 2);
+                $item['revenue'] = round($item['revenue'], 2);
+                $item['cost'] = round($item['cost'], 2);
+                $item['profit'] = round($item['profit'], 2);
+                $item['margin'] = $item['revenue'] > 0
+                    ? round(($item['profit'] / $item['revenue']) * 100, 2)
+                    : 0;
+
+                return $item;
+            }, array_values($group));
+        };
+
+        $byProduct = $finalize($byProduct);
+        usort($byProduct, fn (array $a, array $b): int => $b['profit'] <=> $a['profit']);
+
+        $byPeriod = $finalize($byPeriod);
+        usort($byPeriod, fn (array $a, array $b): int => strcmp($a['date'], $b['date']));
+
+        $bySale = $finalize($bySale);
+        usort($bySale, fn (array $a, array $b): int => strcmp($b['invoice_date'], $a['invoice_date']));
+
+        $netProfit = ($revenueTotal - $costTotal) - $expensesTotal;
+
+        return response()->json(['success' => true, 'data' => [
+            'summary' => [
+                // Ventes (CA HTVA) et coût d'achat
+                'revenue' => round($revenueTotal, 2),
+                'cost' => round($costTotal, 2),
+                'profit' => round($revenueTotal - $costTotal, 2),
+                'margin' => $revenueTotal > 0
+                    ? round((($revenueTotal - $costTotal) / $revenueTotal) * 100, 2)
+                    : 0,
+                // Dépenses à part, puis résultat net
+                'expenses_total' => round($expensesTotal, 2),
+                'net_profit' => round($netProfit, 2),
+                'net_margin' => $revenueTotal > 0
+                    ? round(($netProfit / $revenueTotal) * 100, 2)
+                    : 0,
+                'quantity' => round($quantityTotal, 2),
+                'invoices_count' => count($invoiceIds),
+                'lines_count' => $rows->count(),
+            ],
+            'by_product' => $byProduct,
+            'by_period' => $byPeriod,
+            'by_sale' => $bySale,
+            'expenses' => [
+                'total' => round($expensesTotal, 2),
+                'by_category' => $expensesByCategory,
+                'by_period' => $expensesByPeriod,
+                'items' => $expenseItems,
+            ],
+        ]]);
     }
 
     /**
@@ -745,9 +1054,9 @@ class ReportController extends Controller
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Builder<Depense>
+     * @return Builder<Depense>
      */
-    private function getDepensesQuery(int $companyId, ?string $hotelSection): \Illuminate\Database\Eloquent\Builder
+    private function getDepensesQuery(int $companyId, ?string $hotelSection): Builder
     {
         // Seules les dépenses validées et payées par une caisse de vente entrent dans ce solde
         $query = Depense::where('company_id', $companyId)

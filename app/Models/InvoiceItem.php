@@ -26,6 +26,7 @@ class InvoiceItem extends Model
     protected $fillable = [
         'invoice_id',
         'product_id',
+        'purchase_price',
         'item_designation',
         'item_quantity',
         'item_price',
@@ -51,6 +52,7 @@ class InvoiceItem extends Model
             'id' => 'integer',
             'invoice_id' => 'integer',
             'product_id' => 'integer',
+            'purchase_price' => 'double',
             'item_quantity' => 'double',
             'item_price' => 'double',
             'item_ct' => 'double',

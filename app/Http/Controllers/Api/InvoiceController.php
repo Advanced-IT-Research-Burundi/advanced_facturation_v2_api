@@ -211,12 +211,12 @@ class InvoiceController extends Controller
                 ]);
             }
 
-            $expectedMethodType = [
-                '2' => 'bank',
-                '4' => 'mobile_money',
+            $expectedMethodTypes = [
+                '2' => ['bank'],
+                '4' => ['mobile_money', 'other'],
             ][$validated['payment_type']] ?? null;
 
-            if ($expectedMethodType && $selectedPaymentMethod->method_type !== $expectedMethodType) {
+            if ($expectedMethodTypes && ! in_array($selectedPaymentMethod->method_type, $expectedMethodTypes, true)) {
                 throw ValidationException::withMessages([
                     'payment_method_id' => 'La méthode sélectionnée ne correspond pas au mode de paiement choisi.',
                 ]);
@@ -343,6 +343,7 @@ class InvoiceController extends Controller
                     'item_price_wvat' => $itemCalculations['price_wvat'],
                     'item_total_amount' => $itemCalculations['total_amount'],
                     'product_id' => $item['product_id'] ?? null,
+                    'purchase_price' => $this->resolveItemPurchasePrice($item, $invoice->warehouse_id),
                     'user_id' => auth()->id(),
                 ]);
             }
@@ -520,6 +521,7 @@ class InvoiceController extends Controller
                         'item_price_wvat' => $itemCalculations['price_wvat'],
                         'item_total_amount' => $itemCalculations['total_amount'],
                         'product_id' => $item['product_id'] ?? null,
+                        'purchase_price' => $this->resolveItemPurchasePrice($item, $invoice->warehouse_id),
                         'user_id' => auth()->id(),
                     ]);
 
@@ -633,6 +635,7 @@ class InvoiceController extends Controller
                         'item_price_wvat' => $itemCalculations['price_wvat'],
                         'item_total_amount' => $itemCalculations['total_amount'],
                         'product_id' => $item['product_id'] ?? null,
+                        'purchase_price' => $this->resolveItemPurchasePrice($item, $invoice->warehouse_id),
                         'user_id' => auth()->id(),
                     ]);
                 }
@@ -795,6 +798,29 @@ class InvoiceController extends Controller
     /**
      * Calculer les montants d'un item
      */
+    /**
+     * Instantané du prix d'achat réel au moment de la vente, pour le calcul du bénéfice.
+     * Ligne de stock explicitement fournie > stock du produit dans l'entrepôt de la facture.
+     */
+    private function resolveItemPurchasePrice(array $item, ?int $warehouseId): float
+    {
+        $query = WarehouseProduct::query();
+
+        if (! empty($item['warehouse_product_id'])) {
+            $query->whereKey($item['warehouse_product_id']);
+        } elseif (! empty($item['product_id'])) {
+            $query->where('product_id', $item['product_id']);
+
+            if ($warehouseId) {
+                $query->where('warehouse_id', $warehouseId);
+            }
+        } else {
+            return 0.0;
+        }
+
+        return (float) ($query->value('purchase_price') ?? 0);
+    }
+
     private function calculateItemAmounts(array $item): array
     {
         $quantity = $item['item_quantity'];

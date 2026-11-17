@@ -40,6 +40,7 @@ class WarehouseProduct extends Model
             'company_id' => 'integer',
             'quantity' => 'double', // Crucial pour les stocks fractionnables
             'unit_price' => 'double',
+            'purchase_price' => 'double',
             'price_promo' => 'double',
             'last_stock_movement_id' => 'integer',
             'user_id' => 'integer',

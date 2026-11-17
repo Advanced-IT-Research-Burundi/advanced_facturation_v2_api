@@ -17,8 +17,6 @@ use Illuminate\Support\Facades\Log;
 
 class StockMovementController extends Controller
 {
-
-    
     /**
      * Dashboard du stock - Retourne tout ce qui est nécessaire pour l'interface
      */
@@ -48,7 +46,7 @@ class StockMovementController extends Controller
             'sourceWarehouse:id,name',
             'items.product:id,item_designation,item_code',
             'creator:id,name',
-            ])
+        ])
             ->where('destination_warehouse_id', $warehouseId)
             ->where('status', 'PENDING')
             ->select('id', 'transfer_code', 'source_warehouse_id', 'destination_warehouse_id', 'status', 'notes', 'created_by', 'created_at')
@@ -110,6 +108,7 @@ class StockMovementController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'unit_price' => 'required|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
             'currency' => 'required|string',
             'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
             'date_expiration' => 'nullable|date',
@@ -147,8 +146,9 @@ class StockMovementController extends Controller
             ]);
 
             $stock->quantity = ($stock->quantity ?? 0) + $request->quantity;
-            // Le prix d'entrée est un prix d'achat : il ne remplace pas le prix de vente
-            $stock->purchase_price = $request->unit_price;
+            // Le prix d'achat réel est saisi à l'entrée ; à défaut, on reprend le prix d'entrée.
+            // Il ne remplace jamais le prix de vente (unit_price).
+            $stock->purchase_price = $request->purchase_price ?? $request->unit_price;
             if (! $stock->exists || $stock->unit_price === null) {
                 $stock->unit_price = $request->unit_price;
             }
@@ -277,6 +277,7 @@ class StockMovementController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.purchase_price' => 'nullable|numeric|min:0',
             'items.*.currency' => 'required|string',
             'items.*.date_expiration' => 'nullable|date',
             'movement_type' => 'required|in:EN,ER,EI,EAJ,EAU',
@@ -317,8 +318,8 @@ class StockMovementController extends Controller
                 ]);
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item['quantity'];
-                // Le prix d'entrée est un prix d'achat : il ne remplace pas le prix de vente
-                $stock->purchase_price = $item['unit_price'];
+                // Prix d'achat réel saisi à l'entrée, sinon on reprend le prix d'entrée.
+                $stock->purchase_price = $item['purchase_price'] ?? $item['unit_price'];
                 if (! $stock->exists || $stock->unit_price === null) {
                     $stock->unit_price = $item['unit_price'];
                 }
@@ -527,6 +528,7 @@ class StockMovementController extends Controller
                     'product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $stock->unit_price,
+                    'purchase_price' => $stock->purchase_price,
                     'currency' => $stock->currency,
                     'stock_movement_out_id' => $movementOut->id,
                 ]);
@@ -595,6 +597,7 @@ class StockMovementController extends Controller
 
                 $stock->quantity = ($stock->quantity ?? 0) + $item->quantity;
                 $stock->unit_price = $item->unit_price;
+                $stock->purchase_price = $item->purchase_price ?? $item->unit_price;
                 $stock->currency = $item->currency;
                 $stock->last_stock_movement_id = $movementIn->id;
                 $stock->user_id = Auth::id();

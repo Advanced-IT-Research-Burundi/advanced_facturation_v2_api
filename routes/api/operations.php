@@ -89,6 +89,8 @@ Route::get('analytics/dashboard-stats', [AnalyticsController::class, 'dashboardS
 
 // Reports
 Route::get('reports/sales', [ReportController::class, 'sales']);
+Route::get('reports/payments-by-method', [ReportController::class, 'paymentsByMethod']);
+Route::get('reports/profit', [ReportController::class, 'profit']);
 Route::get('reports/invoices-history', [ReportController::class, 'invoicesHistory']);
 Route::get('reports/stock-sheet', [ReportController::class, 'stockSheet']);
 Route::get('reports/stock-movements', [ReportController::class, 'stockMovements']);
@@ -173,10 +175,8 @@ Route::post('import/products', [ImportExportController::class, 'importProducts']
 Route::post('invoices/{invoice}/validate', [InvoiceController::class, 'validateInvoice']);
 Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancelInvoice']);
 
-
 // =============================================
 // GetDmcItems
 Route::get('getDmcItems/{reference_dmc}', [InvoiceController::class, 'getDmcItems']);
-
 
 Route::post('productstMovements', [ProductController::class, 'productstMovements']);

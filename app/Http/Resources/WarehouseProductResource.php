@@ -16,6 +16,10 @@ class WarehouseProductResource extends JsonResource
     {
         $promoPrice = (float) ($this->price_promo ?? $this->product?->price_promo ?? 0);
         $basePrice = $this->product?->price ?: $this->unit_price;
+        // Le bénéfice se calcule sur le prix de vente HTVA du stock et son prix d'achat réel.
+        $sellingPrice = (float) ($this->unit_price ?? 0);
+        $purchasePrice = (float) ($this->purchase_price ?? 0);
+        $unitProfit = $sellingPrice - $purchasePrice;
         $roles = $request->user()?->roles ?? collect();
         $isSuperAdmin = $roles->contains(function ($role) {
             return in_array(strtolower($role->name ?? ''), ['super_admin', 'superadmin'], true)
@@ -28,6 +32,10 @@ class WarehouseProductResource extends JsonResource
             'name' => $this->product?->item_designation,
             'price' => $isSuperAdmin && $promoPrice > 0 ? $promoPrice : $basePrice,
             'unit_price' => $this->unit_price,
+            'purchase_price' => $purchasePrice,
+            'profit' => round($unitProfit, 2),
+            'profit_margin' => $sellingPrice > 0 ? round(($unitProfit / $sellingPrice) * 100, 2) : 0,
+            'total_profit' => round($unitProfit * (float) ($this->quantity ?? 0), 2),
             'price_promo' => $promoPrice,
             'category' => $this->product?->categoryProduct?->name,
             'libelle' => $this->product?->libelle?->name,

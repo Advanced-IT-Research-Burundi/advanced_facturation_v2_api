@@ -15,6 +15,7 @@ class WarehouseTransferItem extends Model
         'product_id',
         'quantity',
         'unit_price',
+        'purchase_price',
         'currency',
         'stock_movement_out_id',
         'stock_movement_in_id',
@@ -25,6 +26,7 @@ class WarehouseTransferItem extends Model
         return [
             'quantity' => 'decimal:2',
             'unit_price' => 'decimal:2',
+            'purchase_price' => 'decimal:2',
         ];
     }
 
