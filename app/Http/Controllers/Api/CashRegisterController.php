@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\CashTransfer;
+use App\Models\Invoice;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -95,6 +96,8 @@ class CashRegisterController extends Controller
             $income = (clone $ownMovements)->where('type', 'income')->sum('amount');
             $expense = (clone $ownMovements)->where('type', 'expense')->sum('amount');
             $adjustment = (clone $ownMovements)->where('type', 'adjustment')->sum('amount');
+            $transfersIn = (clone $ownMovements)->where('type', 'adjustment')->where('reference', 'like', 'TRF-%')->where('amount', '>', 0)->sum('amount');
+            $transfersOut = -1 * (clone $ownMovements)->where('type', 'adjustment')->where('reference', 'like', 'TRF-%')->where('amount', '<', 0)->sum('amount');
             $pendingOut = (float) $this->pendingOutgoingByUser($user->company_id, Carbon::today()->format('Y-m-d'))->get($user->id, 0);
 
             return response()->json([
@@ -107,6 +110,8 @@ class CashRegisterController extends Controller
                         'total_expense' => $expense,
                         'expected_balance' => $income - $expense + $adjustment - $pendingOut,
                         'pending_out' => $pendingOut,
+                        'transfers_in' => (float) $transfersIn,
+                        'transfers_out' => (float) $transfersOut,
                         'transaction_count' => (clone $ownMovements)->count(),
                     ],
                 ],
@@ -419,6 +424,8 @@ class CashRegisterController extends Controller
                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
                 COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
                 COALESCE(SUM(CASE WHEN type = 'adjustment' THEN amount ELSE 0 END), 0) as total_adjustment,
+                COALESCE(SUM(CASE WHEN type = 'adjustment' AND reference LIKE 'TRF-%' AND amount > 0 THEN amount ELSE 0 END), 0) as transfers_in,
+                COALESCE(SUM(CASE WHEN type = 'adjustment' AND reference LIKE 'TRF-%' AND amount < 0 THEN -amount ELSE 0 END), 0) as transfers_out,
                 MAX(created_at) as latest_transaction_at
             ")
             ->groupBy('created_by')
@@ -439,12 +446,49 @@ class CashRegisterController extends Controller
                     'total_income' => $totalIncome,
                     'total_expense' => $totalExpense,
                     'total_adjustment' => $totalAdjustment,
+                    'transfers_in' => (float) ($row->transfers_in ?? 0),
+                    'transfers_out' => (float) ($row->transfers_out ?? 0),
                     'pending_out' => $pendingOut,
                     'net_amount' => $netAmount - $pendingOut,
                     'cash_amount' => $netAmount,
                     'latest_transaction_at' => $row->latest_transaction_at,
                 ];
             })
+            ->values();
+
+        // Factures vendues par argent électronique (hors caisse espèces) — caisse principale uniquement
+        $electronicByUser = in_array($request->input('hotel_section'), [null, 'null', ''], true)
+            ? $this->electronicMoneySalesByUser($user->company_id, $dayStart, $dayEnd, $filteredUserId)
+            : collect();
+
+        $userSummaries = $userSummaries
+            ->map(fn ($row) => [
+                ...$row,
+                'electronic_amount' => (float) ($electronicByUser->get($row['user_id'])['total'] ?? 0),
+                'electronic_count' => (int) ($electronicByUser->get($row['user_id'])['count'] ?? 0),
+            ])
+            ->concat(
+                $electronicByUser
+                    ->reject(fn ($sales, $userId) => $userSummaries->contains('user_id', $userId))
+                    ->map(fn ($sales, $userId) => [
+                        'user_id' => $userId,
+                        'user_name' => $sales['user_name'],
+                        'user_email' => $sales['user_email'],
+                        'transaction_count' => 0,
+                        'total_income' => 0.0,
+                        'total_expense' => 0.0,
+                        'total_adjustment' => 0.0,
+                        'transfers_in' => 0.0,
+                        'transfers_out' => 0.0,
+                        'pending_out' => 0.0,
+                        'net_amount' => 0.0,
+                        'cash_amount' => 0.0,
+                        'latest_transaction_at' => null,
+                        'electronic_amount' => (float) $sales['total'],
+                        'electronic_count' => (int) $sales['count'],
+                    ])
+                    ->values()
+            )
             ->values();
 
         $recentMovements = CashMovement::with([
@@ -476,6 +520,8 @@ class CashRegisterController extends Controller
                     'total_closing' => $isAdmin ? $totalClosing : 0,
                     'total_difference' => $isAdmin ? $totalDifference : 0,
                     'total_transactions' => $userSummaries->sum('transaction_count'),
+                    'total_electronic' => (float) $electronicByUser->sum('total'),
+                    'electronic_count' => (int) $electronicByUser->sum('count'),
                 ],
                 'user_summaries' => $userSummaries,
                 'recent_movements' => $recentMovements,
@@ -630,6 +676,33 @@ class CashRegisterController extends Controller
             ->selectRaw('from_user_id, SUM(amount) as total')
             ->groupBy('from_user_id')
             ->pluck('total', 'from_user_id');
+    }
+
+    /**
+     * Ventes validées payées par argent électronique (mode 4 : Lumicash, Ecocash...), par vendeur
+     */
+    private function electronicMoneySalesByUser(int $companyId, Carbon $dayStart, Carbon $dayEnd, ?int $filteredUserId): Collection
+    {
+        return Invoice::with('user:id,name,email')
+            ->where('company_id', $companyId)
+            ->where('invoice_type', 'FN')
+            ->where('is_validated', true)
+            ->where(fn ($q) => $q->where('is_cancelled', false)->orWhereNull('is_cancelled'))
+            ->where('payment_type', '4')
+            ->where(fn ($q) => $q->whereNull('payment_method_id')
+                ->orWhereHas('paymentMethod', fn ($method) => $method->withTrashed()->where('method_type', 'mobile_money')))
+            ->whereBetween('invoice_date', [$dayStart, $dayEnd])
+            ->when(! is_null($filteredUserId), fn ($query) => $query->where('user_id', $filteredUserId))
+            ->select('user_id')
+            ->selectRaw('COUNT(*) as invoices_count, COALESCE(SUM(invoice_total_amount), 0) as total')
+            ->groupBy('user_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->user_id => [
+                'user_name' => $row->user?->name ?? 'Utilisateur supprimé',
+                'user_email' => $row->user?->email,
+                'count' => (int) $row->invoices_count,
+                'total' => (float) $row->total,
+            ]]);
     }
 
     private function canAddMovement(User $user, CashRegister $register, string $type): bool

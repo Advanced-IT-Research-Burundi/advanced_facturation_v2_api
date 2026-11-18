@@ -246,4 +246,80 @@ class CashTransferTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.available', 1000);
     }
+
+    public function test_accepted_transfer_is_shown_as_received_in_recipient_cash(): void
+    {
+        $this->actingAs($this->sender);
+        $transferId = $this->postJson('/api/cash-transfers', [
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->recipient->id,
+            'amount' => 400,
+        ])->json('data.id');
+
+        $this->actingAs($this->recipient);
+        $this->postJson("/api/cash-transfers/{$transferId}/accept")->assertOk();
+
+        $this->getJson('/api/cash-registers/current')
+            ->assertJsonPath('data.summary.transfers_in', 400)
+            ->assertJsonPath('data.summary.expected_balance', 400);
+
+        $this->actingAs($this->sender);
+        $this->getJson('/api/cash-registers/current')
+            ->assertJsonPath('data.summary.transfers_out', 400)
+            ->assertJsonPath('data.summary.expected_balance', 600);
+    }
+
+    public function test_history_lists_transfers_across_all_days_for_full_access_user(): void
+    {
+        $other = User::factory()->create(['company_id' => $this->company->id]);
+        $this->createTransfer($this->sender, $this->recipient, 100, now()->subDays(10), 'accepted');
+        $this->createTransfer($this->recipient, $this->sender, 200, now()->subDay(), 'rejected');
+        $this->createTransfer($other, $this->recipient, 300, now(), 'pending');
+
+        $financeUser = User::factory()->create(['company_id' => $this->company->id]);
+        $financeUser->roles()->attach(Role::factory()->create(['permissions' => ['finance']]));
+        $this->actingAs($financeUser);
+
+        $this->getJson('/api/cash-transfers/history')
+            ->assertOk()
+            ->assertJsonPath('data.can_filter_users', true)
+            ->assertJsonPath('data.transfers.total', 3)
+            ->assertJsonPath('data.transfers.data.0.amount', '300.00')
+            ->assertJsonPath('data.summary.accepted.total', 100);
+
+        $this->getJson('/api/cash-transfers/history?start_date='.now()->subDays(2)->toDateString().'&status=rejected')
+            ->assertJsonPath('data.transfers.total', 1)
+            ->assertJsonPath('data.transfers.data.0.amount', '200.00');
+
+        $this->getJson("/api/cash-transfers/history?user_id={$other->id}")
+            ->assertJsonPath('data.transfers.total', 1);
+    }
+
+    public function test_history_only_shows_own_transfers_for_non_admin(): void
+    {
+        $other = User::factory()->create(['company_id' => $this->company->id]);
+        $this->createTransfer($this->sender, $this->recipient, 100, now()->subDays(5), 'accepted');
+        $this->createTransfer($other, $this->sender, 200, now(), 'pending');
+
+        $this->actingAs($this->recipient);
+
+        $this->getJson("/api/cash-transfers/history?user_id={$other->id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_filter_users', false)
+            ->assertJsonPath('data.transfers.total', 1)
+            ->assertJsonPath('data.transfers.data.0.amount', '100.00');
+    }
+
+    private function createTransfer(User $from, User $to, float $amount, $date, string $status): CashTransfer
+    {
+        return CashTransfer::create([
+            'company_id' => $this->company->id,
+            'cash_register_id' => $this->register->id,
+            'from_user_id' => $from->id,
+            'to_user_id' => $to->id,
+            'amount' => $amount,
+            'transfer_date' => $date,
+            'status' => $status,
+        ]);
+    }
 }

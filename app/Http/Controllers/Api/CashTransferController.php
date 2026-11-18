@@ -46,6 +46,58 @@ class CashTransferController extends Controller
     }
 
     /**
+     * Historique complet des transferts entre caisses (filtrable par période, statut et utilisateur)
+     */
+    public function history(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'status' => 'nullable|in:pending,accepted,rejected,cancelled',
+            'user_id' => 'nullable|integer',
+            'per_page' => 'nullable|integer',
+        ]);
+
+        $user = $request->user();
+        $isAdmin = $this->isAdminUser($user);
+        $perPage = max(1, min((int) $request->get('per_page', 25), 100));
+
+        $query = CashTransfer::query()
+            ->where('company_id', $user->company_id)
+            ->when(! $isAdmin, function ($query) use ($user) {
+                $query->where(fn ($q) => $q->where('from_user_id', $user->id)->orWhere('to_user_id', $user->id));
+            })
+            ->when($request->filled('start_date'), fn ($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
+            ->when($request->filled('end_date'), fn ($q) => $q->whereDate('transfer_date', '<=', $request->end_date))
+            ->when($isAdmin && $request->filled('user_id'), function ($query) use ($request) {
+                $query->where(fn ($q) => $q->where('from_user_id', $request->user_id)->orWhere('to_user_id', $request->user_id));
+            });
+
+        $summary = (clone $query)
+            ->selectRaw('status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total')
+            ->groupBy('status')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->status => ['count' => (int) $row->count, 'total' => (float) $row->total]]);
+
+        $transfers = $query
+            ->with(['fromUser:id,name', 'toUser:id,name', 'validatedBy:id,name'])
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->orderByDesc('transfer_date')
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'can_filter_users' => $isAdmin,
+                'today' => Carbon::today()->format('Y-m-d'),
+                'summary' => $summary,
+                'transfers' => $transfers,
+            ],
+        ]);
+    }
+
+    /**
      * Utilisateurs pouvant recevoir un transfert
      */
     public function recipients(Request $request)

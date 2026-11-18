@@ -113,6 +113,7 @@ Route::apiResource('payments', PaymentController::class)->except(['update']);
 // Cash Register (Caisse journalière)
 // Transferts entre caisses utilisateurs (journalier)
 Route::get('cash-transfers', [CashTransferController::class, 'index']);
+Route::get('cash-transfers/history', [CashTransferController::class, 'history']);
 Route::get('cash-transfers/recipients', [CashTransferController::class, 'recipients']);
 Route::get('cash-transfers/available/{userId}', [CashTransferController::class, 'available']);
 Route::post('cash-transfers', [CashTransferController::class, 'store']);
