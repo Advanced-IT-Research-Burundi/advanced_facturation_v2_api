@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankTransfer;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\CashTransfer;
@@ -670,12 +671,27 @@ class CashRegisterController extends Controller
             return collect();
         }
 
-        return CashTransfer::where('company_id', $companyId)
+        $pendingTransfers = CashTransfer::where('company_id', $companyId)
             ->where('status', 'pending')
             ->whereDate('transfer_date', $date)
             ->selectRaw('from_user_id, SUM(amount) as total')
             ->groupBy('from_user_id')
             ->pluck('total', 'from_user_id');
+
+        $pendingBankTransfers = BankTransfer::where('company_id', $companyId)
+            ->where('source', 'user_cash')
+            ->where('status', 'pending')
+            ->whereDate('transfer_date', $date)
+            ->selectRaw('from_user_id, SUM(amount) as total')
+            ->groupBy('from_user_id')
+            ->pluck('total', 'from_user_id');
+
+        return $pendingTransfers->keys()
+            ->merge($pendingBankTransfers->keys())
+            ->unique()
+            ->mapWithKeys(fn ($userId) => [
+                $userId => (float) $pendingTransfers->get($userId, 0) + (float) $pendingBankTransfers->get($userId, 0),
+            ]);
     }
 
     /**
@@ -685,12 +701,7 @@ class CashRegisterController extends Controller
     {
         return Invoice::with('user:id,name,email')
             ->where('company_id', $companyId)
-            ->where('invoice_type', 'FN')
-            ->where('is_validated', true)
-            ->where(fn ($q) => $q->where('is_cancelled', false)->orWhereNull('is_cancelled'))
-            ->where('payment_type', '4')
-            ->where(fn ($q) => $q->whereNull('payment_method_id')
-                ->orWhereHas('paymentMethod', fn ($method) => $method->withTrashed()->where('method_type', 'mobile_money')))
+            ->electronicMoneySales()
             ->whereBetween('invoice_date', [$dayStart, $dayEnd])
             ->when(! is_null($filteredUserId), fn ($query) => $query->where('user_id', $filteredUserId))
             ->select('user_id')

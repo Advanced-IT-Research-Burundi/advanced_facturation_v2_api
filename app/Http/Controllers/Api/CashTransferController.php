@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankTransfer;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\CashTransfer;
@@ -347,26 +348,9 @@ class CashTransferController extends Controller
             ->first();
     }
 
-    /**
-     * Montant caisse du jour d'un utilisateur (même calcul que le résumé journalier)
-     */
     private function userDailyBalance(int $companyId, int $userId): float
     {
-        $registerIds = CashRegister::where('company_id', $companyId)
-            ->whereNull('hotel_section')
-            ->pluck('id');
-
-        $row = CashMovement::whereIn('cash_register_id', $registerIds)
-            ->where('created_by', $userId)
-            ->whereBetween('created_at', [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()])
-            ->selectRaw("
-                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
-                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
-                COALESCE(SUM(CASE WHEN type = 'adjustment' THEN amount ELSE 0 END), 0) as total_adjustment
-            ")
-            ->first();
-
-        return (float) $row->total_income - (float) $row->total_expense + (float) $row->total_adjustment;
+        return CashMovement::userDailyBalance($companyId, $userId);
     }
 
     private function pendingOutgoing(int $companyId, int $userId, ?int $exceptId = null): float
@@ -376,7 +360,8 @@ class CashTransferController extends Controller
             ->where('status', 'pending')
             ->whereDate('transfer_date', Carbon::today())
             ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
-            ->sum('amount');
+            ->sum('amount')
+            + BankTransfer::pendingFromUserToday($companyId, $userId);
     }
 
     private function availableAmount(int $companyId, int $userId): float

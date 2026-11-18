@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Models\Traits\HasCompanyId;
+use App\Services\ObrService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Services\ObrService;
 
 class Invoice extends Model
 {
@@ -116,9 +116,9 @@ class Invoice extends Model
     public static function booting()
     {
         static::created(function ($invoice) {
-           // $invoice->invoice_number = self::getInvoiceNumber($invoice->id);
+            // $invoice->invoice_number = self::getInvoiceNumber($invoice->id);
             if ($invoice->is_validated) {
-                $obr = new ObrService();
+                $obr = new ObrService;
                 $invoice->electronic_signature = $obr->generateInvoiceIdentifier(self::getInvoiceNumber($invoice->id), $invoice->invoice_date);
                 $invoice->obr_submission_status = 'PENDING';
                 $invoice->saveQuietly();
@@ -184,6 +184,19 @@ class Invoice extends Model
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+
+    /**
+     * Ventes validées payées par argent électronique (mode 4 : Lumicash, Ecocash...)
+     */
+    public function scopeElectronicMoneySales($query)
+    {
+        return $query->where('invoice_type', 'FN')
+            ->where('is_validated', true)
+            ->where(fn ($q) => $q->where('is_cancelled', false)->orWhereNull('is_cancelled'))
+            ->where('payment_type', '4')
+            ->where(fn ($q) => $q->whereNull('payment_method_id')
+                ->orWhereHas('paymentMethod', fn ($method) => $method->withTrashed()->where('method_type', 'mobile_money')));
     }
 
     public function restaurantTable(): BelongsTo

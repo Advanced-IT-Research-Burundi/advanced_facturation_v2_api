@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\BankDepositController;
+use App\Http\Controllers\Api\BankTransferController;
 use App\Http\Controllers\Api\CashRegisterController;
 use App\Http\Controllers\Api\CashTransferController;
 use App\Http\Controllers\Api\CurrencyController;
@@ -120,6 +121,12 @@ Route::post('cash-transfers', [CashTransferController::class, 'store']);
 Route::post('cash-transfers/{id}/accept', [CashTransferController::class, 'accept']);
 Route::post('cash-transfers/{id}/reject', [CashTransferController::class, 'reject']);
 Route::post('cash-transfers/{id}/cancel', [CashTransferController::class, 'cancel']);
+// Caisse Banque : transferts validés par l'administrateur
+Route::get('bank-transfers', [BankTransferController::class, 'index']);
+Route::post('bank-transfers', [BankTransferController::class, 'store']);
+Route::post('bank-transfers/{id}/accept', [BankTransferController::class, 'accept']);
+Route::post('bank-transfers/{id}/reject', [BankTransferController::class, 'reject']);
+Route::post('bank-transfers/{id}/cancel', [BankTransferController::class, 'cancel']);
 Route::get('cash-registers/current', [CashRegisterController::class, 'current']);
 Route::get('cash-registers/daily-summary', [CashRegisterController::class, 'dailySummary']);
 Route::post('cash-registers/open', [CashRegisterController::class, 'open']);
